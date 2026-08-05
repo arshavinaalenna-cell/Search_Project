@@ -6,11 +6,18 @@ $namaNavbar = htmlspecialchars(
     "UTF-8"
 );
 
-$roleNavbar = $_SESSION["role"] ?? "-";
+$roleNavbar = $_SESSION["role"] ?? "";
 
-$roleNavbarTampil = ucwords(
-    str_replace("_", " ", $roleNavbar)
-);
+$namaRole = [
+    "kader" => "Kader",
+    "petugas_kia" => "Petugas KIA",
+    "petugas_gizi" => "Petugas Gizi",
+    "orang_tua" => "Orang Tua",
+    "kepala_puskesmas" => "Kepala Puskesmas",
+    "dinkes" => "Dinas Kesehatan"
+];
+
+$roleNavbarTampil = $namaRole[$roleNavbar] ?? "Pengguna";
 ?>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">
@@ -39,6 +46,7 @@ $roleNavbarTampil = ucwords(
             class="collapse navbar-collapse"
             id="navbarUtama"
         >
+
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
                 <li class="nav-item">
@@ -68,6 +76,7 @@ $roleNavbarTampil = ucwords(
             <div
                 class="d-flex flex-column flex-lg-row align-items-lg-center gap-2 text-white"
             >
+
                 <span>
                     Halo,
                     <strong><?= $namaNavbar ?></strong>
@@ -87,7 +96,9 @@ $roleNavbarTampil = ucwords(
                 >
                     Logout
                 </a>
+
             </div>
+
         </div>
 
     </div>

@@ -20,11 +20,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $konfirmasiPassword = $_POST["konfirmasi_password"] ?? "";
     $role = $_POST["role"] ?? "";
 
-    $roleDiizinkan = [
-        "dinkes",
-        "ahli_gizi",
-        "orang_tua"
-    ];
+$roleDiizinkan = [
+    "kader",
+    "petugas_kia",
+    "petugas_gizi",
+    "orang_tua",
+    "kepala_puskesmas",
+    "dinkes"
+];
 
     /*
     |--------------------------------------------------------------------------
@@ -256,43 +259,58 @@ require_once "../includes/navbar.php";
                             Role
                         </label>
 
-                        <select
-                            id="role"
-                            name="role"
-                            class="form-select"
-                            required
-                        >
-                            <option value="">
-                                Pilih role
-                            </option>
+<select
+    id="role"
+    name="role"
+    class="form-select"
+    required
+>
+    <option value="">
+        Pilih role
+    </option>
 
-                            <option
-                                value="dinkes"
-                                <?= $role === "dinkes"
-                                    ? "selected"
-                                    : "" ?>
-                            >
-                                Dinkes
-                            </option>
+    <option
+        value="kader"
+        <?= $role === "kader" ? "selected" : "" ?>
+    >
+        Kader
+    </option>
 
-                            <option
-                                value="ahli_gizi"
-                                <?= $role === "ahli_gizi"
-                                    ? "selected"
-                                    : "" ?>
-                            >
-                                Ahli Gizi
-                            </option>
+    <option
+        value="petugas_kia"
+        <?= $role === "petugas_kia" ? "selected" : "" ?>
+    >
+        Petugas KIA
+    </option>
 
-                            <option
-                                value="orang_tua"
-                                <?= $role === "orang_tua"
-                                    ? "selected"
-                                    : "" ?>
-                            >
-                                Orang Tua
-                            </option>
-                        </select>
+    <option
+        value="petugas_gizi"
+        <?= $role === "petugas_gizi" ? "selected" : "" ?>
+    >
+        Petugas Gizi
+    </option>
+
+    <option
+        value="orang_tua"
+        <?= $role === "orang_tua" ? "selected" : "" ?>
+    >
+        Orang Tua
+    </option>
+
+    <option
+        value="kepala_puskesmas"
+        <?= $role === "kepala_puskesmas" ? "selected" : "" ?>
+    >
+        Kepala Puskesmas
+    </option>
+
+    <option
+        value="dinkes"
+        <?= $role === "dinkes" ? "selected" : "" ?>
+    >
+        Dinas Kesehatan
+    </option>
+</select>
                     </div>
 
                     <div class="row">

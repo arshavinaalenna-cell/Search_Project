@@ -10,15 +10,18 @@ $namaPengguna = htmlspecialchars(
     "UTF-8"
 );
 
-$rolePengguna = htmlspecialchars(
-    $_SESSION["role"] ?? "-",
-    ENT_QUOTES,
-    "UTF-8"
-);
+$rolePengguna = $_SESSION["role"] ?? "";
 
-$roleTampil = ucwords(
-    str_replace("_", " ", $rolePengguna)
-);
+$namaRole = [
+    "kader" => "Kader",
+    "petugas_kia" => "Petugas KIA",
+    "petugas_gizi" => "Petugas Gizi",
+    "orang_tua" => "Orang Tua",
+    "kepala_puskesmas" => "Kepala Puskesmas",
+    "dinkes" => "Dinas Kesehatan"
+];
+
+$roleTampil = $namaRole[$rolePengguna] ?? "Pengguna";
 
 $judulHalaman = "Dashboard | Sistem Deteksi Stunting";
 
@@ -36,7 +39,11 @@ require_once "../includes/navbar.php";
             <h2>Dashboard</h2>
 
             <p>
-                Ringkasan data pada Sistem Deteksi Stunting.
+                Ringkasan data untuk <?= htmlspecialchars(
+                    $roleTampil,
+                    ENT_QUOTES,
+                    "UTF-8"
+                ) ?>.
             </p>
         </div>
 
@@ -45,78 +52,129 @@ require_once "../includes/navbar.php";
             <div class="col-12 col-sm-6 col-lg-3">
                 <div class="card stat-card">
                     <div class="card-body text-center">
-
                         <h2><?= $totalBalita ?></h2>
 
-                        <p>Total Balita</p>
-
+                        <p>
+                            <?= $rolePengguna === "orang_tua"
+                                ? "Data Anak"
+                                : "Total Balita" ?>
+                        </p>
                     </div>
                 </div>
             </div>
 
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card stat-card">
-                    <div class="card-body text-center">
+            <?php if ($rolePengguna === "dinkes"): ?>
 
-                        <h2><?= $totalPengguna ?></h2>
-
-                        <p>Total Pengguna</p>
-
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body text-center">
+                            <h2><?= $totalPengguna ?></h2>
+                            <p>Total Pengguna</p>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card stat-card">
-                    <div class="card-body text-center">
+            <?php endif; ?>
 
-                        <h2><?= $totalSkrining ?></h2>
+            <?php if (
+                in_array(
+                    $rolePengguna,
+                    [
+                        "dinkes",
+                        "petugas_gizi",
+                        "petugas_kia",
+                        "kepala_puskesmas",
+                        "orang_tua"
+                    ],
+                    true
+                )
+            ): ?>
 
-                        <p>Skrining Awal</p>
-
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body text-center">
+                            <h2><?= $totalSkrining ?></h2>
+                            <p>Skrining Awal</p>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card stat-card">
-                    <div class="card-body text-center">
+            <?php endif; ?>
 
-                        <h2><?= $totalHasilDeteksi ?></h2>
+            <?php if (
+                in_array(
+                    $rolePengguna,
+                    [
+                        "dinkes",
+                        "petugas_gizi",
+                        "petugas_kia",
+                        "kepala_puskesmas",
+                        "orang_tua"
+                    ],
+                    true
+                )
+            ): ?>
 
-                        <p>Hasil Deteksi</p>
-
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body text-center">
+                            <h2><?= $totalHasilDeteksi ?></h2>
+                            <p>Hasil Deteksi</p>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-        </div>
+            <?php endif; ?>
 
-        <div class="row g-4 mb-4">
+            <?php if (
+                in_array(
+                    $rolePengguna,
+                    [
+                        "dinkes",
+                        "kader",
+                        "petugas_kia",
+                        "petugas_gizi",
+                        "kepala_puskesmas",
+                        "orang_tua"
+                    ],
+                    true
+                )
+            ): ?>
 
-            <div class="col-12 col-md-6">
-                <div class="card stat-card">
-                    <div class="card-body text-center">
-
-                        <h2><?= $totalPengukuran ?></h2>
-
-                        <p>Total Pengukuran Antropometri</p>
-
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body text-center">
+                            <h2><?= $totalPengukuran ?></h2>
+                            <p>Pengukuran Antropometri</p>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="col-12 col-md-6">
-                <div class="card stat-card">
-                    <div class="card-body text-center">
+            <?php endif; ?>
 
-                        <h2><?= $totalKonsultasi ?></h2>
+            <?php if (
+                in_array(
+                    $rolePengguna,
+                    [
+                        "dinkes",
+                        "petugas_gizi",
+                        "kepala_puskesmas",
+                        "orang_tua"
+                    ],
+                    true
+                )
+            ): ?>
 
-                        <p>Total Konsultasi</p>
-
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <div class="card stat-card">
+                        <div class="card-body text-center">
+                            <h2><?= $totalKonsultasi ?></h2>
+                            <p>Konsultasi</p>
+                        </div>
                     </div>
                 </div>
-            </div>
+
+            <?php endif; ?>
 
         </div>
 
@@ -127,12 +185,61 @@ require_once "../includes/navbar.php";
                     Selamat Datang, <?= $namaPengguna ?>
                 </h4>
 
-                <p class="mb-0">
-                    Selamat datang di Sistem Deteksi Stunting.
-                    Silakan gunakan menu yang tersedia untuk
-                    mengelola data balita, skrining, pengukuran
-                    antropometri, hasil deteksi, dan konsultasi.
-                </p>
+                <?php if ($rolePengguna === "kader"): ?>
+
+                    <p class="mb-0">
+                        Kamu dapat mendaftarkan data balita baru dan
+                        memasukkan hasil pengukuran antropometri dari
+                        kegiatan Posyandu.
+                    </p>
+
+                <?php elseif ($rolePengguna === "petugas_kia"): ?>
+
+                    <p class="mb-0">
+                        Kamu dapat mengelola riwayat kelahiran,
+                        riwayat kesehatan, serta meninjau hasil
+                        pertumbuhan dan deteksi risiko stunting.
+                    </p>
+
+                <?php elseif ($rolePengguna === "petugas_gizi"): ?>
+
+                    <p class="mb-0">
+                        Kamu dapat memvalidasi data balita, meninjau
+                        hasil pengukuran, melakukan analisis risiko
+                        stunting, dan memberikan konsultasi gizi.
+                    </p>
+
+                <?php elseif ($rolePengguna === "orang_tua"): ?>
+
+                    <p class="mb-0">
+                        Kamu dapat melihat data anak, grafik pertumbuhan,
+                        hasil deteksi risiko stunting, serta melakukan
+                        konsultasi dengan petugas gizi.
+                    </p>
+
+                <?php elseif ($rolePengguna === "kepala_puskesmas"): ?>
+
+                    <p class="mb-0">
+                        Kamu dapat memantau data stunting tingkat
+                        Puskesmas, aktivitas konsultasi, serta laporan
+                        pelayanan.
+                    </p>
+
+                <?php elseif ($rolePengguna === "dinkes"): ?>
+
+                    <p class="mb-0">
+                        Kamu dapat memantau data agregat stunting,
+                        mengelola pengguna, dan melihat laporan
+                        tingkat wilayah.
+                    </p>
+
+                <?php else: ?>
+
+                    <p class="mb-0">
+                        Selamat datang di Sistem Deteksi Stunting.
+                    </p>
+
+                <?php endif; ?>
 
             </div>
         </div>
