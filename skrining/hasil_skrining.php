@@ -73,20 +73,32 @@ if (!$query) {
 
     <div class="card">
 
-        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+<div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
 
-            <h4 class="mb-0">
-                Data Skrining Awal
-            </h4>
+    <h4 class="mb-0">
+        Data Skrining Awal
+    </h4>
 
-            <a
-                href="form_skrining.php"
-                class="btn btn-light"
-            >
-                + Tambah Skrining
-            </a>
+    <div class="d-flex gap-2">
 
-        </div>
+        <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="window.history.back();"
+        >
+            ← Kembali
+        </button>
+
+        <a
+            href="form_skrining.php"
+            class="btn btn-light"
+        >
+            + Tambah Skrining
+        </a>
+
+    </div>
+
+</div>
 
         <div class="card-body">
 
