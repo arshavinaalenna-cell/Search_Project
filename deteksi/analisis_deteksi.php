@@ -21,7 +21,7 @@ AMBIL DATA PENGUKURAN TERAKHIR
 
 $queryPengukuran = mysqli_query($conn, "
 SELECT *
-FROM pengukuran
+FROM pengukuran_antropometri
 WHERE id_balita='$id_balita'
 ORDER BY tanggal_pengukuran DESC
 LIMIT 1
