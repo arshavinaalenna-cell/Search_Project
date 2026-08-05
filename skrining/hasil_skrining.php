@@ -178,11 +178,11 @@ if (!$query) {
                                     <div class="aksi">
 
                                         <a
-                                            href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
-                                            class="btn btn-success btn-sm"
-                                        >
-                                            Pilih
-                                        </a>
+    href="/Search_Project/deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
+    class="btn btn-success btn-sm"
+>
+    Pilih
+</a>
 
                                         <a
                                             href="edit_skrining.php?id=<?= $idSkrining; ?>"
