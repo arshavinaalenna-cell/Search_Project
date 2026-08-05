@@ -79,19 +79,20 @@ if (!$query) {
         Data Skrining Awal
     </h4>
 
-<div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-
-    <h4 class="mb-0">
-        Data Skrining Awal
-    </h4>
-
     <div class="d-flex gap-2">
 
-        <a href="../dashboard.php" class="btn btn-secondary">
-            ← Kembali ke Dashboard
-        </a>
+        <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="window.history.back();"
+        >
+            ← Kembali
+        </button>
 
-        <a href="form_skrining.php" class="btn btn-light">
+        <a
+            href="form_skrining.php"
+            class="btn btn-light"
+        >
             + Tambah Skrining
         </a>
 
