@@ -13,7 +13,7 @@ $id = $_GET['id'];
 // Ambil data pengukuran
 $query = mysqli_query($conn,"
 SELECT *
-FROM pengukuran
+FROM pengukuran_antropometri
 WHERE id_pengukuran='$id'
 ");
 
@@ -46,7 +46,7 @@ if(isset($_POST['update'])){
     $lila = $_POST['lila'];
 
     $update = mysqli_query($conn,"
-    UPDATE pengukuran
+    UPDATE pengukuran_antropometri
     SET
         id_balita='$id_balita',
         tanggal_pengukuran='$tanggal',
