@@ -2,86 +2,7 @@
 
 require_once "../auth/session.php";
 require_once "../config/koneksi.php";
-
-/*
-|--------------------------------------------------------------------------
-| Cek apakah pengguna sudah login
-|--------------------------------------------------------------------------
-*/
-
-if (!isset($_SESSION["id_user"])) {
-    header("Location: ../auth/login.php?pesan=belum_login");
-    exit;
-}
-
-/*
-|--------------------------------------------------------------------------
-| Menghitung statistik
-|--------------------------------------------------------------------------
-*/
-
-$queryBalita = mysqli_query(
-    $conn,
-    "SELECT COUNT(*) AS total FROM balita"
-);
-
-$queryPengguna = mysqli_query(
-    $conn,
-    "SELECT COUNT(*) AS total FROM pengguna"
-);
-
-$querySkrining = mysqli_query(
-    $conn,
-    "SELECT COUNT(*) AS total FROM skrining_awal"
-);
-
-$queryHasil = mysqli_query(
-    $conn,
-    "SELECT COUNT(*) AS total FROM hasil_deteksi"
-);
-
-/*
- * Nilai default dibuat 0 supaya dashboard tidak error
- * apabila query gagal.
- */
-
-$balita = [
-    "total" => 0
-];
-
-$pengguna = [
-    "total" => 0
-];
-
-$skrining = [
-    "total" => 0
-];
-
-$hasil = [
-    "total" => 0
-];
-
-if ($queryBalita) {
-    $balita = mysqli_fetch_assoc($queryBalita);
-}
-
-if ($queryPengguna) {
-    $pengguna = mysqli_fetch_assoc($queryPengguna);
-}
-
-if ($querySkrining) {
-    $skrining = mysqli_fetch_assoc($querySkrining);
-}
-
-if ($queryHasil) {
-    $hasil = mysqli_fetch_assoc($queryHasil);
-}
-
-/*
-|--------------------------------------------------------------------------
-| Data session untuk ditampilkan
-|--------------------------------------------------------------------------
-*/
+require_once "statistik.php";
 
 $namaPengguna = htmlspecialchars(
     $_SESSION["nama"] ?? "Pengguna",
@@ -93,6 +14,10 @@ $rolePengguna = htmlspecialchars(
     $_SESSION["role"] ?? "-",
     ENT_QUOTES,
     "UTF-8"
+);
+
+$roleTampil = ucwords(
+    str_replace("_", " ", $rolePengguna)
 );
 ?>
 
@@ -199,7 +124,7 @@ $rolePengguna = htmlspecialchars(
             </span>
 
             <span class="badge bg-light text-success role-badge ms-2">
-                <?= str_replace("_", " ", $rolePengguna) ?>
+                <?= $roleTampil ?>
             </span>
 
             <a
@@ -229,11 +154,11 @@ $rolePengguna = htmlspecialchars(
         <div class="col-12 col-sm-6 col-lg-3">
             <div class="card stat-card">
                 <div class="card-body text-center">
-                    <h2>
-                        <?= (int) $balita["total"] ?>
-                    </h2>
+
+                    <h2><?= $totalBalita ?></h2>
 
                     <p>Total Balita</p>
+
                 </div>
             </div>
         </div>
@@ -241,11 +166,11 @@ $rolePengguna = htmlspecialchars(
         <div class="col-12 col-sm-6 col-lg-3">
             <div class="card stat-card">
                 <div class="card-body text-center">
-                    <h2>
-                        <?= (int) $pengguna["total"] ?>
-                    </h2>
+
+                    <h2><?= $totalPengguna ?></h2>
 
                     <p>Total Pengguna</p>
+
                 </div>
             </div>
         </div>
@@ -253,11 +178,11 @@ $rolePengguna = htmlspecialchars(
         <div class="col-12 col-sm-6 col-lg-3">
             <div class="card stat-card">
                 <div class="card-body text-center">
-                    <h2>
-                        <?= (int) $skrining["total"] ?>
-                    </h2>
+
+                    <h2><?= $totalSkrining ?></h2>
 
                     <p>Skrining Awal</p>
+
                 </div>
             </div>
         </div>
@@ -265,11 +190,39 @@ $rolePengguna = htmlspecialchars(
         <div class="col-12 col-sm-6 col-lg-3">
             <div class="card stat-card">
                 <div class="card-body text-center">
-                    <h2>
-                        <?= (int) $hasil["total"] ?>
-                    </h2>
+
+                    <h2><?= $totalHasilDeteksi ?></h2>
 
                     <p>Hasil Deteksi</p>
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="row g-4 mb-4">
+
+        <div class="col-12 col-md-6">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+
+                    <h2><?= $totalPengukuran ?></h2>
+
+                    <p>Total Pengukuran Antropometri</p>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-6">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+
+                    <h2><?= $totalKonsultasi ?></h2>
+
+                    <p>Total Konsultasi</p>
+
                 </div>
             </div>
         </div>
