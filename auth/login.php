@@ -72,19 +72,35 @@ if (isset($_SESSION['id_user'])) {
     <h3>Sistem Deteksi Stunting</h3>
     <p>Silakan login untuk melanjutkan</p>
 
-    <?php if (isset($_GET['pesan'])): ?>
+<?php if (isset($_GET["pesan"])): ?>
 
-        <?php if ($_GET['pesan'] === 'belum_login'): ?>
-            <div class="alert alert-warning">
-                Silakan login terlebih dahulu.
-            </div>
-        <?php else: ?>
-            <div class="alert alert-danger">
-                Username atau password salah.
-            </div>
-        <?php endif; ?>
+    <?php if ($_GET["pesan"] === "belum_login"): ?>
+
+        <div class="alert alert-warning">
+            Silakan login terlebih dahulu.
+        </div>
+
+    <?php elseif ($_GET["pesan"] === "kosong"): ?>
+
+        <div class="alert alert-warning">
+            Username dan password wajib diisi.
+        </div>
+
+    <?php elseif ($_GET["pesan"] === "logout"): ?>
+
+        <div class="alert alert-success">
+            Kamu berhasil logout.
+        </div>
+
+    <?php else: ?>
+
+        <div class="alert alert-danger">
+            Username atau password salah.
+        </div>
 
     <?php endif; ?>
+
+<?php endif; ?>
 
     <form action="proses_login.php" method="POST">
 
