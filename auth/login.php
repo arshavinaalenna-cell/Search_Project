@@ -1,146 +1,336 @@
 <?php
 session_start();
 
-if (isset($_SESSION['id_user'])) {
+if (isset($_SESSION["id_user"])) {
     header("Location: ../dashboard/dashboard.php");
     exit;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Versi CSS
+|--------------------------------------------------------------------------
+*/
+
+$fileCss = __DIR__ . "/../assets/css/style.css";
+
+$versiCss = file_exists($fileCss)
+    ? filemtime($fileCss)
+    : "1.0";
+
+/*
+|--------------------------------------------------------------------------
+| Pesan Login
+|--------------------------------------------------------------------------
+*/
+
+$pesan = $_GET["pesan"] ?? "";
+
+$pesanLogin = null;
+$jenisAlert = "danger";
+$ikonAlert = "bi-exclamation-circle";
+
+switch ($pesan) {
+    case "belum_login":
+        $pesanLogin = "Silakan login terlebih dahulu untuk mengakses sistem.";
+        $jenisAlert = "warning";
+        $ikonAlert = "bi-shield-exclamation";
+        break;
+
+    case "kosong":
+        $pesanLogin = "Username dan password wajib diisi.";
+        $jenisAlert = "warning";
+        $ikonAlert = "bi-exclamation-triangle";
+        break;
+
+    case "logout":
+        $pesanLogin = "Kamu berhasil logout dari sistem.";
+        $jenisAlert = "success";
+        $ikonAlert = "bi-check-circle";
+        break;
+
+    case "gagal":
+    case "salah":
+        $pesanLogin = "Username atau password yang dimasukkan salah.";
+        $jenisAlert = "danger";
+        $ikonAlert = "bi-x-circle";
+        break;
+
+    default:
+        if ($pesan !== "") {
+            $pesanLogin = "Username atau password yang dimasukkan salah.";
+        }
+        break;
 }
 ?>
 
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Login | Sistem Deteksi Stunting</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
+    <meta
+        name="description"
+        content="Login Sistem Informasi Deteksi dan Pemantauan Stunting"
+    >
+
+    <meta
+        name="theme-color"
+        content="#d96f93"
+    >
+
+    <title>
+        Login | Sistem Deteksi Stunting
+    </title>
+
+    <!-- Bootstrap -->
     <link
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
         rel="stylesheet"
     >
 
-    <style>
-        body {
-            background: linear-gradient(135deg, #4CAF50, #81C784);
-            min-height: 100vh;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: Arial, Helvetica, sans-serif;
-        }
-
-        .login-box {
-            width: 400px;
-            max-width: calc(100% - 30px);
-            background: #ffffff;
-            padding: 35px;
-            border-radius: 15px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-        }
-
-        .login-box h3 {
-            text-align: center;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-
-        .login-box p {
-            text-align: center;
-            color: #777777;
-            margin-bottom: 25px;
-        }
-
-        .btn-success {
-            width: 100%;
-        }
-
-        .logo {
-            display: block;
-            width: 90px;
-            margin: 0 auto 15px;
-        }
-    </style>
+    <!-- CSS utama aplikasi -->
+    <link
+        rel="stylesheet"
+        href="../assets/css/style.css?v=<?= $versiCss ?>"
+    >
 </head>
 
-<body>
+<body class="login-page">
 
-<div class="login-box">
+    <main class="login-container">
 
+        <!-- Bagian informasi -->
+        <section class="login-visual">
 
-    <h3>Sistem Deteksi Stunting</h3>
-    <p>Silakan login untuk melanjutkan</p>
+            <div class="d-flex align-items-center gap-3 mb-auto">
 
-<?php if (isset($_GET["pesan"])): ?>
+                <span class="quick-card-icon mb-0">
+                    <i class="bi bi-heart-pulse-fill"></i>
+                </span>
 
-    <?php if ($_GET["pesan"] === "belum_login"): ?>
+                <div>
+                    <strong class="d-block fs-5">
+                        Sistem Deteksi Stunting
+                    </strong>
 
-        <div class="alert alert-warning">
-            Silakan login terlebih dahulu.
-        </div>
+                    <small class="text-secondary">
+                        Pemantauan tumbuh kembang balita
+                    </small>
+                </div>
 
-    <?php elseif ($_GET["pesan"] === "kosong"): ?>
+            </div>
 
-        <div class="alert alert-warning">
-            Username dan password wajib diisi.
-        </div>
+            <div class="mt-5">
 
-    <?php elseif ($_GET["pesan"] === "logout"): ?>
+                <span class="badge badge-primary mb-3">
+                    <i class="bi bi-stars"></i>
+                    Tumbuh Sehat Bersama
+                </span>
 
-        <div class="alert alert-success">
-            Kamu berhasil logout.
-        </div>
+                <h1 class="mb-3 fw-bold">
+                    Pantau pertumbuhan balita dengan lebih mudah.
+                </h1>
 
-    <?php else: ?>
+                <p class="mb-4">
+                    Sistem terintegrasi untuk membantu kader, tenaga
+                    kesehatan, orang tua, puskesmas, dan dinas kesehatan
+                    dalam melakukan pemantauan serta deteksi risiko
+                    stunting.
+                </p>
 
-        <div class="alert alert-danger">
-            Username atau password salah.
-        </div>
+                <div class="d-grid gap-3">
 
-    <?php endif; ?>
+                    <div class="d-flex align-items-start gap-3">
+                        <span class="badge badge-primary">
+                            <i class="bi bi-rulers"></i>
+                        </span>
 
-<?php endif; ?>
+                        <div>
+                            <strong class="d-block">
+                                Pemantauan Antropometri
+                            </strong>
 
-    <form action="proses_login.php" method="POST">
+                            <small class="text-secondary">
+                                Catat dan pantau perkembangan fisik balita.
+                            </small>
+                        </div>
+                    </div>
 
-        <div class="mb-3">
-            <label for="username" class="form-label">
-                Username
-            </label>
+                    <div class="d-flex align-items-start gap-3">
+                        <span class="badge badge-info">
+                            <i class="bi bi-clipboard2-pulse"></i>
+                        </span>
 
-            <input
-                type="text"
-                id="username"
-                name="username"
-                class="form-control"
-                autocomplete="username"
-                required
-            >
-        </div>
+                        <div>
+                            <strong class="d-block">
+                                Skrining dan Deteksi
+                            </strong>
 
-        <div class="mb-3">
-            <label for="password" class="form-label">
-                Password
-            </label>
+                            <small class="text-secondary">
+                                Identifikasi risiko stunting secara berkala.
+                            </small>
+                        </div>
+                    </div>
 
-            <input
-                type="password"
-                id="password"
-                name="password"
-                class="form-control"
-                autocomplete="current-password"
-                required
-            >
-        </div>
+                    <div class="d-flex align-items-start gap-3">
+                        <span class="badge badge-success">
+                            <i class="bi bi-chat-heart"></i>
+                        </span>
 
-        <button type="submit" class="btn btn-success">
-            Login
-        </button>
+                        <div>
+                            <strong class="d-block">
+                                Konsultasi dan Monitoring
+                            </strong>
 
-    </form>
+                            <small class="text-secondary">
+                                Mendukung tindak lanjut kesehatan dan gizi.
+                            </small>
+                        </div>
+                    </div>
 
-</div>
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- Bagian formulir -->
+        <section class="login-panel">
+
+            <div class="login-card">
+
+                <div class="mb-4">
+
+                    <span class="badge badge-primary mb-3">
+                        <i class="bi bi-shield-check"></i>
+                        Akses Terverifikasi
+                    </span>
+
+                    <h2 class="login-title">
+                        Selamat datang
+                    </h2>
+
+                    <p class="login-subtitle">
+                        Masukkan username dan password untuk mengakses
+                        sistem sesuai hak akses akunmu.
+                    </p>
+
+                </div>
+
+                <?php if ($pesanLogin !== null): ?>
+
+                    <div
+                        class="alert alert-<?= htmlspecialchars(
+                            $jenisAlert,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ) ?> d-flex align-items-start gap-2"
+                        role="alert"
+                    >
+                        <i
+                            class="bi <?= htmlspecialchars(
+                                $ikonAlert,
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ) ?>"
+                            aria-hidden="true"
+                        ></i>
+
+                        <span>
+                            <?= htmlspecialchars(
+                                $pesanLogin,
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ) ?>
+                        </span>
+                    </div>
+
+                <?php endif; ?>
+
+                <form
+                    action="proses_login.php"
+                    method="POST"
+                    autocomplete="on"
+                >
+
+                    <div class="form-group">
+
+                        <label
+                            for="username"
+                            class="form-label"
+                        >
+                            <i class="bi bi-person me-1"></i>
+                            Username
+                        </label>
+
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            class="form-control"
+                            placeholder="Masukkan username"
+                            autocomplete="username"
+                            autofocus
+                            required
+                        >
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label
+                            for="password"
+                            class="form-label"
+                        >
+                            <i class="bi bi-lock me-1"></i>
+                            Password
+                        </label>
+
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            class="form-control"
+                            placeholder="Masukkan password"
+                            autocomplete="current-password"
+                            required
+                        >
+
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary btn-lg w-100 mt-2"
+                    >
+                        <i class="bi bi-box-arrow-in-right"></i>
+                        Masuk ke Sistem
+                    </button>
+
+                </form>
+
+                <div class="text-center mt-4">
+
+                    <small class="text-secondary">
+                        <i class="bi bi-shield-lock me-1"></i>
+                        Informasi akunmu dilindungi dan digunakan
+                        sesuai hak akses.
+                    </small>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
 
 </body>
+
 </html>
