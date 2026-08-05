@@ -177,8 +177,8 @@ if (!$query) {
                                 <td>
                                     <div class="aksi">
 
-                                        <a
-    href="/Search_Project/deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
+<a
+    href="../deteksi/analisis_deteksi.php?id_balita=<?= (int) $data['id_balita']; ?>"
     class="btn btn-success btn-sm"
 >
     Pilih
