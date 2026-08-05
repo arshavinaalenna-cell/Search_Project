@@ -248,7 +248,7 @@ require_once "../includes/navbar.php";
             <?php if ($roleAktif === "petugas_gizi"): ?>
 
                 <a
-                    href="analisis_stunting.php"
+                    href="analisis_deteksi.php"
                     class="btn btn-success"
                 >
                     + Analisis Pengukuran
