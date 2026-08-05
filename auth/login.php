@@ -162,17 +162,10 @@ switch ($pesan) {
 
         <?php endif; ?>
 
-        <form
-            action="proses_login.php"
-            method="POST"
-        >
+        <form action="proses_login.php" method="POST">
 
             <div class="mb-3">
-
-                <label
-                    for="username"
-                    class="form-label"
-                >
+                <label for="username" class="form-label">
                     Username
                 </label>
 
@@ -182,19 +175,12 @@ switch ($pesan) {
                     id="username"
                     class="form-control"
                     placeholder="Masukkan username"
-                    autocomplete="username"
                     required
-                    autofocus
                 >
-
             </div>
 
             <div class="mb-4">
-
-                <label
-                    for="password"
-                    class="form-label"
-                >
+                <label for="password" class="form-label">
                     Password
                 </label>
 
@@ -204,25 +190,19 @@ switch ($pesan) {
                     id="password"
                     class="form-control"
                     placeholder="Masukkan password"
-                    autocomplete="current-password"
                     required
                 >
-
             </div>
 
             <div class="d-grid">
-
-                <button
-                    type="submit"
-                    class="btn btn-success btn-login"
-                >
+                <button type="submit" class="btn btn-success">
                     Login
                 </button>
-
             </div>
 
         </form>
 
+        <!-- HARUS DI LUAR FORM LOGIN -->
         <div class="text-center mt-4">
 
             <span class="text-muted">
@@ -230,10 +210,10 @@ switch ($pesan) {
             </span>
 
             <a
-                href="register.php"
-                class="text-success fw-semibold text-decoration-none"
+                href="/auth/register.php"
+                class="text-success fw-bold text-decoration-none"
             >
-                Daftar sebagai orang tua
+                Daftar sebagai Orang Tua
             </a>
 
         </div>
