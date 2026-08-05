@@ -1,238 +1,557 @@
 <?php
-session_start();
+
+require_once "../auth/session.php";
+require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+cekRole([
+    "petugas_gizi",
+    "petugas_kia",
+    "orang_tua",
+    "kepala_puskesmas",
+    "dinkes"
+]);
+
+$judulHalaman = "Hasil Deteksi Stunting | Sistem Deteksi Stunting";
+
+$roleAktif = $_SESSION["role"] ?? "";
+$idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
+$cari = trim($_GET["cari"] ?? "");
+
+$kataKunci = "%" . $cari . "%";
+
 /*
-====================================================
-AMBIL DATA HASIL DETEKSI
-====================================================
+|--------------------------------------------------------------------------
+| Mengambil data hasil deteksi
+|--------------------------------------------------------------------------
+|
+| Orang tua hanya melihat hasil deteksi anak miliknya.
+| Role lainnya dapat melihat seluruh hasil deteksi.
+|
 */
 
-$query = mysqli_query($conn, "
+if ($roleAktif === "orang_tua") {
 
-SELECT
-    h.*,
-    b.nama_balita,
-    p.umur_bulan,
-    p.berat_badan,
-    p.tinggi_panjang_badan
+    if ($cari !== "") {
 
-FROM hasil_deteksi h
+        $stmt = mysqli_prepare(
+            $conn,
+            "SELECT
+                hd.id_deteksi,
+                hd.id_pengukuran,
+                hd.status_gizi,
+                hd.status_stunting,
+                hd.tanggal_deteksi,
+                pa.tanggal_pengukuran,
+                pa.umur_bulan,
+                pa.berat_badan,
+                pa.tinggi_panjang_badan,
+                pa.lingkar_kepala,
+                pa.lila,
+                b.id_balita,
+                b.nama_balita,
+                b.nik_balita,
+                b.jenis_kelamin
+             FROM hasil_deteksi hd
+             INNER JOIN pengukuran_antropometri pa
+                ON hd.id_pengukuran = pa.id_pengukuran
+             INNER JOIN balita b
+                ON pa.id_balita = b.id_balita
+             WHERE b.id_user = ?
+             AND (
+                b.nama_balita LIKE ?
+                OR b.nik_balita LIKE ?
+                OR hd.status_gizi LIKE ?
+                OR hd.status_stunting LIKE ?
+             )
+             ORDER BY hd.id_deteksi DESC"
+        );
 
-INNER JOIN pengukuran_antropometri p
-    ON h.id_pengukuran = p.id_pengukuran
+        if (!$stmt) {
+            die(
+                "Gagal menyiapkan pencarian hasil deteksi: "
+                . mysqli_error($conn)
+            );
+        }
 
-INNER JOIN balita b
-    ON p.id_balita = b.id_balita
+        mysqli_stmt_bind_param(
+            $stmt,
+            "issss",
+            $idUserAktif,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci
+        );
 
-ORDER BY h.tanggal_deteksi DESC
+    } else {
 
-");
+        $stmt = mysqli_prepare(
+            $conn,
+            "SELECT
+                hd.id_deteksi,
+                hd.id_pengukuran,
+                hd.status_gizi,
+                hd.status_stunting,
+                hd.tanggal_deteksi,
+                pa.tanggal_pengukuran,
+                pa.umur_bulan,
+                pa.berat_badan,
+                pa.tinggi_panjang_badan,
+                pa.lingkar_kepala,
+                pa.lila,
+                b.id_balita,
+                b.nama_balita,
+                b.nik_balita,
+                b.jenis_kelamin
+             FROM hasil_deteksi hd
+             INNER JOIN pengukuran_antropometri pa
+                ON hd.id_pengukuran = pa.id_pengukuran
+             INNER JOIN balita b
+                ON pa.id_balita = b.id_balita
+             WHERE b.id_user = ?
+             ORDER BY hd.id_deteksi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal mengambil hasil deteksi: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "i",
+            $idUserAktif
+        );
+    }
+
+} else {
+
+    if ($cari !== "") {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            "SELECT
+                hd.id_deteksi,
+                hd.id_pengukuran,
+                hd.status_gizi,
+                hd.status_stunting,
+                hd.tanggal_deteksi,
+                pa.tanggal_pengukuran,
+                pa.umur_bulan,
+                pa.berat_badan,
+                pa.tinggi_panjang_badan,
+                pa.lingkar_kepala,
+                pa.lila,
+                b.id_balita,
+                b.nama_balita,
+                b.nik_balita,
+                b.jenis_kelamin
+             FROM hasil_deteksi hd
+             INNER JOIN pengukuran_antropometri pa
+                ON hd.id_pengukuran = pa.id_pengukuran
+             INNER JOIN balita b
+                ON pa.id_balita = b.id_balita
+             WHERE
+                b.nama_balita LIKE ?
+                OR b.nik_balita LIKE ?
+                OR hd.status_gizi LIKE ?
+                OR hd.status_stunting LIKE ?
+             ORDER BY hd.id_deteksi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal menyiapkan pencarian hasil deteksi: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "ssss",
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci
+        );
+
+    } else {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            "SELECT
+                hd.id_deteksi,
+                hd.id_pengukuran,
+                hd.status_gizi,
+                hd.status_stunting,
+                hd.tanggal_deteksi,
+                pa.tanggal_pengukuran,
+                pa.umur_bulan,
+                pa.berat_badan,
+                pa.tinggi_panjang_badan,
+                pa.lingkar_kepala,
+                pa.lila,
+                b.id_balita,
+                b.nama_balita,
+                b.nik_balita,
+                b.jenis_kelamin
+             FROM hasil_deteksi hd
+             INNER JOIN pengukuran_antropometri pa
+                ON hd.id_pengukuran = pa.id_pengukuran
+             INNER JOIN balita b
+                ON pa.id_balita = b.id_balita
+             ORDER BY hd.id_deteksi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal mengambil hasil deteksi: "
+                . mysqli_error($conn)
+            );
+        }
+    }
+}
+
+mysqli_stmt_execute($stmt);
+
+$query = mysqli_stmt_get_result($stmt);
+
+require_once "../includes/header.php";
+require_once "../includes/navbar.php";
 ?>
 
-<!DOCTYPE html>
-<html lang="id">
+<div class="layout-wrapper">
 
-<head>
+    <?php require_once "../includes/sidebar.php"; ?>
 
-<meta charset="UTF-8">
+    <main class="main-content">
 
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+        <div
+            class="d-flex flex-column flex-md-row
+            justify-content-between align-items-md-center
+            gap-3 mb-4"
+        >
+            <div>
+                <h2 class="mb-1">
+                    Hasil Deteksi Stunting
+                </h2>
 
-<title>Hasil Deteksi</title>
+                <p class="text-muted mb-0">
+                    Hasil status gizi dan status stunting berdasarkan
+                    data pengukuran antropometri.
+                </p>
+            </div>
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+            <?php if ($roleAktif === "petugas_gizi"): ?>
 
-<style>
+                <a
+                    href="analisis_stunting.php"
+                    class="btn btn-success"
+                >
+                    + Analisis Pengukuran
+                </a>
 
-body{
+            <?php endif; ?>
+        </div>
 
-background:#f5f6fa;
+        <?php if (isset($_GET["pesan"])): ?>
 
-}
+            <?php if ($_GET["pesan"] === "analisis_berhasil"): ?>
 
-.card{
+                <div class="alert alert-success">
+                    Hasil deteksi berhasil disimpan.
+                </div>
 
-border:none;
-border-radius:15px;
-box-shadow:0 5px 15px rgba(0,0,0,.15);
+            <?php elseif ($_GET["pesan"] === "edit_berhasil"): ?>
 
-}
+                <div class="alert alert-success">
+                    Hasil deteksi berhasil diperbarui.
+                </div>
 
-.table th{
+            <?php elseif ($_GET["pesan"] === "tidak_ditemukan"): ?>
 
-background:#198754;
-color:white;
-text-align:center;
+                <div class="alert alert-warning">
+                    Data hasil deteksi tidak ditemukan.
+                </div>
 
-}
+            <?php elseif ($_GET["pesan"] === "gagal"): ?>
 
-.table td{
+                <div class="alert alert-danger">
+                    Proses deteksi gagal dilakukan.
+                </div>
 
-text-align:center;
-vertical-align:middle;
+            <?php endif; ?>
 
-}
+        <?php endif; ?>
 
-</style>
+        <div class="card content-card">
 
-</head>
+            <div class="card-body p-4">
 
-<body>
+                <form
+                    method="GET"
+                    class="row g-2 mb-4"
+                >
+                    <div class="col-12 col-md-7">
 
-<div class="container mt-4">
+                        <input
+                            type="text"
+                            name="cari"
+                            class="form-control"
+                            placeholder="Cari nama, NIK, status gizi, atau status stunting"
+                            value="<?= htmlspecialchars(
+                                $cari,
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ) ?>"
+                        >
 
-<div class="card">
+                    </div>
 
-<div class="card-header bg-success text-white d-flex justify-content-between">
+                    <div class="col-6 col-md-2">
 
-<h4>
+                        <button
+                            type="submit"
+                            class="btn btn-primary w-100"
+                        >
+                            Cari
+                        </button>
 
-Hasil Deteksi Risiko Stunting
+                    </div>
 
-</h4>
+                    <div class="col-6 col-md-2">
 
-<a
-href="../skrining/hasil_skrining.php"
-class="btn btn-light">
+                        <a
+                            href="hasil_deteksi.php"
+                            class="btn btn-outline-secondary w-100"
+                        >
+                            Reset
+                        </a>
 
-Kembali
+                    </div>
+                </form>
 
-</a>
+                <div class="table-responsive">
+
+                    <table
+                        class="table table-bordered table-striped
+                        table-hover align-middle"
+                    >
+
+                        <thead class="table-dark">
+
+                            <tr>
+                                <th>No.</th>
+                                <th>Tanggal Deteksi</th>
+                                <th>Nama Balita</th>
+                                <th>NIK</th>
+                                <th>JK</th>
+                                <th>Umur</th>
+                                <th>BB</th>
+                                <th>TB/PB</th>
+                                <th>Status Gizi</th>
+                                <th>Status Stunting</th>
+                                <th>Aksi</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            <?php if (mysqli_num_rows($query) > 0): ?>
+
+                                <?php
+                                $no = 1;
+
+                                while (
+                                    $data = mysqli_fetch_assoc($query)
+                                ):
+                                ?>
+
+                                    <?php
+                                    $statusStunting = strtolower(
+                                        trim(
+                                            $data["status_stunting"] ?? ""
+                                        )
+                                    );
+
+                                    $kelasStunting = "bg-secondary";
+
+                                    if (
+                                        in_array(
+                                            $statusStunting,
+                                            [
+                                                "normal",
+                                                "tidak stunting"
+                                            ],
+                                            true
+                                        )
+                                    ) {
+                                        $kelasStunting = "bg-success";
+                                    } elseif (
+                                        in_array(
+                                            $statusStunting,
+                                            [
+                                                "stunting",
+                                                "pendek"
+                                            ],
+                                            true
+                                        )
+                                    ) {
+                                        $kelasStunting = "bg-warning text-dark";
+                                    } elseif (
+                                        in_array(
+                                            $statusStunting,
+                                            [
+                                                "severely stunted",
+                                                "sangat pendek"
+                                            ],
+                                            true
+                                        )
+                                    ) {
+                                        $kelasStunting = "bg-danger";
+                                    }
+                                    ?>
+
+                                    <tr>
+
+                                        <td><?= $no++ ?></td>
+
+                                        <td>
+                                            <?= !empty(
+                                                $data["tanggal_deteksi"]
+                                            )
+                                                ? date(
+                                                    "d-m-Y",
+                                                    strtotime(
+                                                        $data[
+                                                            "tanggal_deteksi"
+                                                        ]
+                                                    )
+                                                )
+                                                : "-" ?>
+                                        </td>
+
+                                        <td>
+                                            <?= htmlspecialchars(
+                                                $data["nama_balita"],
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ) ?>
+                                        </td>
+
+                                        <td>
+                                            <?= htmlspecialchars(
+                                                $data["nik_balita"],
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ) ?>
+                                        </td>
+
+                                        <td>
+                                            <?= htmlspecialchars(
+                                                $data["jenis_kelamin"],
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ) ?>
+                                        </td>
+
+                                        <td>
+                                            <?= (int) (
+                                                $data["umur_bulan"] ?? 0
+                                            ) ?>
+                                            bulan
+                                        </td>
+
+                                        <td>
+                                            <?= htmlspecialchars(
+                                                $data["berat_badan"] ?? "-",
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ) ?>
+                                            kg
+                                        </td>
+
+                                        <td>
+                                            <?= htmlspecialchars(
+                                                $data[
+                                                    "tinggi_panjang_badan"
+                                                ] ?? "-",
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ) ?>
+                                            cm
+                                        </td>
+
+                                        <td>
+                                            <?= htmlspecialchars(
+                                                $data["status_gizi"]
+                                                    ?? "Belum tersedia",
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ) ?>
+                                        </td>
+
+                                        <td>
+                                            <span
+                                                class="badge <?= $kelasStunting ?>"
+                                            >
+                                                <?= htmlspecialchars(
+                                                    $data["status_stunting"]
+                                                        ?? "Belum tersedia",
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                ) ?>
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <a
+                                                href="detail_deteksi.php?id=<?= (int) $data["id_deteksi"] ?>"
+                                                class="btn btn-info btn-sm"
+                                            >
+                                                Detail
+                                            </a>
+                                        </td>
+
+                                    </tr>
+
+                                <?php endwhile; ?>
+
+                            <?php else: ?>
+
+                                <tr>
+                                    <td
+                                        colspan="11"
+                                        class="text-center text-muted py-4"
+                                    >
+                                        Data hasil deteksi belum tersedia.
+                                    </td>
+                                </tr>
+
+                            <?php endif; ?>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
 
 </div>
 
-<div class="card-body table-responsive">
-
-<table class="table table-bordered table-hover">
-
-<thead>
-
-<tr>
-
-<th>No</th>
-
-<th>Nama Balita</th>
-
-<th>Umur</th>
-
-<th>BB</th>
-
-<th>TB</th>
-
-<th>Status Gizi</th>
-
-<th>Status Risiko</th>
-
-<th>Tanggal</th>
-
-<th>Rekomendasi</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
 <?php
 
-$no=1;
+mysqli_stmt_close($stmt);
 
-while($data=mysqli_fetch_assoc($query)){
-
-?>
-
-<tr>
-
-<td><?= $no++; ?></td>
-
-<td><?= $data['nama_balita']; ?></td>
-
-<td><?= $data['umur_bulan']; ?> Bulan</td>
-
-<td><?= $data['berat_badan']; ?> Kg</td>
-
-<td><?= $data['tinggi_panjang_badan']; ?> Cm</td>
-
-<td>
-
-<span class="badge bg-warning text-dark">
-
-<?= $data['status_gizi']; ?>
-
-</span>
-
-</td>
-
-<td>
-
-<?php
-
-if($data['status_stunting']=="Risiko Rendah"){
-
-echo "<span class='badge bg-success'>Risiko Rendah</span>";
-
-}elseif($data['status_stunting']=="Risiko Sedang"){
-
-echo "<span class='badge bg-warning text-dark'>Risiko Sedang</span>";
-
-}else{
-
-echo "<span class='badge bg-danger'>Risiko Tinggi</span>";
-
-}
+require_once "../includes/footer.php";
 
 ?>
-
-</td>
-
-<td>
-
-<?= $data['tanggal_deteksi']; ?>
-
-</td>
-
-<td>
-
-<?php
-
-if($data['status_stunting']=="Risiko Rendah"){
-
-echo "Pertahankan pola makan sehat dan rutin ke Posyandu.";
-
-}elseif($data['status_stunting']=="Risiko Sedang"){
-
-echo "Tingkatkan konsumsi protein hewani dan lakukan pemantauan rutin.";
-
-}else{
-
-echo "Segera konsultasi dengan Petugas Gizi/Puskesmas untuk penanganan lebih lanjut.";
-
-}
-
-?>
-
-</td>
-
-</tr>
-
-<?php
-
-}
-
-?>
-
-</tbody>
-
-</table>
-
-</div>
-
-</div>
-
-</div>
-
-</body>
-
-</html>
