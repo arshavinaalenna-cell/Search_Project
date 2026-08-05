@@ -19,6 +19,28 @@ $rolePengguna = htmlspecialchars(
 $roleTampil = ucwords(
     str_replace("_", " ", $rolePengguna)
 );
+
+$judulHalaman = "Dashboard | Sistem Deteksi Stunting";
+
+require_once "../includes/header.php";
+require_once "../includes/navbar.php";
+?>
+
+$namaPengguna = htmlspecialchars(
+    $_SESSION["nama"] ?? "Pengguna",
+    ENT_QUOTES,
+    "UTF-8"
+);
+
+$rolePengguna = htmlspecialchars(
+    $_SESSION["role"] ?? "-",
+    ENT_QUOTES,
+    "UTF-8"
+);
+
+$roleTampil = ucwords(
+    str_replace("_", " ", $rolePengguna)
+);
 ?>
 
 <!DOCTYPE html>
@@ -105,39 +127,6 @@ $roleTampil = ucwords(
 </head>
 
 <body>
-
-<nav class="navbar navbar-expand-lg navbar-dark">
-    <div class="container-fluid">
-
-        <a
-            href="dashboard.php"
-            class="navbar-brand fw-bold"
-        >
-            Sistem Deteksi Stunting
-        </a>
-
-        <div class="navbar-user text-white">
-
-            <span>
-                Halo,
-                <strong><?= $namaPengguna ?></strong>
-            </span>
-
-            <span class="badge bg-light text-success role-badge ms-2">
-                <?= $roleTampil ?>
-            </span>
-
-            <a
-                href="../auth/logout.php"
-                class="btn btn-light btn-sm ms-3"
-            >
-                Logout
-            </a>
-
-        </div>
-
-    </div>
-</nav>
 
 <main class="container py-4">
 
