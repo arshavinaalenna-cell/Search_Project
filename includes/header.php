@@ -5,6 +5,20 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 $judulHalaman = $judulHalaman ?? "Sistem Deteksi Stunting";
+
+/*
+|--------------------------------------------------------------------------
+| Versi CSS
+|--------------------------------------------------------------------------
+| CSS hanya dimuat ulang ketika file style.css benar-benar diubah.
+| Lebih baik daripada memakai time() pada setiap halaman dibuka.
+*/
+
+$fileCss = __DIR__ . "/../assets/css/style.css";
+
+$versiCss = file_exists($fileCss)
+    ? filemtime($fileCss)
+    : "1.0";
 ?>
 
 <!DOCTYPE html>
@@ -23,6 +37,11 @@ $judulHalaman = $judulHalaman ?? "Sistem Deteksi Stunting";
         content="Sistem Informasi Deteksi dan Pemantauan Stunting"
     >
 
+    <meta
+        name="theme-color"
+        content="#e91e8d"
+    >
+
     <title>
         <?= htmlspecialchars(
             $judulHalaman,
@@ -31,8 +50,11 @@ $judulHalaman = $judulHalaman ?? "Sistem Deteksi Stunting";
         ) ?>
     </title>
 
-    <!-- Font modern -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <!-- Font utama aplikasi -->
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
 
     <link
         rel="preconnect"
@@ -51,11 +73,11 @@ $judulHalaman = $judulHalaman ?? "Sistem Deteksi Stunting";
         rel="stylesheet"
     >
 
-    <!-- CSS project -->
+    <!-- CSS utama aplikasi -->
     <link
         rel="stylesheet"
-        href="../assets/css/style.css?v=<?= time(); ?>"
+        href="../assets/css/style.css?v=<?= $versiCss ?>"
     >
 </head>
 
-<body>
+<body class="app-body">
