@@ -39,7 +39,7 @@ $judulHalaman = $judulHalaman ?? "Sistem Deteksi Stunting";
     <!-- CSS project -->
     <link
         rel="stylesheet"
-        href="../assets/css/style.css"
+        href="../assets/css/style.css?v=<?= time(); ?>"
     >
 </head>
 
