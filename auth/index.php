@@ -1,11 +1,13 @@
 <?php
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-if (!isset($_SESSION['id_user'])) {
-    header("Location: auth/login.php");
+if (isset($_SESSION["id_user"])) {
+    header("Location: dashboard/dashboard.php");
     exit;
 }
 
-header("Location: dashboard/dashboard.php");
+header("Location: auth/login.php");
 exit;

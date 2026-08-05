@@ -1,7 +1,6 @@
 <?php
 
-session_start();
-
+require_once "../auth/session.php";
 require_once "../config/koneksi.php";
 
 /*
