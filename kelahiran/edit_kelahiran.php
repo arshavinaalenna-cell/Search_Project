@@ -1,54 +1,79 @@
 <?php
-include '../koneksi.php';
+require_once '../config/koneksi.php';
 
-// Ambil ID dari URL
-$id = $_GET['id'];
+// Cek apakah ID ada
+if (!isset($_GET['id']) || empty($_GET['id'])) {
+    echo "<script>
+            alert('ID Riwayat Kelahiran tidak ditemukan!');
+            window.location='riwayat_kelahiran.php';
+          </script>";
+    exit;
+}
+
+$id = (int)$_GET['id'];
 
 // Ambil data riwayat kelahiran
-$query = mysqli_query($conn,"SELECT * FROM riwayat_kelahiran WHERE id_kelahiran='$id'");
-$data = mysqli_fetch_assoc($query);
+$stmt = mysqli_prepare($conn, "SELECT * FROM riwayat_kelahiran WHERE id_kelahiran = ?");
+mysqli_stmt_bind_param($stmt, "i", $id);
+mysqli_stmt_execute($stmt);
+$result = mysqli_stmt_get_result($stmt);
+$data = mysqli_fetch_assoc($result);
 
-// Jika tombol update ditekan
-if(isset($_POST['update'])){
+if (!$data) {
+    echo "<script>
+            alert('Data tidak ditemukan!');
+            window.location='riwayat_kelahiran.php';
+          </script>";
+    exit;
+}
 
-    $id_balita         = $_POST['id_balita'];
-    $berat_lahir       = $_POST['berat_lahir'];
-    $panjang_lahir     = $_POST['panjang_lahir'];
-    $usia_kehamilan    = $_POST['usia_kehamilan'];
-    $jenis_persalinan  = $_POST['jenis_persalinan'];
+// Simpan perubahan
+if (isset($_POST['update'])) {
 
-    $update = mysqli_query($conn,"UPDATE riwayat_kelahiran SET
+    $id_balita        = $_POST['id_balita'];
+    $berat_lahir      = $_POST['berat_lahir'];
+    $panjang_lahir    = $_POST['panjang_lahir'];
+    $usia_kehamilan   = $_POST['usia_kehamilan'];
+    $jenis_persalinan = $_POST['jenis_persalinan'];
 
-        id_balita='$id_balita',
-        berat_lahir='$berat_lahir',
-        panjang_lahir='$panjang_lahir',
-        usia_kehamilan='$usia_kehamilan',
-        jenis_persalinan='$jenis_persalinan'
+    $update = mysqli_prepare($conn, "UPDATE riwayat_kelahiran SET
+        id_balita=?,
+        berat_lahir=?,
+        panjang_lahir=?,
+        usia_kehamilan=?,
+        jenis_persalinan=?
+        WHERE id_kelahiran=?");
 
-        WHERE id_kelahiran='$id'
-    ");
+    mysqli_stmt_bind_param(
+        $update,
+        "iddisi",
+        $id_balita,
+        $berat_lahir,
+        $panjang_lahir,
+        $usia_kehamilan,
+        $jenis_persalinan,
+        $id
+    );
 
-    if($update){
+    if (mysqli_stmt_execute($update)) {
 
         echo "<script>
-            alert('Data berhasil diperbarui');
-            window.location='data_kelahiran.php';
-        </script>";
+                alert('Data berhasil diperbarui');
+                window.location='riwayat_kelahiran.php';
+              </script>";
 
-    }else{
+    } else {
 
         echo "<script>
-            alert('Data gagal diperbarui');
-        </script>";
+                alert('Data gagal diperbarui');
+              </script>";
 
     }
-
 }
 ?>
 
 <!DOCTYPE html>
 <html lang="id">
-
 <head>
 
 <meta charset="UTF-8">
@@ -66,7 +91,7 @@ if(isset($_POST['update'])){
 
 <div class="card shadow">
 
-<div class="card-header bg-warning">
+<div class="card-header bg-warning text-dark">
 
 <h4>Edit Riwayat Kelahiran</h4>
 
@@ -78,7 +103,7 @@ if(isset($_POST['update'])){
 
 <div class="mb-3">
 
-<label class="form-label">Balita</label>
+<label class="form-label">Nama Balita</label>
 
 <select name="id_balita" class="form-select" required>
 
@@ -86,17 +111,12 @@ if(isset($_POST['update'])){
 
 $balita = mysqli_query($conn,"SELECT * FROM balita ORDER BY nama_balita ASC");
 
-while($b = mysqli_fetch_array($balita)){
-
-    if($b['id_balita']==$data['id_balita']){
-        $selected="selected";
-    }else{
-        $selected="";
-    }
+while($b = mysqli_fetch_assoc($balita)){
 
 ?>
 
-<option value="<?= $b['id_balita']; ?>" <?= $selected; ?>>
+<option value="<?= $b['id_balita']; ?>"
+<?= ($b['id_balita']==$data['id_balita']) ? "selected" : ""; ?>>
 
 <?= $b['nama_balita']; ?> - <?= $b['nik_balita']; ?>
 
@@ -176,15 +196,11 @@ Forceps
 </div>
 
 <button type="submit" name="update" class="btn btn-warning">
-
 Update
-
 </button>
 
-<a href="data_kelahiran.php" class="btn btn-secondary">
-
+<a href="riwayat_kelahiran.php" class="btn btn-secondary">
 Kembali
-
 </a>
 
 </form>
@@ -196,5 +212,4 @@ Kembali
 </div>
 
 </body>
-
 </html>

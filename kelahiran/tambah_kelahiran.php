@@ -1,13 +1,13 @@
 <?php
-include '../koneksi.php';
+require_once '../config/koneksi.php';
 
 if(isset($_POST['simpan'])){
 
-    $id_balita         = $_POST['id_balita'];
-    $berat_lahir       = $_POST['berat_lahir'];
-    $panjang_lahir     = $_POST['panjang_lahir'];
-    $usia_kehamilan    = $_POST['usia_kehamilan'];
-    $jenis_persalinan  = $_POST['jenis_persalinan'];
+    $id_balita        = $_POST['id_balita'];
+    $berat_lahir      = $_POST['berat_lahir'];
+    $panjang_lahir    = $_POST['panjang_lahir'];
+    $usia_kehamilan   = $_POST['usia_kehamilan'];
+    $jenis_persalinan = $_POST['jenis_persalinan'];
 
     $query = mysqli_query($conn,"INSERT INTO riwayat_kelahiran
     (
@@ -29,14 +29,14 @@ if(isset($_POST['simpan'])){
     if($query){
 
         echo "<script>
-        alert('Data riwayat kelahiran berhasil ditambahkan');
-        window.location='data_kelahiran.php';
+            alert('Data riwayat kelahiran berhasil ditambahkan');
+            window.location='riwayat_kelahiran.php';
         </script>";
 
     }else{
 
         echo "<script>
-        alert('Data gagal ditambahkan');
+            alert('Data gagal ditambahkan');
         </script>";
 
     }
@@ -76,7 +76,7 @@ if(isset($_POST['simpan'])){
 
 <div class="mb-3">
 
-<label class="form-label">ID Balita</label>
+<label class="form-label">Balita</label>
 
 <select name="id_balita" class="form-select" required>
 
@@ -155,11 +155,8 @@ required>
 <option value="">-- Pilih Jenis Persalinan --</option>
 
 <option value="Normal">Normal</option>
-
 <option value="Caesar">Caesar</option>
-
 <option value="Vakum">Vakum</option>
-
 <option value="Forceps">Forceps</option>
 
 </select>
@@ -176,7 +173,7 @@ Simpan
 </button>
 
 <a
-href="data_kelahiran.php"
+href="riwayat_kelahiran.php"
 class="btn btn-secondary">
 
 Kembali

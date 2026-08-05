@@ -1,43 +1,61 @@
 <?php
-include '../koneksi.php';
+require_once '../config/koneksi.php';
 
 if(isset($_POST['simpan'])){
 
-    $id_balita = $_POST['id_balita'];
-    $berat_lahir = $_POST['berat_lahir'];
-    $panjang_lahir = $_POST['panjang_lahir'];
-    $usia_kehamilan = $_POST['usia_kehamilan'];
+    $id_balita        = $_POST['id_balita'];
+    $berat_lahir      = $_POST['berat_lahir'];
+    $panjang_lahir    = $_POST['panjang_lahir'];
+    $usia_kehamilan   = $_POST['usia_kehamilan'];
     $jenis_persalinan = $_POST['jenis_persalinan'];
 
-    $query = mysqli_query($conn,"INSERT INTO riwayat_kelahiran
-    (
-        id_balita,
-        berat_lahir,
-        panjang_lahir,
-        usia_kehamilan,
-        jenis_persalinan
-    )
-    VALUES
-    (
-        '$id_balita',
-        '$berat_lahir',
-        '$panjang_lahir',
-        '$usia_kehamilan',
-        '$jenis_persalinan'
-    )");
-
-    if($query){
+    if(
+        empty($id_balita) ||
+        empty($berat_lahir) ||
+        empty($panjang_lahir) ||
+        empty($usia_kehamilan) ||
+        empty($jenis_persalinan)
+    ){
 
         echo "<script>
-        alert('Data berhasil disimpan');
-        window.location='data_riwayat_kelahiran.php';
-        </script>";
+                alert('Semua data harus diisi');
+              </script>";
 
     }else{
 
-        echo "<script>
-        alert('Data gagal disimpan');
-        </script>";
+        $query = mysqli_query($conn,"
+            INSERT INTO riwayat_kelahiran
+            (
+                id_balita,
+                berat_lahir,
+                panjang_lahir,
+                usia_kehamilan,
+                jenis_persalinan
+            )
+            VALUES
+            (
+                '$id_balita',
+                '$berat_lahir',
+                '$panjang_lahir',
+                '$usia_kehamilan',
+                '$jenis_persalinan'
+            )
+        ");
+
+        if($query){
+
+            echo "<script>
+                    alert('Data riwayat kelahiran berhasil ditambahkan');
+                    window.location='riwayat_kelahiran.php';
+                  </script>";
+
+        }else{
+
+            echo "<script>
+                    alert('Data gagal disimpan');
+                  </script>";
+
+        }
 
     }
 
@@ -45,9 +63,13 @@ if(isset($_POST['simpan'])){
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="id">
 
 <head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <title>Tambah Riwayat Kelahiran</title>
 
@@ -59,7 +81,7 @@ if(isset($_POST['simpan'])){
 
 <div class="container mt-5">
 
-<div class="card">
+<div class="card shadow">
 
 <div class="card-header bg-success text-white">
 
@@ -73,61 +95,120 @@ if(isset($_POST['simpan'])){
 
 <div class="mb-3">
 
-<label>ID Balita</label>
+<label class="form-label">
 
-<input
-type="number"
-name="id_balita"
-class="form-control"
-required>
+Balita
+
+</label>
+
+<select name="id_balita" class="form-select" required>
+
+<option value="">-- Pilih Balita --</option>
+
+<?php
+
+$balita = mysqli_query($conn,"
+SELECT *
+FROM balita
+ORDER BY nama_balita ASC
+");
+
+while($b=mysqli_fetch_assoc($balita)){
+
+?>
+
+<option value="<?= $b['id_balita']; ?>">
+
+<?= $b['nama_balita']; ?>
+
+(<?= $b['nik_balita']; ?>)
+
+</option>
+
+<?php } ?>
+
+</select>
 
 </div>
 
 <div class="mb-3">
 
-<label>Berat Lahir (kg)</label>
+<label class="form-label">
+
+Berat Lahir (Kg)
+
+</label>
 
 <input
+
 type="number"
+
 step="0.01"
+
 name="berat_lahir"
+
 class="form-control"
+
 required>
 
 </div>
 
 <div class="mb-3">
 
-<label>Panjang Lahir (cm)</label>
+<label class="form-label">
+
+Panjang Lahir (cm)
+
+</label>
 
 <input
+
 type="number"
+
 step="0.01"
+
 name="panjang_lahir"
+
 class="form-control"
+
 required>
 
 </div>
 
 <div class="mb-3">
 
-<label>Usia Kehamilan (Minggu)</label>
+<label class="form-label">
+
+Usia Kehamilan (Minggu)
+
+</label>
 
 <input
+
 type="number"
+
 name="usia_kehamilan"
+
 class="form-control"
+
 required>
 
 </div>
 
 <div class="mb-3">
 
-<label>Jenis Persalinan</label>
+<label class="form-label">
+
+Jenis Persalinan
+
+</label>
 
 <select
+
 name="jenis_persalinan"
+
 class="form-select"
+
 required>
 
 <option value="">-- Pilih --</option>
@@ -145,15 +226,22 @@ required>
 </div>
 
 <button
+
 type="submit"
+
 name="simpan"
+
 class="btn btn-success">
 
 Simpan
 
 </button>
 
-<a href="data_riwayat_kelahiran.php" class="btn btn-secondary">
+<a
+
+href="riwayat_kelahiran.php"
+
+class="btn btn-secondary">
 
 Kembali
 
@@ -168,4 +256,5 @@ Kembali
 </div>
 
 </body>
+
 </html>
