@@ -39,7 +39,8 @@ require_once "../includes/navbar.php";
             <h2>Dashboard</h2>
 
             <p>
-                Ringkasan data untuk <?= htmlspecialchars(
+                Ringkasan data untuk
+                <?= htmlspecialchars(
                     $roleTampil,
                     ENT_QUOTES,
                     "UTF-8"
@@ -52,6 +53,7 @@ require_once "../includes/navbar.php";
             <div class="col-12 col-sm-6 col-lg-3">
                 <div class="card stat-card">
                     <div class="card-body text-center">
+
                         <h2><?= $totalBalita ?></h2>
 
                         <p>
@@ -59,6 +61,7 @@ require_once "../includes/navbar.php";
                                 ? "Data Anak"
                                 : "Total Balita" ?>
                         </p>
+
                     </div>
                 </div>
             </div>
@@ -68,8 +71,11 @@ require_once "../includes/navbar.php";
                 <div class="col-12 col-sm-6 col-lg-3">
                     <div class="card stat-card">
                         <div class="card-body text-center">
+
                             <h2><?= $totalPengguna ?></h2>
+
                             <p>Total Pengguna</p>
+
                         </div>
                     </div>
                 </div>
@@ -93,8 +99,11 @@ require_once "../includes/navbar.php";
                 <div class="col-12 col-sm-6 col-lg-3">
                     <div class="card stat-card">
                         <div class="card-body text-center">
+
                             <h2><?= $totalSkrining ?></h2>
+
                             <p>Skrining Awal</p>
+
                         </div>
                     </div>
                 </div>
@@ -118,8 +127,11 @@ require_once "../includes/navbar.php";
                 <div class="col-12 col-sm-6 col-lg-3">
                     <div class="card stat-card">
                         <div class="card-body text-center">
+
                             <h2><?= $totalHasilDeteksi ?></h2>
+
                             <p>Hasil Deteksi</p>
+
                         </div>
                     </div>
                 </div>
@@ -144,8 +156,11 @@ require_once "../includes/navbar.php";
                 <div class="col-12 col-sm-6 col-lg-3">
                     <div class="card stat-card">
                         <div class="card-body text-center">
+
                             <h2><?= $totalPengukuran ?></h2>
+
                             <p>Pengukuran Antropometri</p>
+
                         </div>
                     </div>
                 </div>
@@ -168,8 +183,11 @@ require_once "../includes/navbar.php";
                 <div class="col-12 col-sm-6 col-lg-3">
                     <div class="card stat-card">
                         <div class="card-body text-center">
+
                             <h2><?= $totalKonsultasi ?></h2>
+
                             <p>Konsultasi</p>
+
                         </div>
                     </div>
                 </div>
@@ -177,6 +195,52 @@ require_once "../includes/navbar.php";
             <?php endif; ?>
 
         </div>
+
+        <?php if ($rolePengguna === "kader"): ?>
+
+            <div class="card welcome-card mb-4">
+                <div class="card-body">
+
+                    <h5 class="mb-3">
+                        Aksi Cepat Kader
+                    </h5>
+
+                    <div class="d-flex flex-wrap gap-2">
+
+                        <a
+                            href="../balita/tambah_balita.php"
+                            class="btn btn-success"
+                        >
+                            Tambah Data Balita
+                        </a>
+
+                        <a
+                            href="../balita/data_balita.php"
+                            class="btn btn-outline-success"
+                        >
+                            Lihat Data Balita
+                        </a>
+
+                        <a
+                            href="../pengukuran/tambah_pengukuran.php"
+                            class="btn btn-success"
+                        >
+                            Input Pengukuran
+                        </a>
+
+                        <a
+                            href="../pengukuran/data_pengukuran.php"
+                            class="btn btn-outline-success"
+                        >
+                            Riwayat Pengukuran
+                        </a>
+
+                    </div>
+
+                </div>
+            </div>
+
+        <?php endif; ?>
 
         <div class="card welcome-card">
             <div class="card-body">
