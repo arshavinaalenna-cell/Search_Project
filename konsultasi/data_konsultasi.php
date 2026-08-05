@@ -24,12 +24,14 @@ $kataKunci = "%" . $cari . "%";
 |--------------------------------------------------------------------------
 |
 | Orang tua hanya melihat konsultasi anak miliknya.
-| Petugas Gizi dan Kepala Puskesmas melihat semua konsultasi.
+| Petugas Gizi dan Kepala Puskesmas dapat melihat semua konsultasi.
 |
 */
 
 if ($roleAktif === "orang_tua") {
+
     if ($cari !== "") {
+
         $stmt = mysqli_prepare(
             $conn,
             "SELECT
@@ -37,6 +39,7 @@ if ($roleAktif === "orang_tua") {
                 k.id_balita,
                 k.id_petugas,
                 k.tanggal,
+                k.keluhan,
                 k.hasil_konsultasi,
                 k.tindak_lanjut,
                 b.nama_balita,
@@ -51,6 +54,8 @@ if ($roleAktif === "orang_tua") {
              AND (
                 b.nama_balita LIKE ?
                 OR b.nik_balita LIKE ?
+                OR p.nama LIKE ?
+                OR k.keluhan LIKE ?
                 OR k.hasil_konsultasi LIKE ?
                 OR k.tindak_lanjut LIKE ?
              )
@@ -66,14 +71,18 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "issss",
+            "issssss",
             $idUserAktif,
+            $kataKunci,
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci
         );
+
     } else {
+
         $stmt = mysqli_prepare(
             $conn,
             "SELECT
@@ -81,6 +90,7 @@ if ($roleAktif === "orang_tua") {
                 k.id_balita,
                 k.id_petugas,
                 k.tanggal,
+                k.keluhan,
                 k.hasil_konsultasi,
                 k.tindak_lanjut,
                 b.nama_balita,
@@ -108,8 +118,11 @@ if ($roleAktif === "orang_tua") {
             $idUserAktif
         );
     }
+
 } else {
+
     if ($cari !== "") {
+
         $stmt = mysqli_prepare(
             $conn,
             "SELECT
@@ -117,6 +130,7 @@ if ($roleAktif === "orang_tua") {
                 k.id_balita,
                 k.id_petugas,
                 k.tanggal,
+                k.keluhan,
                 k.hasil_konsultasi,
                 k.tindak_lanjut,
                 b.nama_balita,
@@ -131,6 +145,7 @@ if ($roleAktif === "orang_tua") {
                 b.nama_balita LIKE ?
                 OR b.nik_balita LIKE ?
                 OR p.nama LIKE ?
+                OR k.keluhan LIKE ?
                 OR k.hasil_konsultasi LIKE ?
                 OR k.tindak_lanjut LIKE ?
              ORDER BY k.id_konsultasi DESC"
@@ -145,14 +160,17 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "sssss",
+            "ssssss",
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci
         );
+
     } else {
+
         $stmt = mysqli_prepare(
             $conn,
             "SELECT
@@ -160,6 +178,7 @@ if ($roleAktif === "orang_tua") {
                 k.id_balita,
                 k.id_petugas,
                 k.tanggal,
+                k.keluhan,
                 k.hasil_konsultasi,
                 k.tindak_lanjut,
                 b.nama_balita,
@@ -282,7 +301,7 @@ require_once "../includes/navbar.php";
                             type="text"
                             name="cari"
                             class="form-control"
-                            placeholder="Cari nama balita, NIK, petugas, hasil, atau tindak lanjut"
+                            placeholder="Cari balita, NIK, petugas, keluhan, hasil, atau tindak lanjut"
                             value="<?= htmlspecialchars(
                                 $cari,
                                 ENT_QUOTES,
@@ -330,8 +349,10 @@ require_once "../includes/navbar.php";
                                 <th>Nama Balita</th>
                                 <th>NIK</th>
                                 <th>Petugas Gizi</th>
+                                <th>Keluhan</th>
                                 <th>Hasil Konsultasi</th>
                                 <th>Tindak Lanjut</th>
+
                                 <th style="min-width: 180px;">
                                     Aksi
                                 </th>
@@ -392,48 +413,121 @@ require_once "../includes/navbar.php";
                                         </td>
 
                                         <td>
-                                            <?= nl2br(
-                                                htmlspecialchars(
-                                                    $data["hasil_konsultasi"]
-                                                        ?? "-",
-                                                    ENT_QUOTES,
-                                                    "UTF-8"
-                                                )
-                                            ) ?>
-                                        </td>
-
-                                        <td>
-                                            <?= nl2br(
-                                                htmlspecialchars(
-                                                    $data["tindak_lanjut"]
-                                                        ?? "-",
-                                                    ENT_QUOTES,
-                                                    "UTF-8"
-                                                )
-                                            ) ?>
-                                        </td>
-
-                                        <td>
-
-                                            <a
-                                                href="detail_konsultasi.php?id=<?= (int) $data["id_konsultasi"] ?>"
-                                                class="btn btn-info btn-sm"
-                                            >
-                                                Detail
-                                            </a>
-
                                             <?php if (
-                                                $roleAktif === "petugas_gizi"
+                                                trim(
+                                                    $data["keluhan"] ?? ""
+                                                ) !== ""
                                             ): ?>
 
-                                                <a
-                                                    href="edit_konsultasi.php?id=<?= (int) $data["id_konsultasi"] ?>"
-                                                    class="btn btn-warning btn-sm"
-                                                >
-                                                    Edit
-                                                </a>
+                                                <?= nl2br(
+                                                    htmlspecialchars(
+                                                        $data["keluhan"],
+                                                        ENT_QUOTES,
+                                                        "UTF-8"
+                                                    )
+                                                ) ?>
+
+                                            <?php else: ?>
+
+                                                <span class="text-muted">
+                                                    Tidak ada keluhan.
+                                                </span>
 
                                             <?php endif; ?>
+                                        </td>
+
+                                        <td>
+                                            <?php if (
+                                                trim(
+                                                    $data[
+                                                        "hasil_konsultasi"
+                                                    ] ?? ""
+                                                ) !== ""
+                                            ): ?>
+
+                                                <?= nl2br(
+                                                    htmlspecialchars(
+                                                        $data[
+                                                            "hasil_konsultasi"
+                                                        ],
+                                                        ENT_QUOTES,
+                                                        "UTF-8"
+                                                    )
+                                                ) ?>
+
+                                            <?php else: ?>
+
+                                                <span
+                                                    class="badge bg-warning text-dark"
+                                                >
+                                                    Belum diisi
+                                                </span>
+
+                                            <?php endif; ?>
+                                        </td>
+
+                                        <td>
+                                            <?php if (
+                                                trim(
+                                                    $data[
+                                                        "tindak_lanjut"
+                                                    ] ?? ""
+                                                ) !== ""
+                                            ): ?>
+
+                                                <?= nl2br(
+                                                    htmlspecialchars(
+                                                        $data[
+                                                            "tindak_lanjut"
+                                                        ],
+                                                        ENT_QUOTES,
+                                                        "UTF-8"
+                                                    )
+                                                ) ?>
+
+                                            <?php else: ?>
+
+                                                <span
+                                                    class="badge bg-secondary"
+                                                >
+                                                    Belum ada
+                                                </span>
+
+                                            <?php endif; ?>
+                                        </td>
+
+                                        <td>
+
+                                            <div
+                                                class="d-flex flex-wrap gap-1"
+                                            >
+
+                                                <a
+                                                    href="detail_konsultasi.php?id=<?= (int) $data["id_konsultasi"] ?>"
+                                                    class="btn btn-info btn-sm"
+                                                >
+                                                    Detail
+                                                </a>
+
+                                                <?php if (
+                                                    $roleAktif ===
+                                                        "petugas_gizi"
+                                                    &&
+                                                    (int) $data[
+                                                        "id_petugas"
+                                                    ] === $idUserAktif
+                                                ): ?>
+
+                                                    <a
+                                                        href="edit_konsultasi.php?id=<?= (int) $data["id_konsultasi"] ?>"
+                                                        class="btn btn-warning btn-sm"
+                                                    >
+                                                        Edit
+                                                    </a>
+
+                                                <?php endif; ?>
+
+                                            </div>
 
                                         </td>
 
@@ -445,7 +539,7 @@ require_once "../includes/navbar.php";
 
                                 <tr>
                                     <td
-                                        colspan="8"
+                                        colspan="9"
                                         class="text-center text-muted py-4"
                                     >
                                         Data konsultasi belum tersedia.
