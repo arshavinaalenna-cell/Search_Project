@@ -145,11 +145,6 @@ Edit
     action="hapus_balita.php"
     method="POST"
     class="d-inline form-hapus-balita"
-    data-nama="<?= htmlspecialchars(
-        $data["nama_balita"],
-        ENT_QUOTES,
-        "UTF-8"
-    ) ?>"
 >
     <input
         type="hidden"
