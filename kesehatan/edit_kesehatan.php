@@ -1,168 +1,447 @@
 <?php
-include '../koneksi.php';
 
-// Ambil ID dari URL
-$id = $_GET['id'];
+require_once "../auth/session.php";
+require_once "../includes/cek_role.php";
+require_once "../config/koneksi.php";
 
-// Ambil data berdasarkan ID
-$query = mysqli_query($conn, "SELECT * FROM riwayat_kesehatan WHERE id_riwayat='$id'");
-$data = mysqli_fetch_assoc($query);
+cekRole(["petugas_kia"]);
 
-// Update data
-if(isset($_POST['update'])){
+$judulHalaman = "Edit Riwayat Kesehatan | Sistem Deteksi Stunting";
+$pesanError = "";
 
-    $id_balita = $_POST['id_balita'];
-    $riwayat_penyakit = $_POST['riwayat_penyakit'];
-    $riwayat_imunisasi = $_POST['riwayat_imunisasi'];
-    $riwayat_perawatan = $_POST['riwayat_perawatan'];
+$idRiwayat = filter_input(
+    INPUT_GET,
+    "id",
+    FILTER_VALIDATE_INT
+);
 
-    $update = mysqli_query($conn,"UPDATE riwayat_kesehatan SET
+if (!$idRiwayat) {
+    header(
+        "Location: riwayat_kesehatan.php?pesan=tidak_ditemukan"
+    );
+    exit;
+}
 
-        id_balita='$id_balita',
-        riwayat_penyakit='$riwayat_penyakit',
-        riwayat_imunisasi='$riwayat_imunisasi',
-        riwayat_perawatan='$riwayat_perawatan'
+/*
+|--------------------------------------------------------------------------
+| Mengambil data riwayat kesehatan
+|--------------------------------------------------------------------------
+*/
 
-        WHERE id_riwayat='$id'
-    ");
+$stmtRiwayat = mysqli_prepare(
+    $conn,
+    "SELECT
+        id_riwayat,
+        id_balita,
+        riwayat_penyakit,
+        riwayat_imunisasi,
+        riwayat_perawatan
+     FROM riwayat_kesehatan
+     WHERE id_riwayat = ?
+     LIMIT 1"
+);
 
-    if($update){
+if (!$stmtRiwayat) {
+    die(
+        "Gagal menyiapkan data riwayat kesehatan: "
+        . mysqli_error($conn)
+    );
+}
 
-        echo "<script>
-            alert('Data berhasil diperbarui');
-            window.location='riwayat_kesehatan.php';
-        </script>";
+mysqli_stmt_bind_param(
+    $stmtRiwayat,
+    "i",
+    $idRiwayat
+);
 
-    }else{
+mysqli_stmt_execute($stmtRiwayat);
 
-        echo "<script>
-            alert('Data gagal diperbarui');
-        </script>";
+$hasilRiwayat = mysqli_stmt_get_result($stmtRiwayat);
+$dataRiwayat = mysqli_fetch_assoc($hasilRiwayat);
 
+mysqli_stmt_close($stmtRiwayat);
+
+if (!$dataRiwayat) {
+    header(
+        "Location: riwayat_kesehatan.php?pesan=tidak_ditemukan"
+    );
+    exit;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Nilai awal form
+|--------------------------------------------------------------------------
+*/
+
+$idBalita = (int) $dataRiwayat["id_balita"];
+
+$riwayatPenyakit =
+    $dataRiwayat["riwayat_penyakit"] ?? "";
+
+$riwayatImunisasi =
+    $dataRiwayat["riwayat_imunisasi"] ?? "";
+
+$riwayatPerawatan =
+    $dataRiwayat["riwayat_perawatan"] ?? "";
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil daftar balita
+|--------------------------------------------------------------------------
+*/
+
+$queryBalita = mysqli_query(
+    $conn,
+    "SELECT
+        id_balita,
+        nik_balita,
+        nama_balita
+     FROM balita
+     ORDER BY nama_balita ASC"
+);
+
+if (!$queryBalita) {
+    die(
+        "Gagal mengambil data balita: "
+        . mysqli_error($conn)
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Memproses perubahan data
+|--------------------------------------------------------------------------
+*/
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $idBalita = filter_input(
+        INPUT_POST,
+        "id_balita",
+        FILTER_VALIDATE_INT
+    );
+
+    $riwayatPenyakit = trim(
+        $_POST["riwayat_penyakit"] ?? ""
+    );
+
+    $riwayatImunisasi = trim(
+        $_POST["riwayat_imunisasi"] ?? ""
+    );
+
+    $riwayatPerawatan = trim(
+        $_POST["riwayat_perawatan"] ?? ""
+    );
+
+    if (
+        !$idBalita
+        || $riwayatPenyakit === ""
+        || $riwayatImunisasi === ""
+        || $riwayatPerawatan === ""
+    ) {
+        $pesanError = "Semua data wajib diisi.";
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Memastikan balita tersedia
+    |--------------------------------------------------------------------------
+    */
+
+    if ($pesanError === "") {
+        $cekBalita = mysqli_prepare(
+            $conn,
+            "SELECT id_balita
+             FROM balita
+             WHERE id_balita = ?
+             LIMIT 1"
+        );
+
+        if (!$cekBalita) {
+            $pesanError =
+                "Gagal memeriksa data balita.";
+        } else {
+            mysqli_stmt_bind_param(
+                $cekBalita,
+                "i",
+                $idBalita
+            );
+
+            mysqli_stmt_execute($cekBalita);
+
+            $hasilBalita = mysqli_stmt_get_result(
+                $cekBalita
+            );
+
+            if (
+                mysqli_num_rows($hasilBalita) === 0
+            ) {
+                $pesanError =
+                    "Data balita tidak ditemukan.";
+            }
+
+            mysqli_stmt_close($cekBalita);
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Memperbarui riwayat kesehatan
+    |--------------------------------------------------------------------------
+    */
+
+    if ($pesanError === "") {
+        $stmtUpdate = mysqli_prepare(
+            $conn,
+            "UPDATE riwayat_kesehatan
+             SET
+                id_balita = ?,
+                riwayat_penyakit = ?,
+                riwayat_imunisasi = ?,
+                riwayat_perawatan = ?
+             WHERE id_riwayat = ?"
+        );
+
+        if (!$stmtUpdate) {
+            $pesanError =
+                "Gagal menyiapkan perubahan data: "
+                . mysqli_error($conn);
+        } else {
+            mysqli_stmt_bind_param(
+                $stmtUpdate,
+                "isssi",
+                $idBalita,
+                $riwayatPenyakit,
+                $riwayatImunisasi,
+                $riwayatPerawatan,
+                $idRiwayat
+            );
+
+            if (mysqli_stmt_execute($stmtUpdate)) {
+                mysqli_stmt_close($stmtUpdate);
+
+                header(
+                    "Location: riwayat_kesehatan.php?pesan=edit_berhasil"
+                );
+                exit;
+            }
+
+            $pesanError =
+                "Data gagal diperbarui: "
+                . mysqli_stmt_error($stmtUpdate);
+
+            mysqli_stmt_close($stmtUpdate);
+        }
+    }
 }
+
+require_once "../includes/header.php";
+require_once "../includes/navbar.php";
 ?>
 
-<!DOCTYPE html>
-<html lang="id">
+<div class="layout-wrapper">
 
-<head>
+    <?php require_once "../includes/sidebar.php"; ?>
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+    <main class="main-content">
 
-<title>Edit Riwayat Kesehatan</title>
+        <div
+            class="d-flex flex-column flex-md-row
+            justify-content-between align-items-md-center
+            gap-3 mb-4"
+        >
+            <div>
+                <h2 class="mb-1">
+                    Edit Riwayat Kesehatan
+                </h2>
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+                <p class="text-muted mb-0">
+                    Perbarui riwayat penyakit, imunisasi,
+                    dan perawatan balita.
+                </p>
+            </div>
 
-</head>
+            <a
+                href="riwayat_kesehatan.php"
+                class="btn btn-outline-secondary"
+            >
+                Kembali
+            </a>
+        </div>
 
-<body>
+        <?php if ($pesanError !== ""): ?>
 
-<div class="container mt-5">
+            <div
+                class="alert alert-danger
+                alert-dismissible fade show"
+                role="alert"
+            >
+                <?= htmlspecialchars(
+                    $pesanError,
+                    ENT_QUOTES,
+                    "UTF-8"
+                ) ?>
 
-<div class="card shadow">
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"
+                    aria-label="Tutup"
+                ></button>
+            </div>
 
-<div class="card-header bg-warning text-dark">
+        <?php endif; ?>
 
-<h4>Edit Riwayat Kesehatan Anak</h4>
+        <div class="card content-card">
+
+            <div class="card-body p-4">
+
+                <form method="POST">
+
+                    <div class="mb-3">
+
+                        <label
+                            for="id_balita"
+                            class="form-label"
+                        >
+                            Nama Balita
+                        </label>
+
+                        <select
+                            id="id_balita"
+                            name="id_balita"
+                            class="form-select"
+                            required
+                        >
+                            <option value="">
+                                Pilih balita
+                            </option>
+
+                            <?php while (
+                                $balita =
+                                    mysqli_fetch_assoc(
+                                        $queryBalita
+                                    )
+                            ): ?>
+
+                                <option
+                                    value="<?= (int)
+                                        $balita["id_balita"] ?>"
+                                    <?= $idBalita ===
+                                        (int) $balita["id_balita"]
+                                        ? "selected"
+                                        : "" ?>
+                                >
+                                    <?= htmlspecialchars(
+                                        $balita["nama_balita"]
+                                        . " - "
+                                        . $balita["nik_balita"],
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ) ?>
+                                </option>
+
+                            <?php endwhile; ?>
+
+                        </select>
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label
+                            for="riwayat_penyakit"
+                            class="form-label"
+                        >
+                            Riwayat Penyakit
+                        </label>
+
+                        <textarea
+                            id="riwayat_penyakit"
+                            name="riwayat_penyakit"
+                            class="form-control"
+                            rows="3"
+                            required
+                        ><?= htmlspecialchars(
+                            $riwayatPenyakit,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ) ?></textarea>
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label
+                            for="riwayat_imunisasi"
+                            class="form-label"
+                        >
+                            Riwayat Imunisasi
+                        </label>
+
+                        <textarea
+                            id="riwayat_imunisasi"
+                            name="riwayat_imunisasi"
+                            class="form-control"
+                            rows="3"
+                            required
+                        ><?= htmlspecialchars(
+                            $riwayatImunisasi,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ) ?></textarea>
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label
+                            for="riwayat_perawatan"
+                            class="form-label"
+                        >
+                            Riwayat Perawatan
+                        </label>
+
+                        <textarea
+                            id="riwayat_perawatan"
+                            name="riwayat_perawatan"
+                            class="form-control"
+                            rows="3"
+                            required
+                        ><?= htmlspecialchars(
+                            $riwayatPerawatan,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ) ?></textarea>
+
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2">
+
+                        <button
+                            type="submit"
+                            class="btn btn-warning"
+                        >
+                            Simpan Perubahan
+                        </button>
+
+                        <a
+                            href="riwayat_kesehatan.php"
+                            class="btn btn-outline-secondary"
+                        >
+                            Batal
+                        </a>
+
+                    </div>
+
+                </form>
+
+            </div>
+
+        </div>
+
+    </main>
 
 </div>
 
-<div class="card-body">
-
-<form method="POST">
-
-<div class="mb-3">
-
-<label class="form-label">Nama Balita</label>
-
-<select name="id_balita" class="form-select" required>
-
-<?php
-
-$balita = mysqli_query($conn,"SELECT * FROM balita ORDER BY nama_balita ASC");
-
-while($b = mysqli_fetch_array($balita)){
-
-    $selected = ($b['id_balita']==$data['id_balita']) ? "selected" : "";
-
-?>
-
-<option value="<?= $b['id_balita']; ?>" <?= $selected; ?>>
-
-<?= $b['nama_balita']; ?> - <?= $b['nik_balita']; ?>
-
-</option>
-
-<?php } ?>
-
-</select>
-
-</div>
-
-<div class="mb-3">
-
-<label class="form-label">Riwayat Penyakit</label>
-
-<textarea
-name="riwayat_penyakit"
-class="form-control"
-rows="3"
-required><?= $data['riwayat_penyakit']; ?></textarea>
-
-</div>
-
-<div class="mb-3">
-
-<label class="form-label">Riwayat Imunisasi</label>
-
-<textarea
-name="riwayat_imunisasi"
-class="form-control"
-rows="3"
-required><?= $data['riwayat_imunisasi']; ?></textarea>
-
-</div>
-
-<div class="mb-3">
-
-<label class="form-label">Riwayat Perawatan</label>
-
-<textarea
-name="riwayat_perawatan"
-class="form-control"
-rows="3"
-required><?= $data['riwayat_perawatan']; ?></textarea>
-
-</div>
-
-<button
-type="submit"
-name="update"
-class="btn btn-warning">
-
-Update
-
-</button>
-
-<a
-href="riwayat_kesehatan.php"
-class="btn btn-secondary">
-
-Kembali
-
-</a>
-
-</form>
-
-</div>
-
-</div>
-
-</div>
-
-</body>
-
-</html>
+<?php require_once "../includes/footer.php"; ?>
