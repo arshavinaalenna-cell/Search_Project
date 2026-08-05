@@ -141,14 +141,29 @@ Edit
 
 </a>
 
-<a
-href="hapus_balita.php?id=<?= $d['id_balita']; ?>"
-class="btn btn-danger btn-sm"
-onclick="return confirm('Yakin ingin menghapus data balita ini?')">
+<form
+    action="hapus_balita.php"
+    method="POST"
+    class="d-inline form-hapus-balita"
+    data-nama="<?= htmlspecialchars(
+        $data["nama_balita"],
+        ENT_QUOTES,
+        "UTF-8"
+    ) ?>"
+>
+    <input
+        type="hidden"
+        name="id_balita"
+        value="<?= (int) $data["id_balita"] ?>"
+    >
 
-Hapus
-
-</a>
+    <button
+        type="submit"
+        class="btn btn-danger btn-sm"
+    >
+        Hapus
+    </button>
+</form>
 
 </td>
 
