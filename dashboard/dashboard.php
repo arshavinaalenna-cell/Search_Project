@@ -1,68 +1,211 @@
 <?php
-session_start();
-require_once "koneksi.php";
 
-if (!isset($_SESSION['id_user'])) {
-    header("Location: login.php");
+require_once "../auth/session.php";
+require_once "../config/koneksi.php";
+
+/*
+|--------------------------------------------------------------------------
+| Cek apakah pengguna sudah login
+|--------------------------------------------------------------------------
+*/
+
+if (!isset($_SESSION["id_user"])) {
+    header("Location: ../auth/login.php?pesan=belum_login");
     exit;
 }
 
-// Menghitung jumlah data
-$balita = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM balita"));
-$pengguna = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM pengguna"));
-$skrining = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM skrining_awal"));
-$hasil = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS total FROM hasil_deteksi"));
+/*
+|--------------------------------------------------------------------------
+| Menghitung statistik
+|--------------------------------------------------------------------------
+*/
+
+$queryBalita = mysqli_query(
+    $conn,
+    "SELECT COUNT(*) AS total FROM balita"
+);
+
+$queryPengguna = mysqli_query(
+    $conn,
+    "SELECT COUNT(*) AS total FROM pengguna"
+);
+
+$querySkrining = mysqli_query(
+    $conn,
+    "SELECT COUNT(*) AS total FROM skrining_awal"
+);
+
+$queryHasil = mysqli_query(
+    $conn,
+    "SELECT COUNT(*) AS total FROM hasil_deteksi"
+);
+
+/*
+ * Nilai default dibuat 0 supaya dashboard tidak error
+ * apabila query gagal.
+ */
+
+$balita = [
+    "total" => 0
+];
+
+$pengguna = [
+    "total" => 0
+];
+
+$skrining = [
+    "total" => 0
+];
+
+$hasil = [
+    "total" => 0
+];
+
+if ($queryBalita) {
+    $balita = mysqli_fetch_assoc($queryBalita);
+}
+
+if ($queryPengguna) {
+    $pengguna = mysqli_fetch_assoc($queryPengguna);
+}
+
+if ($querySkrining) {
+    $skrining = mysqli_fetch_assoc($querySkrining);
+}
+
+if ($queryHasil) {
+    $hasil = mysqli_fetch_assoc($queryHasil);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Data session untuk ditampilkan
+|--------------------------------------------------------------------------
+*/
+
+$namaPengguna = htmlspecialchars(
+    $_SESSION["nama"] ?? "Pengguna",
+    ENT_QUOTES,
+    "UTF-8"
+);
+
+$rolePengguna = htmlspecialchars(
+    $_SESSION["role"] ?? "-",
+    ENT_QUOTES,
+    "UTF-8"
+);
 ?>
 
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
 
-<title>Dashboard | Sistem Deteksi Stunting</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Dashboard | Sistem Deteksi Stunting</title>
 
-<style>
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
 
-body{
-    background:#f5f6fa;
-}
+    <style>
+        body {
+            margin: 0;
+            background: #f5f6fa;
+            font-family: Arial, Helvetica, sans-serif;
+        }
 
-.navbar{
-    background:#198754;
-}
+        .navbar {
+            background: #198754;
+        }
 
-.card{
-    border:none;
-    border-radius:15px;
-    box-shadow:0 5px 15px rgba(0,0,0,.1);
-}
+        .dashboard-header {
+            margin-bottom: 25px;
+        }
 
-.card h2{
-    font-weight:bold;
-}
+        .dashboard-header h2 {
+            margin-bottom: 5px;
+            font-weight: 700;
+        }
 
-</style>
+        .dashboard-header p {
+            margin: 0;
+            color: #6c757d;
+        }
 
+        .stat-card {
+            height: 100%;
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            transition: transform 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+        }
+
+        .stat-card h2 {
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #198754;
+        }
+
+        .stat-card p {
+            margin-bottom: 0;
+            color: #6c757d;
+        }
+
+        .welcome-card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .role-badge {
+            text-transform: capitalize;
+        }
+
+        @media (max-width: 767px) {
+            .navbar-user {
+                margin-top: 10px;
+            }
+        }
+    </style>
 </head>
+
 <body>
 
-<nav class="navbar navbar-dark">
+<nav class="navbar navbar-expand-lg navbar-dark">
     <div class="container-fluid">
 
-        <span class="navbar-brand">
+        <a
+            href="dashboard.php"
+            class="navbar-brand fw-bold"
+        >
             Sistem Deteksi Stunting
-        </span>
+        </a>
 
-        <div class="text-white">
+        <div class="navbar-user text-white">
 
-            Halo,
-            <b><?= $_SESSION['nama']; ?></b>
+            <span>
+                Halo,
+                <strong><?= $namaPengguna ?></strong>
+            </span>
 
-            <a href="logout.php"
-               class="btn btn-light btn-sm ms-3">
+            <span class="badge bg-light text-success role-badge ms-2">
+                <?= str_replace("_", " ", $rolePengguna) ?>
+            </span>
+
+            <a
+                href="../auth/logout.php"
+                class="btn btn-light btn-sm ms-3"
+            >
                 Logout
             </a>
 
@@ -71,85 +214,86 @@ body{
     </div>
 </nav>
 
-<div class="container mt-4">
+<main class="container py-4">
 
-<div class="row">
+    <div class="dashboard-header">
+        <h2>Dashboard</h2>
 
-<div class="col-md-3 mb-4">
+        <p>
+            Ringkasan data pada Sistem Deteksi Stunting.
+        </p>
+    </div>
 
-<div class="card">
-<div class="card-body text-center">
+    <div class="row g-4 mb-4">
 
-<h2><?= $balita['total']; ?></h2>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h2>
+                        <?= (int) $balita["total"] ?>
+                    </h2>
 
-<p>Total Balita</p>
+                    <p>Total Balita</p>
+                </div>
+            </div>
+        </div>
 
-</div>
-</div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h2>
+                        <?= (int) $pengguna["total"] ?>
+                    </h2>
 
-</div>
+                    <p>Total Pengguna</p>
+                </div>
+            </div>
+        </div>
 
-<div class="col-md-3 mb-4">
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h2>
+                        <?= (int) $skrining["total"] ?>
+                    </h2>
 
-<div class="card">
-<div class="card-body text-center">
+                    <p>Skrining Awal</p>
+                </div>
+            </div>
+        </div>
 
-<h2><?= $pengguna['total']; ?></h2>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="card stat-card">
+                <div class="card-body text-center">
+                    <h2>
+                        <?= (int) $hasil["total"] ?>
+                    </h2>
 
-<p>Total Pengguna</p>
+                    <p>Hasil Deteksi</p>
+                </div>
+            </div>
+        </div>
 
-</div>
-</div>
+    </div>
 
-</div>
+    <div class="card welcome-card">
+        <div class="card-body">
 
-<div class="col-md-3 mb-4">
+            <h4 class="mb-3">
+                Selamat Datang, <?= $namaPengguna ?>
+            </h4>
 
-<div class="card">
-<div class="card-body text-center">
+            <p class="mb-0">
+                Selamat datang di Sistem Deteksi Stunting.
+                Silakan gunakan menu yang tersedia untuk
+                mengelola data balita, skrining, pengukuran
+                antropometri, hasil deteksi, dan konsultasi.
+            </p>
 
-<h2><?= $skrining['total']; ?></h2>
+        </div>
+    </div>
 
-<p>Skrining Awal</p>
-
-</div>
-</div>
-
-</div>
-
-<div class="col-md-3 mb-4">
-
-<div class="card">
-<div class="card-body text-center">
-
-<h2><?= $hasil['total']; ?></h2>
-
-<p>Hasil Deteksi</p>
-
-</div>
-</div>
-
-</div>
-
-</div>
-
-<div class="card">
-
-<div class="card-body">
-
-<h4>Selamat Datang</h4>
-
-<p>
-Selamat datang di Sistem Deteksi Stunting.
-Silakan pilih menu yang tersedia untuk mengelola data balita,
-skrining, pengukuran antropometri, hasil deteksi, dan konsultasi.
-</p>
-
-</div>
-
-</div>
-
-</div>
+</main>
 
 </body>
 </html>
