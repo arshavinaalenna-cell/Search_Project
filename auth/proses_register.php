@@ -6,7 +6,7 @@ require_once "../config/koneksi.php";
 
 /*
 |--------------------------------------------------------------------------
-| Hanya menerima request POST
+| Hanya menerima pengiriman form POST
 |--------------------------------------------------------------------------
 */
 
@@ -17,7 +17,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil input registrasi
+| Mengambil input
 |--------------------------------------------------------------------------
 */
 
@@ -43,11 +43,11 @@ $_SESSION["register_old"] = [
 
 /*
 |--------------------------------------------------------------------------
-| Fungsi untuk mengembalikan pengguna ke halaman registrasi
+| Fungsi kembali ke registrasi jika terjadi kesalahan
 |--------------------------------------------------------------------------
 */
 
-function kembaliDenganError(string $pesan): void
+function kembaliRegister(string $pesan): void
 {
     $_SESSION["register_error"] = $pesan;
 
@@ -57,7 +57,7 @@ function kembaliDenganError(string $pesan): void
 
 /*
 |--------------------------------------------------------------------------
-| Validasi input kosong
+| Validasi kolom kosong
 |--------------------------------------------------------------------------
 */
 
@@ -67,8 +67,8 @@ if (
     || $password === ""
     || $konfirmasiPassword === ""
 ) {
-    kembaliDenganError(
-        "Semua kolom registrasi wajib diisi."
+    kembaliRegister(
+        "Semua kolom wajib diisi."
     );
 }
 
@@ -79,14 +79,14 @@ if (
 */
 
 if (strlen($nama) < 3) {
-    kembaliDenganError(
-        "Nama lengkap minimal terdiri dari 3 karakter."
+    kembaliRegister(
+        "Nama lengkap minimal 3 karakter."
     );
 }
 
 if (strlen($nama) > 100) {
-    kembaliDenganError(
-        "Nama lengkap maksimal terdiri dari 100 karakter."
+    kembaliRegister(
+        "Nama lengkap maksimal 100 karakter."
     );
 }
 
@@ -97,14 +97,14 @@ if (strlen($nama) > 100) {
 */
 
 if (strlen($username) < 4) {
-    kembaliDenganError(
-        "Username minimal terdiri dari 4 karakter."
+    kembaliRegister(
+        "Username minimal 4 karakter."
     );
 }
 
 if (strlen($username) > 50) {
-    kembaliDenganError(
-        "Username maksimal terdiri dari 50 karakter."
+    kembaliRegister(
+        "Username maksimal 50 karakter."
     );
 }
 
@@ -114,8 +114,8 @@ if (
         $username
     )
 ) {
-    kembaliDenganError(
-        "Username hanya boleh berisi huruf, angka, titik, garis bawah, dan tanda hubung."
+    kembaliRegister(
+        "Username hanya boleh menggunakan huruf, angka, titik, garis bawah, atau tanda hubung."
     );
 }
 
@@ -126,20 +126,20 @@ if (
 */
 
 if (strlen($password) < 8) {
-    kembaliDenganError(
-        "Password minimal terdiri dari 8 karakter."
+    kembaliRegister(
+        "Password minimal 8 karakter."
     );
 }
 
 if ($password !== $konfirmasiPassword) {
-    kembaliDenganError(
-        "Konfirmasi password tidak sama dengan password."
+    kembaliRegister(
+        "Konfirmasi password tidak sama."
     );
 }
 
 /*
 |--------------------------------------------------------------------------
-| Memeriksa username yang sudah terdaftar
+| Memeriksa username
 |--------------------------------------------------------------------------
 */
 
@@ -152,8 +152,8 @@ $stmtCek = mysqli_prepare(
 );
 
 if (!$stmtCek) {
-    kembaliDenganError(
-        "Terjadi kesalahan saat memeriksa username."
+    kembaliRegister(
+        "Sistem gagal memeriksa username."
     );
 }
 
@@ -165,21 +165,21 @@ mysqli_stmt_bind_param(
 
 mysqli_stmt_execute($stmtCek);
 
-$hasilCek = mysqli_stmt_get_result($stmtCek);
+$resultCek = mysqli_stmt_get_result($stmtCek);
 
-$penggunaLama = mysqli_fetch_assoc($hasilCek);
+$dataUsername = mysqli_fetch_assoc($resultCek);
 
 mysqli_stmt_close($stmtCek);
 
-if ($penggunaLama) {
-    kembaliDenganError(
-        "Username sudah digunakan. Silakan gunakan username lain."
+if ($dataUsername) {
+    kembaliRegister(
+        "Username sudah digunakan. Gunakan username lain."
     );
 }
 
 /*
 |--------------------------------------------------------------------------
-| Mengenkripsi password
+| Membuat password hash
 |--------------------------------------------------------------------------
 */
 
@@ -189,26 +189,22 @@ $passwordHash = password_hash(
 );
 
 if ($passwordHash === false) {
-    kembaliDenganError(
+    kembaliRegister(
         "Password gagal diproses."
     );
 }
 
 /*
 |--------------------------------------------------------------------------
-| Role registrasi publik selalu orang_tua
+| Role otomatis orang tua
 |--------------------------------------------------------------------------
-|
-| Role tidak diambil dari form agar pengguna tidak dapat mendaftarkan
-| dirinya sebagai petugas, kepala puskesmas, atau dinas kesehatan.
-|
 */
 
 $role = "orang_tua";
 
 /*
 |--------------------------------------------------------------------------
-| Menyimpan akun ke tabel pengguna
+| Menyimpan akun
 |--------------------------------------------------------------------------
 */
 
@@ -225,8 +221,8 @@ $stmtInsert = mysqli_prepare(
 );
 
 if (!$stmtInsert) {
-    kembaliDenganError(
-        "Terjadi kesalahan saat menyiapkan registrasi."
+    kembaliRegister(
+        "Sistem gagal menyiapkan registrasi."
     );
 }
 
@@ -239,25 +235,20 @@ mysqli_stmt_bind_param(
     $role
 );
 
-$berhasil = mysqli_stmt_execute($stmtInsert);
+if (!mysqli_stmt_execute($stmtInsert)) {
 
-if (!$berhasil) {
-
-    $nomorError = mysqli_stmt_errno($stmtInsert);
+    $kodeError = mysqli_stmt_errno($stmtInsert);
 
     mysqli_stmt_close($stmtInsert);
 
-    /*
-     * Error 1062 berarti username duplikat.
-     */
-    if ($nomorError === 1062) {
-        kembaliDenganError(
-            "Username sudah digunakan. Silakan gunakan username lain."
+    if ($kodeError === 1062) {
+        kembaliRegister(
+            "Username sudah digunakan."
         );
     }
 
-    kembaliDenganError(
-        "Registrasi gagal disimpan. Silakan coba kembali."
+    kembaliRegister(
+        "Registrasi gagal disimpan. Silakan coba lagi."
     );
 }
 
@@ -265,7 +256,7 @@ mysqli_stmt_close($stmtInsert);
 
 /*
 |--------------------------------------------------------------------------
-| Menghapus data sementara registrasi
+| Menghapus data sementara
 |--------------------------------------------------------------------------
 */
 
@@ -274,7 +265,7 @@ unset($_SESSION["register_error"]);
 
 /*
 |--------------------------------------------------------------------------
-| Kembali ke halaman login
+| Kembali ke login
 |--------------------------------------------------------------------------
 */
 
