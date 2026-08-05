@@ -12,7 +12,7 @@ $id = $_GET['id'];
 
 // Hapus data
 $hapus = mysqli_query($conn, "
-    DELETE FROM pengukuran
+    DELETE FROM pengukuran_antropometri
     WHERE id_pengukuran = '$id'
 ");
 

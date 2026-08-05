@@ -18,7 +18,7 @@ if (isset($_POST['simpan'])) {
     $lila = $_POST['lila'];
 
     $simpan = mysqli_query($conn, "
-        INSERT INTO pengukuran
+        INSERT INTO pengukuran_antropometri
         (
             id_balita,
             tanggal_pengukuran,

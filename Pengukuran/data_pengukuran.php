@@ -5,7 +5,7 @@ require_once "../config/koneksi.php";
 // Mengambil data pengukuran beserta nama balita
 $query = mysqli_query($conn, "
     SELECT p.*, b.nama_balita
-    FROM pengukuran p
+    FROM pengukuran_antropometri p
     INNER JOIN balita b
         ON p.id_balita = b.id_balita
     ORDER BY p.tanggal_pengukuran DESC

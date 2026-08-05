@@ -11,25 +11,23 @@ AMBIL DATA HASIL DETEKSI
 $query = mysqli_query($conn, "
 
 SELECT
-
-h.*,
-b.nama_balita,
-p.umur_bulan,
-p.berat_badan,
-p.tinggi_panjang_badan
+    h.*,
+    b.nama_balita,
+    p.umur_bulan,
+    p.berat_badan,
+    p.tinggi_panjang_badan
 
 FROM hasil_deteksi h
 
-INNER JOIN pengukuran p
-ON h.id_pengukuran = p.id_pengukuran
+INNER JOIN pengukuran_antropometri p
+    ON h.id_pengukuran = p.id_pengukuran
 
 INNER JOIN balita b
-ON p.id_balita = b.id_balita
+    ON p.id_balita = b.id_balita
 
 ORDER BY h.tanggal_deteksi DESC
 
 ");
-
 ?>
 
 <!DOCTYPE html>
