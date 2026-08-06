@@ -168,6 +168,46 @@ $query = mysqli_stmt_get_result($stmt);
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
+
+/*
+|--------------------------------------------------------------------------
+| Teks interface berdasarkan role
+|--------------------------------------------------------------------------
+|
+| Hanya mengubah tampilan halaman. Query, proses, dan hak akses tidak diubah.
+|
+*/
+
+$judulDataBalita = "Data Balita";
+$deskripsiDataBalita =
+    "Daftar balita yang terdaftar dalam sistem.";
+
+if ($roleAktif === "kader") {
+    $judulDataBalita = "Kelola Data Balita";
+    $deskripsiDataBalita =
+        "Daftarkan balita baru dan kelola data profil dasar balita.";
+} elseif ($roleAktif === "petugas_kia") {
+    $judulDataBalita = "Data Balita";
+    $deskripsiDataBalita =
+        "Pilih data balita untuk meninjau identitas dan melengkapi riwayat medis.";
+} elseif ($roleAktif === "petugas_gizi") {
+    $judulDataBalita = "Verifikasi Data Balita";
+    $deskripsiDataBalita =
+        "Tinjau kelengkapan data balita sebelum proses deteksi dan konsultasi gizi.";
+} elseif ($roleAktif === "orang_tua") {
+    $judulDataBalita = "Data Anak";
+    $deskripsiDataBalita =
+        "Lihat data anak yang terhubung dengan akunmu.";
+} elseif ($roleAktif === "kepala_puskesmas") {
+    $judulDataBalita = "Data Balita";
+    $deskripsiDataBalita =
+        "Tinjau data balita sebagai informasi monitoring tingkat Puskesmas.";
+} elseif ($roleAktif === "dinkes") {
+    $judulDataBalita = "Data Balita Wilayah";
+    $deskripsiDataBalita =
+        "Tinjau data balita sebagai informasi monitoring tingkat wilayah.";
+}
+
 ?>
 
 <div class="layout-wrapper">
@@ -176,43 +216,53 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div
-            class="d-flex flex-column flex-md-row
-            justify-content-between align-items-md-center
-            gap-3 mb-4"
-        >
+        <div class="page-header">
+
             <div>
-                <h2 class="mb-1">
-                    Data Balita
-                </h2>
 
-                <p class="text-muted mb-0">
-                    Daftar balita yang terdaftar dalam sistem.
+                <h1 class="page-title">
+                    <i class="bi bi-person-heart me-2"></i>
+                    <?= htmlspecialchars(
+                        $judulDataBalita,
+                        ENT_QUOTES,
+                        "UTF-8"
+                    ); ?>
+                </h1>
+
+                <p class="page-subtitle">
+                    <?= htmlspecialchars(
+                        $deskripsiDataBalita,
+                        ENT_QUOTES,
+                        "UTF-8"
+                    ); ?>
                 </p>
+
             </div>
-<?php if ($roleAktif === "kader"): ?>
 
-    <div class="d-flex justify-content-end align-items-center gap-2">
+            <div class="d-flex flex-wrap gap-2">
 
-        <button
-            type="button"
-            class="btn btn-success"
-            onclick="history.back()"
-        >
-            <i class="bi bi-arrow-left"></i>
-            Kembali
-        </button>
+                <a
+                    href="../dashboard/dashboard.php"
+                    class="btn btn-secondary"
+                >
+                    <i class="bi bi-arrow-left"></i>
+                    Kembali
+                </a>
 
-        <a
-            href="tambah_balita.php"
-            class="btn btn-success"
-        >
-            + Tambah Balita
-        </a>
+                <?php if ($roleAktif === "kader"): ?>
 
-    </div>
+                    <a
+                        href="tambah_balita.php"
+                        class="btn btn-primary"
+                    >
+                        <i class="bi bi-person-plus"></i>
+                        Tambah Balita
+                    </a>
 
-<?php endif; ?>
+                <?php endif; ?>
+
+            </div>
+
         </div>
 
         <?php if (isset($_GET["pesan"])): ?>
@@ -220,24 +270,28 @@ require_once "../includes/navbar.php";
             <?php if ($_GET["pesan"] === "tambah_berhasil"): ?>
 
                 <div class="alert alert-success">
+                    <i class="bi bi-check-circle me-1"></i>
                     Data balita berhasil ditambahkan.
                 </div>
 
             <?php elseif ($_GET["pesan"] === "edit_berhasil"): ?>
 
                 <div class="alert alert-success">
+                    <i class="bi bi-check-circle me-1"></i>
                     Data balita berhasil diperbarui.
                 </div>
 
             <?php elseif ($_GET["pesan"] === "hapus_berhasil"): ?>
 
                 <div class="alert alert-success">
+                    <i class="bi bi-check-circle me-1"></i>
                     Data balita berhasil dihapus.
                 </div>
 
             <?php elseif ($_GET["pesan"] === "masih_digunakan"): ?>
 
                 <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
                     Data balita tidak dapat dihapus karena masih
                     terhubung dengan data lain.
                 </div>
@@ -245,12 +299,14 @@ require_once "../includes/navbar.php";
             <?php elseif ($_GET["pesan"] === "hapus_gagal"): ?>
 
                 <div class="alert alert-danger">
+                    <i class="bi bi-x-circle me-1"></i>
                     Data balita gagal dihapus.
                 </div>
 
             <?php elseif ($_GET["pesan"] === "tidak_ditemukan"): ?>
 
                 <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
                     Data balita tidak ditemukan.
                 </div>
 
@@ -260,70 +316,131 @@ require_once "../includes/navbar.php";
 
         <div class="card content-card">
 
-            <div class="card-body p-4">
+            <div class="card-header">
+
+                <div>
+
+                    <h4 class="mb-1">
+                        Daftar Balita
+                    </h4>
+
+                    <small class="text-muted">
+                        Gunakan pencarian untuk menemukan data lebih cepat.
+                    </small>
+
+                </div>
+
+                <span class="badge badge-primary">
+                    <i class="bi bi-people"></i>
+                    Data
+                </span>
+
+            </div>
+
+            <div class="card-body">
 
                 <form
                     method="GET"
                     class="row g-2 mb-4"
                 >
-                    <div class="col-12 col-md-7">
 
-                        <input
-                            type="text"
-                            name="cari"
-                            class="form-control"
-                            placeholder="Cari NIK, nama balita, nama ibu, atau wilayah"
-                            value="<?= htmlspecialchars(
-                                $cari,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ) ?>"
-                        >
+                    <div class="col-12 col-lg-8">
+
+                        <div class="input-group">
+
+                            <span class="input-group-text">
+                                <i class="bi bi-search"></i>
+                            </span>
+
+                            <input
+                                type="text"
+                                name="cari"
+                                class="form-control"
+                                placeholder="Cari NIK, nama balita, nama ibu, atau wilayah"
+                                value="<?= htmlspecialchars(
+                                    $cari,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                            >
+
+                        </div>
 
                     </div>
 
-                    <div class="col-6 col-md-2">
+                    <div class="col-6 col-lg-2">
 
                         <button
                             type="submit"
                             class="btn btn-primary w-100"
                         >
+                            <i class="bi bi-search"></i>
                             Cari
                         </button>
 
                     </div>
 
-                    <div class="col-6 col-md-2">
+                    <div class="col-6 col-lg-2">
 
                         <a
                             href="data_balita.php"
-                            class="btn btn-success"
+                            class="btn btn-light w-100"
                         >
+                            <i class="bi bi-arrow-counterclockwise"></i>
                             Reset
                         </a>
 
                     </div>
+
                 </form>
 
                 <div class="table-responsive">
 
                     <table
-                        class="table table-bordered table-striped
-                        table-hover align-middle"
+                        class="table table-hover align-middle"
                     >
 
-                        <thead class="table-dark">
+                        <thead>
 
                             <tr>
-                                <th>No.</th>
-                                <th>NIK</th>
-                                <th>Nama Balita</th>
-                                <th>JK</th>
-                                <th>Tanggal Lahir</th>
-                                <th>Umur</th>
-                                <th>Nama Ibu</th>
-                                <th>Wilayah</th>
-                                <th style="min-width: 210px;">
+                                <th class="text-center">
+                                    No.
+                                </th>
+
+                                <th>
+                                    NIK
+                                </th>
+
+                                <th>
+                                    Nama Balita
+                                </th>
+
+                                <th class="text-center">
+                                    JK
+                                </th>
+
+                                <th class="text-center">
+                                    Tanggal Lahir
+                                </th>
+
+                                <th class="text-center">
+                                    Umur
+                                </th>
+
+                                <th>
+                                    Nama Ibu
+                                </th>
+
+                                <th>
+                                    Wilayah
+                                </th>
+
+                                <th
+                                    class="text-center"
+                                    style="min-width: <?= $roleAktif === "kader"
+                                        ? "210px"
+                                        : "110px"; ?>;"
+                                >
                                     Aksi
                                 </th>
                             </tr>
@@ -332,7 +449,9 @@ require_once "../includes/navbar.php";
 
                         <tbody>
 
-                            <?php if (mysqli_num_rows($query) > 0): ?>
+                            <?php if (
+                                mysqli_num_rows($query) > 0
+                            ): ?>
 
                                 <?php
                                 $no = 1;
@@ -344,33 +463,55 @@ require_once "../includes/navbar.php";
 
                                     <tr>
 
-                                        <td><?= $no++ ?></td>
+                                        <td class="text-center">
+                                            <?= $no++; ?>
+                                        </td>
 
                                         <td>
                                             <?= htmlspecialchars(
                                                 $d["nik_balita"],
                                                 ENT_QUOTES,
                                                 "UTF-8"
-                                            ) ?>
+                                            ); ?>
                                         </td>
 
                                         <td>
-                                            <?= htmlspecialchars(
-                                                $d["nama_balita"],
-                                                ENT_QUOTES,
-                                                "UTF-8"
-                                            ) ?>
+
+                                            <div
+                                                class="d-flex
+                                                align-items-center gap-2"
+                                            >
+
+                                                <span
+                                                    class="badge badge-primary"
+                                                >
+                                                    <i
+                                                        class="bi
+                                                        bi-person-heart"
+                                                    ></i>
+                                                </span>
+
+                                                <strong>
+                                                    <?= htmlspecialchars(
+                                                        $d["nama_balita"],
+                                                        ENT_QUOTES,
+                                                        "UTF-8"
+                                                    ); ?>
+                                                </strong>
+
+                                            </div>
+
                                         </td>
 
-                                        <td>
+                                        <td class="text-center">
                                             <?= htmlspecialchars(
                                                 $d["jenis_kelamin"],
                                                 ENT_QUOTES,
                                                 "UTF-8"
-                                            ) ?>
+                                            ); ?>
                                         </td>
 
-                                        <td>
+                                        <td class="text-center">
                                             <?= !empty(
                                                 $d["tanggal_lahir"]
                                             )
@@ -380,11 +521,11 @@ require_once "../includes/navbar.php";
                                                         $d["tanggal_lahir"]
                                                     )
                                                 )
-                                                : "-" ?>
+                                                : "-"; ?>
                                         </td>
 
-                                        <td>
-                                            <?= (int) $d["umur"] ?>
+                                        <td class="text-center">
+                                            <?= (int) $d["umur"]; ?>
                                             bulan
                                         </td>
 
@@ -393,7 +534,7 @@ require_once "../includes/navbar.php";
                                                 $d["nama_ibu"],
                                                 ENT_QUOTES,
                                                 "UTF-8"
-                                            ) ?>
+                                            ); ?>
                                         </td>
 
                                         <td>
@@ -401,19 +542,21 @@ require_once "../includes/navbar.php";
                                                 $d["wilayah_posyandu"],
                                                 ENT_QUOTES,
                                                 "UTF-8"
-                                            ) ?>
+                                            ); ?>
                                         </td>
 
                                         <td>
 
                                             <div
-                                                class="d-flex flex-wrap gap-1"
+                                                class="table-actions
+                                                justify-content-center"
                                             >
 
                                                 <a
-                                                    href="detail_balita.php?id=<?= (int) $d["id_balita"] ?>"
+                                                    href="detail_balita.php?id=<?= (int) $d["id_balita"]; ?>"
                                                     class="btn btn-info btn-sm"
                                                 >
+                                                    <i class="bi bi-eye"></i>
                                                     Detail
                                                 </a>
 
@@ -422,32 +565,35 @@ require_once "../includes/navbar.php";
                                                 ): ?>
 
                                                     <a
-                                                        href="edit_balita.php?id=<?= (int) $d["id_balita"] ?>"
+                                                        href="edit_balita.php?id=<?= (int) $d["id_balita"]; ?>"
                                                         class="btn btn-warning btn-sm"
                                                     >
+                                                        <i class="bi bi-pencil-square"></i>
                                                         Edit
                                                     </a>
 
                                                     <form
                                                         action="hapus_balita.php"
                                                         method="POST"
-                                                        class="d-inline form-hapus-balita"
+                                                        class="d-inline
+                                                        form-hapus-balita"
                                                         data-nama="<?= htmlspecialchars(
                                                             $d["nama_balita"],
                                                             ENT_QUOTES,
                                                             "UTF-8"
-                                                        ) ?>"
+                                                        ); ?>"
                                                     >
                                                         <input
                                                             type="hidden"
                                                             name="id_balita"
-                                                            value="<?= (int) $d["id_balita"] ?>"
+                                                            value="<?= (int) $d["id_balita"]; ?>"
                                                         >
 
                                                         <button
                                                             type="submit"
                                                             class="btn btn-danger btn-sm"
                                                         >
+                                                            <i class="bi bi-trash"></i>
                                                             Hapus
                                                         </button>
                                                     </form>
@@ -465,12 +611,28 @@ require_once "../includes/navbar.php";
                             <?php else: ?>
 
                                 <tr>
-                                    <td
-                                        colspan="9"
-                                        class="text-center text-muted py-4"
-                                    >
-                                        Data balita tidak ditemukan.
+
+                                    <td colspan="9">
+
+                                        <div class="empty-state">
+
+                                            <div class="empty-state-icon">
+                                                <i class="bi bi-person-x"></i>
+                                            </div>
+
+                                            <h3>
+                                                Data balita tidak ditemukan
+                                            </h3>
+
+                                            <p>
+                                                Coba gunakan kata kunci lain
+                                                atau reset pencarian.
+                                            </p>
+
+                                        </div>
+
                                     </td>
+
                                 </tr>
 
                             <?php endif; ?>
