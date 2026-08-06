@@ -101,6 +101,16 @@ $menuSidebar = [
                 "tambah_konsultasi.php",
                 "detail_konsultasi.php"
             ]
+        ],
+        [
+            "nama" => "Laporan Stunting",
+            "ikon" => "▣",
+            "url" => "../laporan/laporan_stunting.php",
+            "halaman" => [
+                "laporan_stunting.php",
+                "detail_laporan.php",
+                "cetak_laporan.php"
+            ]
         ]
     ],
 
@@ -142,6 +152,16 @@ $menuSidebar = [
             "halaman" => [
                 "data_konsultasi.php",
                 "detail_konsultasi.php"
+            ]
+        ],
+        [
+            "nama" => "Laporan Stunting",
+            "ikon" => "▣",
+            "url" => "../laporan/laporan_stunting.php",
+            "halaman" => [
+                "laporan_stunting.php",
+                "detail_laporan.php",
+                "cetak_laporan.php"
             ]
         ]
     ],
@@ -297,6 +317,16 @@ $menuSidebar = [
                 "data_konsultasi.php",
                 "tambah_konsultasi.php",
                 "detail_konsultasi.php"
+            ]
+        ],
+        [
+            "nama" => "Laporan Stunting",
+            "ikon" => "▣",
+            "url" => "../laporan/laporan_stunting.php",
+            "halaman" => [
+                "laporan_stunting.php",
+                "detail_laporan.php",
+                "cetak_laporan.php"
             ]
         ]
     ],
