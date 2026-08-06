@@ -4,12 +4,6 @@ require_once "../auth/session.php";
 require_once "../config/koneksi.php";
 require_once "statistik.php";
 
-$namaPengguna = htmlspecialchars(
-    $_SESSION["nama"] ?? "Pengguna",
-    ENT_QUOTES,
-    "UTF-8"
-);
-
 $rolePengguna = $_SESSION["role"] ?? "";
 
 $namaRole = [
@@ -399,36 +393,6 @@ switch ($rolePengguna) {
         break;
 }
 
-/*
-|--------------------------------------------------------------------------
-| Deskripsi dashboard berdasarkan role
-|--------------------------------------------------------------------------
-*/
-
-$deskripsiRole = [
-    "kader" =>
-        "Kelola pendaftaran balita dan pencatatan pengukuran antropometri dari kegiatan Posyandu.",
-
-    "petugas_kia" =>
-        "Kelola rekam medis dasar balita serta tinjau pertumbuhan dan hasil deteksi risiko stunting.",
-
-    "petugas_gizi" =>
-        "Validasi data balita, tinjau hasil pengukuran, lakukan deteksi risiko, dan berikan konsultasi gizi.",
-
-    "orang_tua" =>
-        "Pantau grafik pertumbuhan, hasil deteksi, dan konsultasi terkait kondisi gizi anak.",
-
-    "kepala_puskesmas" =>
-        "Pantau statistik Puskesmas, aktivitas konsultasi, serta laporan periodik pelayanan stunting.",
-
-    "dinkes" =>
-        "Pantau data agregat wilayah dan akses rekapitulasi laporan stunting untuk mendukung kebijakan."
-];
-
-$teksDeskripsi =
-    $deskripsiRole[$rolePengguna]
-    ?? "Selamat datang di Sistem Deteksi Stunting.";
-
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
 
@@ -456,26 +420,6 @@ require_once "../includes/navbar.php";
                         ENT_QUOTES,
                         "UTF-8"
                     ); ?>.
-                </p>
-
-            </div>
-
-        </div>
-
-        <div class="card welcome-card mb-4">
-
-            <div class="card-body">
-
-                <h4 class="mb-2">
-                    Selamat Datang, <?= $namaPengguna; ?>
-                </h4>
-
-                <p class="mb-0 text-muted">
-                    <?= htmlspecialchars(
-                        $teksDeskripsi,
-                        ENT_QUOTES,
-                        "UTF-8"
-                    ); ?>
                 </p>
 
             </div>
