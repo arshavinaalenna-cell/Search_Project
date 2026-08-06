@@ -1,386 +1,1174 @@
 <?php
-session_start();
+
+require_once "../auth/session.php";
 require_once "../config/koneksi.php";
 
-// Simpan Data
-if(isset($_POST['simpan'])){
+/*
+|--------------------------------------------------------------------------
+| Judul halaman
+|--------------------------------------------------------------------------
+*/
 
-    $id_balita            = $_POST['id_balita'];
-    $tinggi_badan_ibu     = $_POST['tinggi_badan_ibu'];
-    $pendidikan_ibu       = $_POST['pendidikan_ibu'];
-    $pekerjaan_ibu        = $_POST['pekerjaan_ibu'];
-    $lama_asi_eksklusif   = $_POST['lama_asi_eksklusif'];
-    $mpasi                = $_POST['mpasi'];
-    $frekuensi_makan      = $_POST['frekuensi_makan'];
-    $protein_hewani       = $_POST['protein_hewani'];
-    $status_ekonomi       = $_POST['status_ekonomi'];
-    $sanitasi             = $_POST['sanitasi'];
-    $air_bersih           = $_POST['air_bersih'];
+$judulHalaman =
+    "Tambah Skrining Awal | Sistem Deteksi Stunting";
 
-    $query = mysqli_query($conn,"
-        INSERT INTO skrining_awal
-        (
-            id_balita,
-            tinggi_badan_ibu,
-            pendidikan_ibu,
-            pekerjaan_ibu,
-            lama_asi_eksklusif,
-            mpasi,
-            frekuensi_makan,
-            protein_hewani,
-            status_ekonomi,
-            sanitasi,
-            air_bersih
-        )
-        VALUES
-        (
-            '$id_balita',
-            '$tinggi_badan_ibu',
-            '$pendidikan_ibu',
-            '$pekerjaan_ibu',
-            '$lama_asi_eksklusif',
-            '$mpasi',
-            '$frekuensi_makan',
-            '$protein_hewani',
-            '$status_ekonomi',
-            '$sanitasi',
-            '$air_bersih'
-        )
-    ");
+/*
+|--------------------------------------------------------------------------
+| Fungsi mengamankan output
+|--------------------------------------------------------------------------
+*/
 
-    if($query){
-
-        echo "<script>
-                alert('Data skrining berhasil disimpan');
-                window.location='hasil_skrining.php';
-              </script>";
-
-    }else{
-
-        echo "<script>
-                alert('Data gagal disimpan');
-              </script>";
-
-    }
-
+function amanFormSkrining($nilai): string
+{
+    return htmlspecialchars(
+        (string) ($nilai ?? ""),
+        ENT_QUOTES,
+        "UTF-8"
+    );
 }
 
-// Data Balita
-$balita = mysqli_query($conn,"
-SELECT *
-FROM balita
-ORDER BY nama_balita ASC
-");
+/*
+|--------------------------------------------------------------------------
+| Nilai awal form
+|--------------------------------------------------------------------------
+*/
+
+$error = "";
+
+$old = [
+    "id_balita"          => "",
+    "tinggi_badan_ibu"   => "",
+    "pendidikan_ibu"     => "",
+    "pekerjaan_ibu"      => "",
+    "lama_asi_eksklusif" => "",
+    "mpasi"              => "",
+    "frekuensi_makan"    => "",
+    "protein_hewani"     => "",
+    "status_ekonomi"     => "",
+    "sanitasi"           => "",
+    "air_bersih"         => ""
+];
+
+/*
+|--------------------------------------------------------------------------
+| Pilihan yang diizinkan
+|--------------------------------------------------------------------------
+*/
+
+$daftarPendidikan = [
+    "SD",
+    "SMP",
+    "SMA",
+    "Diploma",
+    "Sarjana"
+];
+
+$daftarPekerjaan = [
+    "Ibu Rumah Tangga",
+    "Petani",
+    "Pedagang",
+    "Karyawan Swasta",
+    "PNS",
+    "Wiraswasta",
+    "Lainnya"
+];
+
+$daftarFrekuensi = [
+    "Kurang dari 3 kali",
+    "3 kali",
+    "Lebih dari 3 kali"
+];
+
+$daftarEkonomi = [
+    "Rendah",
+    "Sedang",
+    "Tinggi"
+];
+
+/*
+|--------------------------------------------------------------------------
+| Proses penyimpanan
+|--------------------------------------------------------------------------
+*/
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
+    foreach ($old as $namaKolom => $nilai) {
+        $old[$namaKolom] =
+            trim($_POST[$namaKolom] ?? "");
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mengubah tipe input
+    |--------------------------------------------------------------------------
+    */
+
+    $idBalita = filter_var(
+        $old["id_balita"],
+        FILTER_VALIDATE_INT
+    );
+
+    $tinggiBadanIbu = filter_var(
+        $old["tinggi_badan_ibu"],
+        FILTER_VALIDATE_FLOAT
+    );
+
+    $lamaAsiEksklusif = filter_var(
+        $old["lama_asi_eksklusif"],
+        FILTER_VALIDATE_INT
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validasi kolom wajib
+    |--------------------------------------------------------------------------
+    */
+
+    foreach ($old as $nilai) {
+        if ($nilai === "") {
+            $error =
+                "Semua kolom skrining wajib diisi.";
+            break;
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validasi masing-masing data
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        $error === ""
+        && (
+            $idBalita === false
+            || $idBalita < 1
+        )
+    ) {
+        $error =
+            "Data balita yang dipilih tidak valid.";
+    }
+
+    if (
+        $error === ""
+        && (
+            $tinggiBadanIbu === false
+            || $tinggiBadanIbu < 100
+            || $tinggiBadanIbu > 220
+        )
+    ) {
+        $error =
+            "Tinggi badan ibu harus berada antara 100 sampai 220 cm.";
+    }
+
+    if (
+        $error === ""
+        && !in_array(
+            $old["pendidikan_ibu"],
+            $daftarPendidikan,
+            true
+        )
+    ) {
+        $error =
+            "Pilihan pendidikan ibu tidak valid.";
+    }
+
+    if (
+        $error === ""
+        && !in_array(
+            $old["pekerjaan_ibu"],
+            $daftarPekerjaan,
+            true
+        )
+    ) {
+        $error =
+            "Pilihan pekerjaan ibu tidak valid.";
+    }
+
+    if (
+        $error === ""
+        && (
+            $lamaAsiEksklusif === false
+            || $lamaAsiEksklusif < 0
+            || $lamaAsiEksklusif > 24
+        )
+    ) {
+        $error =
+            "Lama ASI eksklusif harus berada antara 0 sampai 24 bulan.";
+    }
+
+    if (
+        $error === ""
+        && !in_array(
+            $old["mpasi"],
+            ["Ya", "Tidak"],
+            true
+        )
+    ) {
+        $error =
+            "Pilihan MPASI tidak valid.";
+    }
+
+    if (
+        $error === ""
+        && !in_array(
+            $old["frekuensi_makan"],
+            $daftarFrekuensi,
+            true
+        )
+    ) {
+        $error =
+            "Pilihan frekuensi makan tidak valid.";
+    }
+
+    if (
+        $error === ""
+        && !in_array(
+            $old["protein_hewani"],
+            ["Ya", "Tidak"],
+            true
+        )
+    ) {
+        $error =
+            "Pilihan protein hewani tidak valid.";
+    }
+
+    if (
+        $error === ""
+        && !in_array(
+            $old["status_ekonomi"],
+            $daftarEkonomi,
+            true
+        )
+    ) {
+        $error =
+            "Pilihan status ekonomi tidak valid.";
+    }
+
+    if (
+        $error === ""
+        && !in_array(
+            $old["sanitasi"],
+            ["Baik", "Kurang"],
+            true
+        )
+    ) {
+        $error =
+            "Pilihan kondisi sanitasi tidak valid.";
+    }
+
+    if (
+        $error === ""
+        && !in_array(
+            $old["air_bersih"],
+            ["Ya", "Tidak"],
+            true
+        )
+    ) {
+        $error =
+            "Pilihan ketersediaan air bersih tidak valid.";
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Memastikan balita tersedia
+    |--------------------------------------------------------------------------
+    */
+
+    if ($error === "") {
+
+        $stmtCekBalita = mysqli_prepare(
+            $conn,
+            "SELECT id_balita
+             FROM balita
+             WHERE id_balita = ?
+             LIMIT 1"
+        );
+
+        if (!$stmtCekBalita) {
+            $error =
+                "Sistem gagal memeriksa data balita.";
+
+        } else {
+
+            mysqli_stmt_bind_param(
+                $stmtCekBalita,
+                "i",
+                $idBalita
+            );
+
+            mysqli_stmt_execute($stmtCekBalita);
+
+            $hasilBalita =
+                mysqli_stmt_get_result($stmtCekBalita);
+
+            $dataBalita =
+                mysqli_fetch_assoc($hasilBalita);
+
+            mysqli_stmt_close($stmtCekBalita);
+
+            if (!$dataBalita) {
+                $error =
+                    "Data balita tidak ditemukan.";
+            }
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Menyimpan data skrining
+    |--------------------------------------------------------------------------
+    */
+
+    if ($error === "") {
+
+        $pendidikanIbu =
+            $old["pendidikan_ibu"];
+
+        $pekerjaanIbu =
+            $old["pekerjaan_ibu"];
+
+        $mpasi =
+            $old["mpasi"];
+
+        $frekuensiMakan =
+            $old["frekuensi_makan"];
+
+        $proteinHewani =
+            $old["protein_hewani"];
+
+        $statusEkonomi =
+            $old["status_ekonomi"];
+
+        $sanitasi =
+            $old["sanitasi"];
+
+        $airBersih =
+            $old["air_bersih"];
+
+        $stmtSimpan = mysqli_prepare(
+            $conn,
+            "INSERT INTO skrining_awal
+            (
+                id_balita,
+                tinggi_badan_ibu,
+                pendidikan_ibu,
+                pekerjaan_ibu,
+                lama_asi_eksklusif,
+                mpasi,
+                frekuensi_makan,
+                protein_hewani,
+                status_ekonomi,
+                sanitasi,
+                air_bersih
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        );
+
+        if (!$stmtSimpan) {
+            $error =
+                "Sistem gagal menyiapkan penyimpanan skrining.";
+
+        } else {
+
+            mysqli_stmt_bind_param(
+                $stmtSimpan,
+                "idssissssss",
+                $idBalita,
+                $tinggiBadanIbu,
+                $pendidikanIbu,
+                $pekerjaanIbu,
+                $lamaAsiEksklusif,
+                $mpasi,
+                $frekuensiMakan,
+                $proteinHewani,
+                $statusEkonomi,
+                $sanitasi,
+                $airBersih
+            );
+
+            $berhasil =
+                mysqli_stmt_execute($stmtSimpan);
+
+            if ($berhasil) {
+
+                mysqli_stmt_close($stmtSimpan);
+
+                header(
+                    "Location: hasil_skrining.php?pesan=tambah_berhasil"
+                );
+
+                exit;
+            }
+
+            $error =
+                "Data skrining gagal disimpan.";
+
+            mysqli_stmt_close($stmtSimpan);
+        }
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil daftar balita
+|--------------------------------------------------------------------------
+*/
+
+$queryBalita = mysqli_query(
+    $conn,
+    "SELECT
+        id_balita,
+        nama_balita
+     FROM balita
+     ORDER BY nama_balita ASC"
+);
+
+if (!$queryBalita) {
+    die(
+        "Gagal mengambil daftar balita: "
+        . mysqli_error($conn)
+    );
+}
+
+$jumlahBalita =
+    mysqli_num_rows($queryBalita);
+
+/*
+|--------------------------------------------------------------------------
+| Template utama
+|--------------------------------------------------------------------------
+*/
+
+require_once "../includes/header.php";
+require_once "../includes/navbar.php";
 
 ?>
 
-<!DOCTYPE html>
-<html lang="id">
-<head>
+<div class="layout-wrapper">
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php require_once "../includes/sidebar.php"; ?>
 
-<title>Form Skrining</title>
+    <main class="main-content">
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+        <!-- Header halaman -->
+        <div class="page-header">
 
-<style>
+            <div>
 
-body{
-    background:#f5f6fa;
-}
+                <h1 class="page-title">
+                    <i class="bi bi-clipboard2-heart me-2"></i>
+                    Tambah Skrining Awal
+                </h1>
 
-.card{
-    border:none;
-    border-radius:15px;
-    box-shadow:0 5px 15px rgba(0,0,0,.1);
-}
+                <p class="page-subtitle">
+                    Lengkapi informasi keluarga, pola pemberian makan,
+                    sanitasi, dan faktor risiko awal balita.
+                </p>
 
-</style>
+            </div>
 
-</head>
+            <a
+                href="hasil_skrining.php"
+                class="btn btn-secondary"
+            >
+                <i class="bi bi-arrow-left"></i>
+                Kembali ke Hasil Skrining
+            </a>
 
-<body>
+        </div>
 
-<div class="container mt-4">
+        <!-- Pesan error -->
+        <?php if ($error !== ""): ?>
 
-<div class="card">
+            <div
+                class="alert alert-danger alert-dismissible fade show"
+                role="alert"
+            >
+                <i class="bi bi-exclamation-circle me-1"></i>
 
-<div class="card-header bg-success text-white">
+                <?= amanFormSkrining($error); ?>
 
-<h4>Form Skrining Awal Stunting</h4>
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"
+                    aria-label="Tutup"
+                ></button>
+            </div>
+
+        <?php endif; ?>
+
+        <?php if ($jumlahBalita < 1): ?>
+
+            <div class="card content-card">
+
+                <div class="card-body">
+
+                    <div class="empty-state">
+
+                        <div class="empty-state-icon">
+                            <i class="bi bi-person-plus"></i>
+                        </div>
+
+                        <h3>
+                            Belum ada data balita
+                        </h3>
+
+                        <p>
+                            Tambahkan data balita terlebih dahulu
+                            sebelum mengisi skrining awal.
+                        </p>
+
+                        <a
+                            href="../dashboard/dashboard.php"
+                            class="btn btn-secondary mt-3"
+                        >
+                            <i class="bi bi-house-heart"></i>
+                            Kembali ke Dashboard
+                        </a>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        <?php else: ?>
+
+            <div class="card content-card">
+
+                <div class="card-header">
+
+                    <div>
+
+                        <h4 class="mb-1">
+                            Form Skrining Awal Stunting
+                        </h4>
+
+                        <small class="text-muted">
+                            Semua kolom pada formulir wajib diisi.
+                        </small>
+
+                    </div>
+
+                    <span class="badge badge-info">
+                        <i class="bi bi-heart-pulse"></i>
+                        Skrining
+                    </span>
+
+                </div>
+
+                <div class="card-body">
+
+                    <form
+                        method="POST"
+                        action=""
+                        autocomplete="off"
+                    >
+
+                        <!-- Data balita -->
+                        <div class="form-group">
+
+                            <label
+                                for="id_balita"
+                                class="form-label"
+                            >
+                                Nama Balita
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <select
+                                name="id_balita"
+                                id="id_balita"
+                                class="form-select"
+                                required
+                            >
+
+                                <option value="">
+                                    -- Pilih Balita --
+                                </option>
+
+                                <?php
+                                while (
+                                    $balita =
+                                        mysqli_fetch_assoc(
+                                            $queryBalita
+                                        )
+                                ):
+                                ?>
+
+                                    <option
+                                        value="<?= (int) $balita["id_balita"]; ?>"
+                                        <?= (
+                                            (string) $old["id_balita"]
+                                            ===
+                                            (string) $balita["id_balita"]
+                                        )
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= amanFormSkrining(
+                                            $balita["nama_balita"]
+                                        ); ?>
+                                    </option>
+
+                                <?php endwhile; ?>
+
+                            </select>
+
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h5 class="mb-3">
+                            <i class="bi bi-person-heart me-1"></i>
+                            Informasi Ibu
+                        </h5>
+
+                        <div class="form-row">
+
+                            <div class="form-group">
+
+                                <label
+                                    for="tinggi_badan_ibu"
+                                    class="form-label"
+                                >
+                                    Tinggi Badan Ibu
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <div class="input-group">
+
+                                    <input
+                                        type="number"
+                                        name="tinggi_badan_ibu"
+                                        id="tinggi_badan_ibu"
+                                        class="form-control"
+                                        value="<?= amanFormSkrining(
+                                            $old["tinggi_badan_ibu"]
+                                        ); ?>"
+                                        min="100"
+                                        max="220"
+                                        step="0.01"
+                                        placeholder="Contoh: 155"
+                                        required
+                                    >
+
+                                    <span class="input-group-text">
+                                        cm
+                                    </span>
+
+                                </div>
+
+                            </div>
+
+                            <div class="form-group">
+
+                                <label
+                                    for="pendidikan_ibu"
+                                    class="form-label"
+                                >
+                                    Pendidikan Ibu
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <select
+                                    name="pendidikan_ibu"
+                                    id="pendidikan_ibu"
+                                    class="form-select"
+                                    required
+                                >
+
+                                    <option value="">
+                                        -- Pilih Pendidikan --
+                                    </option>
+
+                                    <?php
+                                    foreach (
+                                        $daftarPendidikan
+                                        as $pendidikan
+                                    ):
+                                    ?>
+
+                                        <option
+                                            value="<?= amanFormSkrining(
+                                                $pendidikan
+                                            ); ?>"
+                                            <?= (
+                                                $old["pendidikan_ibu"]
+                                                === $pendidikan
+                                            )
+                                                ? "selected"
+                                                : ""; ?>
+                                        >
+                                            <?= amanFormSkrining(
+                                                $pendidikan
+                                            ); ?>
+                                        </option>
+
+                                    <?php endforeach; ?>
+
+                                </select>
+
+                            </div>
+
+                        </div>
+
+                        <div class="form-group">
+
+                            <label
+                                for="pekerjaan_ibu"
+                                class="form-label"
+                            >
+                                Pekerjaan Ibu
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <select
+                                name="pekerjaan_ibu"
+                                id="pekerjaan_ibu"
+                                class="form-select"
+                                required
+                            >
+
+                                <option value="">
+                                    -- Pilih Pekerjaan --
+                                </option>
+
+                                <?php
+                                foreach (
+                                    $daftarPekerjaan
+                                    as $pekerjaan
+                                ):
+                                ?>
+
+                                    <option
+                                        value="<?= amanFormSkrining(
+                                            $pekerjaan
+                                        ); ?>"
+                                        <?= (
+                                            $old["pekerjaan_ibu"]
+                                            === $pekerjaan
+                                        )
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= amanFormSkrining(
+                                            $pekerjaan
+                                        ); ?>
+                                    </option>
+
+                                <?php endforeach; ?>
+
+                            </select>
+
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h5 class="mb-3">
+                            <i class="bi bi-cup-straw me-1"></i>
+                            Pola Pemberian Makan
+                        </h5>
+
+                        <div class="form-row">
+
+                            <div class="form-group">
+
+                                <label
+                                    for="lama_asi_eksklusif"
+                                    class="form-label"
+                                >
+                                    Lama ASI Eksklusif
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <div class="input-group">
+
+                                    <input
+                                        type="number"
+                                        name="lama_asi_eksklusif"
+                                        id="lama_asi_eksklusif"
+                                        class="form-control"
+                                        value="<?= amanFormSkrining(
+                                            $old[
+                                                "lama_asi_eksklusif"
+                                            ]
+                                        ); ?>"
+                                        min="0"
+                                        max="24"
+                                        placeholder="Contoh: 6"
+                                        required
+                                    >
+
+                                    <span class="input-group-text">
+                                        bulan
+                                    </span>
+
+                                </div>
+
+                            </div>
+
+                            <div class="form-group">
+
+                                <label class="form-label">
+                                    Pemberian MPASI
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <div class="option-group">
+
+                                    <label class="option-item">
+
+                                        <input
+                                            type="radio"
+                                            name="mpasi"
+                                            value="Ya"
+                                            <?= (
+                                                $old["mpasi"] === "Ya"
+                                            )
+                                                ? "checked"
+                                                : ""; ?>
+                                            required
+                                        >
+
+                                        <span>
+                                            Ya
+                                        </span>
+
+                                    </label>
+
+                                    <label class="option-item">
+
+                                        <input
+                                            type="radio"
+                                            name="mpasi"
+                                            value="Tidak"
+                                            <?= (
+                                                $old["mpasi"] === "Tidak"
+                                            )
+                                                ? "checked"
+                                                : ""; ?>
+                                        >
+
+                                        <span>
+                                            Tidak
+                                        </span>
+
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="form-row">
+
+                            <div class="form-group">
+
+                                <label
+                                    for="frekuensi_makan"
+                                    class="form-label"
+                                >
+                                    Frekuensi Makan
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <select
+                                    name="frekuensi_makan"
+                                    id="frekuensi_makan"
+                                    class="form-select"
+                                    required
+                                >
+
+                                    <option value="">
+                                        -- Pilih Frekuensi --
+                                    </option>
+
+                                    <?php
+                                    foreach (
+                                        $daftarFrekuensi
+                                        as $frekuensi
+                                    ):
+                                    ?>
+
+                                        <option
+                                            value="<?= amanFormSkrining(
+                                                $frekuensi
+                                            ); ?>"
+                                            <?= (
+                                                $old["frekuensi_makan"]
+                                                === $frekuensi
+                                            )
+                                                ? "selected"
+                                                : ""; ?>
+                                        >
+                                            <?= amanFormSkrining(
+                                                $frekuensi
+                                            ); ?>
+                                        </option>
+
+                                    <?php endforeach; ?>
+
+                                </select>
+
+                            </div>
+
+                            <div class="form-group">
+
+                                <label class="form-label">
+                                    Konsumsi Protein Hewani
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <div class="option-group">
+
+                                    <label class="option-item">
+
+                                        <input
+                                            type="radio"
+                                            name="protein_hewani"
+                                            value="Ya"
+                                            <?= (
+                                                $old["protein_hewani"]
+                                                === "Ya"
+                                            )
+                                                ? "checked"
+                                                : ""; ?>
+                                            required
+                                        >
+
+                                        <span>
+                                            Ya
+                                        </span>
+
+                                    </label>
+
+                                    <label class="option-item">
+
+                                        <input
+                                            type="radio"
+                                            name="protein_hewani"
+                                            value="Tidak"
+                                            <?= (
+                                                $old["protein_hewani"]
+                                                === "Tidak"
+                                            )
+                                                ? "checked"
+                                                : ""; ?>
+                                        >
+
+                                        <span>
+                                            Tidak
+                                        </span>
+
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h5 class="mb-3">
+                            <i class="bi bi-house-heart me-1"></i>
+                            Kondisi Lingkungan
+                        </h5>
+
+                        <div class="form-row">
+
+                            <div class="form-group">
+
+                                <label
+                                    for="status_ekonomi"
+                                    class="form-label"
+                                >
+                                    Status Ekonomi
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <select
+                                    name="status_ekonomi"
+                                    id="status_ekonomi"
+                                    class="form-select"
+                                    required
+                                >
+
+                                    <option value="">
+                                        -- Pilih Status Ekonomi --
+                                    </option>
+
+                                    <?php
+                                    foreach (
+                                        $daftarEkonomi
+                                        as $ekonomi
+                                    ):
+                                    ?>
+
+                                        <option
+                                            value="<?= amanFormSkrining(
+                                                $ekonomi
+                                            ); ?>"
+                                            <?= (
+                                                $old["status_ekonomi"]
+                                                === $ekonomi
+                                            )
+                                                ? "selected"
+                                                : ""; ?>
+                                        >
+                                            <?= amanFormSkrining(
+                                                $ekonomi
+                                            ); ?>
+                                        </option>
+
+                                    <?php endforeach; ?>
+
+                                </select>
+
+                            </div>
+
+                            <div class="form-group">
+
+                                <label class="form-label">
+                                    Kondisi Sanitasi
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <div class="option-group">
+
+                                    <label class="option-item">
+
+                                        <input
+                                            type="radio"
+                                            name="sanitasi"
+                                            value="Baik"
+                                            <?= (
+                                                $old["sanitasi"] === "Baik"
+                                            )
+                                                ? "checked"
+                                                : ""; ?>
+                                            required
+                                        >
+
+                                        <span>
+                                            Baik
+                                        </span>
+
+                                    </label>
+
+                                    <label class="option-item">
+
+                                        <input
+                                            type="radio"
+                                            name="sanitasi"
+                                            value="Kurang"
+                                            <?= (
+                                                $old["sanitasi"] === "Kurang"
+                                            )
+                                                ? "checked"
+                                                : ""; ?>
+                                        >
+
+                                        <span>
+                                            Kurang
+                                        </span>
+
+                                    </label>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="form-group">
+
+                            <label class="form-label">
+                                Ketersediaan Air Bersih
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <div class="option-group">
+
+                                <label class="option-item">
+
+                                    <input
+                                        type="radio"
+                                        name="air_bersih"
+                                        value="Ya"
+                                        <?= (
+                                            $old["air_bersih"] === "Ya"
+                                        )
+                                            ? "checked"
+                                            : ""; ?>
+                                        required
+                                    >
+
+                                    <span>
+                                        Tersedia
+                                    </span>
+
+                                </label>
+
+                                <label class="option-item">
+
+                                    <input
+                                        type="radio"
+                                        name="air_bersih"
+                                        value="Tidak"
+                                        <?= (
+                                            $old["air_bersih"] === "Tidak"
+                                        )
+                                            ? "checked"
+                                            : ""; ?>
+                                    >
+
+                                    <span>
+                                        Tidak tersedia
+                                    </span>
+
+                                </label>
+
+                            </div>
+
+                        </div>
+
+                        <div class="form-actions">
+
+                            <button
+                                type="submit"
+                                name="simpan"
+                                class="btn btn-primary"
+                            >
+                                <i class="bi bi-floppy"></i>
+                                Simpan Skrining
+                            </button>
+
+                            <a
+                                href="hasil_skrining.php"
+                                class="btn btn-light"
+                            >
+                                <i class="bi bi-x-circle"></i>
+                                Batal
+                            </a>
+
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        <?php endif; ?>
+
+    </main>
 
 </div>
 
-<div class="card-body">
-
-<form method="POST">
-
-<div class="mb-3">
-
-<label class="form-label">
-
-Nama Balita
-
-</label>
-
-<select
-name="id_balita"
-class="form-select"
-required>
-
-<option value="">-- Pilih Balita --</option>
-
-<?php while($b=mysqli_fetch_assoc($balita)){ ?>
-
-<option value="<?= $b['id_balita']; ?>">
-
-<?= $b['nama_balita']; ?>
-
-</option>
-
-<?php } ?>
-
-</select>
-
-</div>
-
-<div class="row">
-
-<div class="col-md-6 mb-3">
-
-<label>Tinggi Badan Ibu (cm)</label>
-
-<input
-type="number"
-step="0.01"
-name="tinggi_badan_ibu"
-class="form-control"
-required>
-
-</div>
-
-<div class="col-md-6 mb-3">
-
-<label>Pendidikan Ibu</label>
-
-<select
-name="pendidikan_ibu"
-class="form-select"
-required>
-
-<option value="">Pilih</option>
-<option>SD</option>
-<option>SMP</option>
-<option>SMA</option>
-<option>Diploma</option>
-<option>Sarjana</option>
-
-</select>
-
-</div>
-
-</div>
-
-<div class="mb-3">
-
-<div class="mb-3">
-
-<label class="form-label">
-Pekerjaan Ibu
-</label>
-
-<select
-name="pekerjaan_ibu"
-class="form-select"
-required>
-
-<option value="">-- Pilih Pekerjaan --</option>
-
-<option value="Ibu Rumah Tangga">Ibu Rumah Tangga</option>
-<option value="Petani">Petani</option>
-<option value="Pedagang">Pedagang</option>
-<option value="Karyawan Swasta">Karyawan Swasta</option>
-<option value="PNS">PNS</option>
-<option value="Wiraswasta">Wiraswasta</option>
-<option value="Lainnya">Lainnya</option>
-
-</select>
-
-</div>
-
-<div class="row">
-
-<div class="col-md-6 mb-3">
-
-<label>Lama ASI Eksklusif (bulan)</label>
-
-<input
-type="number"
-name="lama_asi_eksklusif"
-class="form-control"
-required>
-
-</div>
-
-<div class="col-md-6 mb-3">
-
-<label>MPASI</label>
-
-<div>
-
-<input
-type="radio"
-name="mpasi"
-value="Ya"
-required> Ya
-
-<input
-type="radio"
-name="mpasi"
-value="Tidak"> Tidak
-
-</div>
-
-</div>
-
-</div>
-
-<div class="row">
-
-<div class="col-md-6 mb-3">
-
-<label>Frekuensi Makan</label>
-
-<select
-name="frekuensi_makan"
-class="form-select"
-required>
-
-<option value="">Pilih</option>
-
-<option value="Kurang dari 3 kali">Kurang dari 3 kali</option>
-<option value="3 kali">3 kali</option>
-<option value="Lebih dari 3 kali">Lebih dari 3 kali</option>
-
-</select>
-
-</div>
-
-<div class="col-md-6 mb-3">
-
-<label>Protein Hewani</label>
-
-<div>
-
-<input
-type="radio"
-name="protein_hewani"
-value="Ya"
-required> Ya
-
-<input
-type="radio"
-name="protein_hewani"
-value="Tidak"> Tidak
-
-</div>
-
-</div>
-
-</div>
-
-<div class="row">
-
-<div class="col-md-6 mb-3">
-
-<label>Status Ekonomi</label>
-
-<select
-name="status_ekonomi"
-class="form-select"
-required>
-
-<option value="">Pilih</option>
-
-<option>Rendah</option>
-<option>Sedang</option>
-<option>Tinggi</option>
-
-</select>
-
-</div>
-
-<div class="col-md-6 mb-3">
-
-<label>Sanitasi</label>
-
-<div>
-
-<input
-type="radio"
-name="sanitasi"
-value="Baik"
-required> Baik
-
-<input
-type="radio"
-name="sanitasi"
-value="Kurang"> Kurang
-
-</div>
-
-</div>
-
-</div>
-
-<div class="mb-3">
-
-<label>Air Bersih</label>
-
-<div>
-
-<input
-type="radio"
-name="air_bersih"
-value="Ya"
-required> Ya
-
-<input
-type="radio"
-name="air_bersih"
-value="Tidak"> Tidak
-
-</div>
-
-</div>
-
-<button
-type="submit"
-name="simpan"
-class="btn btn-success">
-
-Simpan
-
-</button>
-
-<a
-href="hasil_skrining.php"
-class="btn btn-secondary">
-
-Kembali
-
-</a>
-
-</form>
-
-</div>
-
-</div>
-
-</div>
-
-</body>
-
-</html>
+<?php require_once "../includes/footer.php"; ?>

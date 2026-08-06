@@ -190,17 +190,29 @@ require_once "../includes/navbar.php";
                     Daftar balita yang terdaftar dalam sistem.
                 </p>
             </div>
+<?php if ($roleAktif === "kader"): ?>
 
-            <?php if ($roleAktif === "kader"): ?>
+    <div class="d-flex justify-content-end align-items-center gap-2">
 
-                <a
-                    href="tambah_balita.php"
-                    class="btn btn-success"
-                >
-                    + Tambah Balita
-                </a>
+        <button
+            type="button"
+            class="btn btn-success"
+            onclick="history.back()"
+        >
+            <i class="bi bi-arrow-left"></i>
+            Kembali
+        </button>
 
-            <?php endif; ?>
+        <a
+            href="tambah_balita.php"
+            class="btn btn-success"
+        >
+            + Tambah Balita
+        </a>
+
+    </div>
+
+<?php endif; ?>
         </div>
 
         <?php if (isset($_GET["pesan"])): ?>
@@ -285,7 +297,7 @@ require_once "../includes/navbar.php";
 
                         <a
                             href="data_balita.php"
-                            class="btn btn-outline-secondary w-100"
+                            class="btn btn-success"
                         >
                             Reset
                         </a>

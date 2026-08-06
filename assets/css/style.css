@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,500;6..12,600;6..12,700;6..12,800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 @import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css");
 
 /* =========================================================
@@ -61,19 +61,19 @@
     --surface-solid: #ffffff;
 
     --shadow-xs: 0 2px 8px rgba(71, 59, 78, 0.05);
-    --shadow-sm: 0 8px 24px rgba(71, 59, 78, 0.07);
-    --shadow-md: 0 14px 38px rgba(71, 59, 78, 0.1);
-    --shadow-hover: 0 18px 44px rgba(71, 59, 78, 0.13);
+    --shadow-sm: 0 7px 20px rgba(71, 59, 78, 0.07);
+    --shadow-md: 0 12px 30px rgba(71, 59, 78, 0.10);
+    --shadow-hover: 0 15px 34px rgba(71, 59, 78, 0.12);
 
     --radius-xs: 8px;
     --radius-sm: 12px;
-    --radius-md: 18px;
-    --radius-lg: 24px;
+    --radius-md: 16px;
+    --radius-lg: 21px;
     --radius-pill: 999px;
 
     --shell-max: 1440px;
-    --shell-gap: 28px;
-    --header-height: 86px;
+    --shell-gap: 24px;
+    --header-height: 80px;
     --transition: 180ms ease;
 }
 
@@ -110,7 +110,7 @@ body {
         radial-gradient(circle at 48% 100%, rgba(228, 221, 244, 0.6), transparent 34%),
         linear-gradient(135deg, #fff9fb 0%, #fbf8fd 48%, #f5f9fe 100%);
     background-attachment: fixed;
-    font-size: 15px;
+    font-size: 14.5px;
     font-weight: 500;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
@@ -203,9 +203,9 @@ p {
     justify-content: space-between;
     gap: 28px;
     min-height: var(--header-height);
-    margin-top: 24px;
-    margin-bottom: 14px;
-    padding: 16px 20px;
+    margin-top: 17px;
+    margin-bottom: 12px;
+    padding: 14px 18px;
     background: var(--surface);
     border: 1px solid rgba(255, 255, 255, 0.95);
     border-radius: var(--radius-lg);
@@ -223,17 +223,17 @@ p {
 
 .app-brand-icon {
     display: inline-flex;
-    flex: 0 0 50px;
+    flex: 0 0 46px;
     align-items: center;
     justify-content: center;
-    width: 50px;
-    height: 50px;
+    width: 46px;
+    height: 46px;
     color: #ffffff;
     background: linear-gradient(145deg, var(--pink-500), var(--blue-500));
     border: 1px solid rgba(255, 255, 255, 0.5);
     border-radius: 16px;
     box-shadow: 0 10px 22px rgba(200, 100, 136, 0.2);
-    font-size: 22px;
+    font-size: 20px;
 }
 
 .app-brand-copy {
@@ -245,7 +245,7 @@ p {
 .app-brand-copy strong {
     overflow: hidden;
     color: var(--text-900);
-    font-size: 19px;
+    font-size: 18px;
     font-weight: 800;
     letter-spacing: -0.35px;
     line-height: 1.25;
@@ -353,8 +353,8 @@ p {
     z-index: 40;
     width: 100% !important;
     min-height: auto !important;
-    margin: 0 0 22px;
-    padding: 8px !important;
+    margin: 0 0 18px;
+    padding: 7px !important;
     background: var(--surface);
     border: 1px solid rgba(255, 255, 255, 0.95) !important;
     border-radius: var(--radius-md);
@@ -386,8 +386,8 @@ p {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    min-height: 42px;
-    padding: 8px 13px !important;
+    min-height: 39px;
+    padding: 7px 12px !important;
     color: var(--text-700) !important;
     background: transparent;
     border: 1px solid transparent;
@@ -458,13 +458,13 @@ p {
     align-items: center;
     justify-content: space-between;
     gap: 18px;
-    margin: 0 0 20px !important;
+    margin: 0 0 17px !important;
 }
 
 .page-title {
     margin: 0;
     color: var(--text-900) !important;
-    font-size: clamp(24px, 2.2vw, 31px) !important;
+    font-size: clamp(23px, 2.1vw, 29px) !important;
     font-weight: 800 !important;
     letter-spacing: -0.65px;
     line-height: 1.2;
@@ -549,7 +549,7 @@ p {
 .card,
 .panel,
 .content-card {
-    margin-bottom: 20px;
+    margin-bottom: 15px;
     overflow: hidden;
     background: var(--surface-solid);
     border: 1px solid var(--border-soft) !important;
@@ -575,8 +575,8 @@ p {
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    min-height: 62px;
-    padding: 16px 20px !important;
+    min-height: 56px;
+    padding: 14px 18px !important;
     background: linear-gradient(135deg, #fffafb, var(--blue-050));
     border-bottom: 1px solid var(--border-soft) !important;
 }
@@ -597,13 +597,13 @@ p {
 .card-body,
 .panel-body,
 .content-card-body {
-    padding: 20px !important;
+    padding: 18px !important;
 }
 
 .card-footer,
 .panel-footer,
 .content-card-footer {
-    padding: 14px 20px !important;
+    padding: 13px 18px !important;
     background: #fffafb;
     border-top: 1px solid var(--border-soft) !important;
 }
@@ -625,8 +625,8 @@ p {
     display: flex;
     align-items: center;
     gap: 15px;
-    min-height: 122px;
-    padding: 20px;
+    min-height: 112px;
+    padding: 17px;
     overflow: hidden;
     background: var(--surface-solid);
     border: 1px solid var(--border-soft);
@@ -661,13 +661,13 @@ p {
     flex: 0 0 54px;
     align-items: center;
     justify-content: center;
-    width: 54px;
-    height: 54px;
+    width: 45px;
+    height: 45px;
     color: var(--pink-700);
     background: linear-gradient(145deg, var(--pink-100), var(--pink-200));
     border: 1px solid rgba(255, 255, 255, 0.8);
     border-radius: 16px;
-    font-size: 23px;
+    font-size: 21px;
 }
 
 .stat-content,
@@ -687,7 +687,7 @@ p {
 .stat-value {
     margin: 0;
     color: var(--text-900);
-    font-size: 29px;
+    font-size: 27px;
     font-weight: 800;
     letter-spacing: -0.5px;
     line-height: 1.05;
@@ -743,7 +743,7 @@ p {
 .feature-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 17px;
+    gap: 15px;
     margin-bottom: 24px;
 }
 
@@ -751,8 +751,8 @@ p {
 .feature-card {
     display: flex;
     flex-direction: column;
-    min-height: 205px;
-    padding: 22px;
+    min-height: 188px;
+    padding: 19px;
     background: var(--surface-solid);
     border: 1px solid var(--border-soft);
     border-radius: var(--radius-md);
@@ -775,8 +775,8 @@ p {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 49px;
-    height: 49px;
+    width: 45px;
+    height: 45px;
     margin-bottom: 15px;
     color: var(--pink-700);
     background: linear-gradient(145deg, var(--pink-100), var(--blue-100));
@@ -829,7 +829,7 @@ table,
 table th,
 table td,
 .table > :not(caption) > * > * {
-    padding: 13px 15px !important;
+    padding: 11px 13px !important;
     border-bottom: 1px solid var(--border-soft) !important;
     box-shadow: none !important;
     text-align: left;
@@ -850,7 +850,7 @@ table td,
 .table tbody td {
     color: var(--text-700) !important;
     background: #ffffff;
-    font-size: 12.5px !important;
+    font-size: 12px !important;
     font-weight: 600;
 }
 
@@ -889,8 +889,8 @@ input[type="button"] {
     align-items: center;
     justify-content: center;
     gap: 7px;
-    min-height: 39px;
-    padding: 8px 15px;
+    min-height: 37px;
+    padding: 7px 13px;
     border: 1px solid transparent;
     border-radius: 11px;
     font-size: 12.5px;
@@ -1023,13 +1023,13 @@ input[type="submit"]:hover {
 ========================================================= */
 
 .form-group {
-    margin-bottom: 17px;
+    margin-bottom: 15px;
 }
 
 .form-row {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 17px;
+    gap: 15px;
 }
 
 .form-label,
@@ -1053,14 +1053,14 @@ input[type="search"],
 select,
 textarea {
     width: 100%;
-    min-height: 43px;
-    padding: 9px 12px;
+    min-height: 41px;
+    padding: 8px 11px;
     color: var(--text-900) !important;
     background: #ffffff !important;
     border: 1px solid var(--border) !important;
     border-radius: 11px !important;
     outline: none;
-    font-size: 12.5px !important;
+    font-size: 12px !important;
     font-weight: 600;
     transition:
         border-color var(--transition),
@@ -1103,7 +1103,7 @@ textarea.form-control {
     align-items: center;
     gap: 9px;
     flex-wrap: wrap;
-    margin-top: 20px;
+    margin-top: 17px;
 }
 
 input[type="radio"],
@@ -1175,7 +1175,7 @@ input[type="checkbox"] {
 }
 
 .alert {
-    margin-bottom: 17px;
+    margin-bottom: 15px;
     padding: 13px 15px;
     border: 1px solid transparent;
     border-radius: 12px;
@@ -1241,7 +1241,7 @@ input[type="checkbox"] {
 }
 
 .empty-state {
-    padding: 44px 20px;
+    padding: 36px 18px;
     color: var(--text-500);
     text-align: center;
 }
@@ -1477,7 +1477,7 @@ input[type="checkbox"] {
         width: 43px;
         height: 43px;
         border-radius: 13px;
-        font-size: 19px;
+        font-size: 18px;
     }
 
     .app-brand-copy strong {
@@ -1501,7 +1501,7 @@ input[type="checkbox"] {
     }
 
     .sidebar {
-        margin-bottom: 17px;
+        margin-bottom: 15px;
         padding: 7px !important;
         border-radius: 15px;
     }
@@ -1671,5 +1671,93 @@ input[type="checkbox"] {
     .panel,
     .content-card {
         box-shadow: none !important;
+    }
+}
+
+/* =========================================================
+   TYPOGRAPHY CONSISTENCY PATCH
+   Ensures every application component uses one font family.
+========================================================= */
+
+html,
+body,
+.app-navbar,
+.sidebar,
+.main-content,
+.card,
+.panel,
+.content-card,
+.table,
+.table th,
+.table td,
+.form-label,
+.form-control,
+.form-select,
+.input-group-text,
+.btn,
+.badge,
+.alert,
+.pagination,
+.dropdown-menu,
+.modal-content,
+.offcanvas {
+    font-family: var(--font-main) !important;
+}
+
+/* Prevent Bootstrap utility headings from looking excessively large. */
+.card-header h1,
+.card-header h2,
+.card-header h3,
+.card-header h4,
+.card-header h5,
+.card-header h6 {
+    line-height: 1.35;
+}
+
+.page-subtitle,
+.card-header small,
+.form-text,
+.text-muted {
+    letter-spacing: 0;
+}
+
+/* Keep cards calm and compact; no oversized decorative framing. */
+.card,
+.panel,
+.content-card {
+    transform: none;
+}
+
+.card:hover,
+.panel:hover,
+.content-card:hover {
+    transform: none;
+}
+
+/* More balanced desktop form width and spacing. */
+.main-content > .card,
+.main-content > .content-card {
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    body {
+        font-size: 14px;
+    }
+
+    .page-title {
+        font-size: 23px !important;
+    }
+
+    .card-header,
+    .panel-header,
+    .content-card-header {
+        padding: 13px 14px !important;
+    }
+
+    .card-body,
+    .panel-body,
+    .content-card-body {
+        padding: 14px !important;
     }
 }
