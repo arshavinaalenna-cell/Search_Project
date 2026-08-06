@@ -121,6 +121,92 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
+    <?php
+
+$pesan = $_GET["pesan"] ?? "";
+
+$jenisAlert = "";
+$isiPesan = "";
+
+switch ($pesan) {
+
+    case "tambah_berhasil":
+        $jenisAlert = "success";
+        $isiPesan =
+            "Data pengukuran berhasil ditambahkan.";
+        break;
+
+    case "edit_berhasil":
+        $jenisAlert = "success";
+        $isiPesan =
+            "Data pengukuran berhasil diperbarui.";
+        break;
+
+    case "hapus_berhasil":
+        $jenisAlert = "success";
+        $isiPesan =
+            "Data pengukuran berhasil dihapus.";
+        break;
+
+    case "tidak_ditemukan":
+        $jenisAlert = "warning";
+        $isiPesan =
+            "Data pengukuran tidak ditemukan.";
+        break;
+
+    case "id_tidak_valid":
+        $jenisAlert = "warning";
+        $isiPesan =
+            "ID pengukuran tidak valid.";
+        break;
+
+    case "data_digunakan":
+        $jenisAlert = "warning";
+        $isiPesan =
+            "Data pengukuran tidak dapat dihapus karena sudah digunakan pada hasil deteksi.";
+        break;
+
+    case "gagal_hapus":
+        $jenisAlert = "danger";
+        $isiPesan =
+            "Data pengukuran gagal dihapus.";
+        break;
+
+    case "akses_tidak_valid":
+        $jenisAlert = "danger";
+        $isiPesan =
+            "Permintaan penghapusan tidak valid.";
+        break;
+}
+
+?>
+
+<?php if ($isiPesan !== ""): ?>
+
+    <div
+        class="alert alert-<?= htmlspecialchars(
+            $jenisAlert,
+            ENT_QUOTES,
+            "UTF-8"
+        ); ?> alert-dismissible fade show"
+        role="alert"
+    >
+        <?= htmlspecialchars(
+            $isiPesan,
+            ENT_QUOTES,
+            "UTF-8"
+        ); ?>
+
+        <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="alert"
+            aria-label="Tutup"
+        ></button>
+    </div>
+
+<?php endif; ?>
+
         <!-- Judul halaman -->
         <div class="page-header">
 
@@ -342,16 +428,28 @@ require_once "../includes/navbar.php";
                                                 Edit
                                             </a>
 
-                                            <a
-                                                href="hapus_pengukuran.php?id=<?= $idPengukuran; ?>"
-                                                class="btn btn-danger btn-sm"
-                                                onclick="return confirm(
-                                                    'Yakin ingin menghapus data pengukuran ini?'
-                                                );"
-                                            >
-                                                <i class="bi bi-trash3"></i>
-                                                Hapus
-                                            </a>
+                                            <form
+    action="hapus_pengukuran.php"
+    method="POST"
+    class="d-inline"
+    onsubmit="return confirm(
+        'Yakin ingin menghapus data pengukuran ini?'
+    );"
+>
+    <input
+        type="hidden"
+        name="id_pengukuran"
+        value="<?= $idPengukuran; ?>"
+    >
+
+    <button
+        type="submit"
+        class="btn btn-danger btn-sm"
+    >
+        <i class="bi bi-trash3"></i>
+        Hapus
+    </button>
+</form>
 
                                         </div>
 

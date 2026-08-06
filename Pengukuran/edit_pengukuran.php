@@ -1,299 +1,864 @@
 <?php
-session_start();
+
+require_once "../auth/session.php";
+require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
-// Cek ID
-if (!isset($_GET['id'])) {
-    header("Location: data_pengukuran.php");
+/*
+|--------------------------------------------------------------------------
+| Hak akses
+|--------------------------------------------------------------------------
+*/
+
+cekRole(["kader"]);
+
+/*
+|--------------------------------------------------------------------------
+| Judul halaman
+|--------------------------------------------------------------------------
+*/
+
+$judulHalaman =
+    "Edit Pengukuran | Sistem Deteksi Stunting";
+
+/*
+|--------------------------------------------------------------------------
+| Fungsi mengamankan output
+|--------------------------------------------------------------------------
+*/
+
+function amanEditPengukuran($nilai): string
+{
+    return htmlspecialchars(
+        (string) ($nilai ?? ""),
+        ENT_QUOTES,
+        "UTF-8"
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Memeriksa ID pengukuran
+|--------------------------------------------------------------------------
+*/
+
+$idPengukuran = filter_input(
+    INPUT_GET,
+    "id",
+    FILTER_VALIDATE_INT
+);
+
+if (
+    !$idPengukuran
+    || $idPengukuran < 1
+) {
+    header(
+        "Location: data_pengukuran.php?pesan=tidak_ditemukan"
+    );
     exit;
 }
 
-$id = $_GET['id'];
+/*
+|--------------------------------------------------------------------------
+| Mengambil data pengukuran yang akan diedit
+|--------------------------------------------------------------------------
+*/
 
-// Ambil data pengukuran
-$query = mysqli_query($conn,"
-SELECT *
-FROM pengukuran_antropometri
-WHERE id_pengukuran='$id'
-");
+$stmtData = mysqli_prepare(
+    $conn,
+    "SELECT
+        id_pengukuran,
+        id_balita,
+        tanggal_pengukuran,
+        umur_bulan,
+        berat_badan,
+        tinggi_panjang_badan,
+        lingkar_kepala,
+        lila
+     FROM pengukuran_antropometri
+     WHERE id_pengukuran = ?
+     LIMIT 1"
+);
 
-$data = mysqli_fetch_assoc($query);
+if (!$stmtData) {
+    die(
+        "Gagal menyiapkan data pengukuran: "
+        . mysqli_error($conn)
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtData,
+    "i",
+    $idPengukuran
+);
+
+mysqli_stmt_execute($stmtData);
+
+$resultData =
+    mysqli_stmt_get_result($stmtData);
+
+$data =
+    mysqli_fetch_assoc($resultData);
+
+mysqli_stmt_close($stmtData);
 
 if (!$data) {
-    echo "<script>
-            alert('Data tidak ditemukan');
-            window.location='data_pengukuran.php';
-          </script>";
+    header(
+        "Location: data_pengukuran.php?pesan=tidak_ditemukan"
+    );
     exit;
 }
 
-// Ambil data balita
-$balita = mysqli_query($conn,"
-SELECT *
-FROM balita
-ORDER BY nama_balita ASC
-");
+/*
+|--------------------------------------------------------------------------
+| Nilai awal form
+|--------------------------------------------------------------------------
+*/
 
-// Proses Update
-if(isset($_POST['update'])){
+$error = "";
 
-    $id_balita = $_POST['id_balita'];
-    $tanggal = $_POST['tanggal_pengukuran'];
-    $umur = $_POST['umur_bulan'];
-    $bb = $_POST['berat_badan'];
-    $tb = $_POST['tinggi_panjang_badan'];
-    $lk = $_POST['lingkar_kepala'];
-    $lila = $_POST['lila'];
+$old = [
+    "id_balita" =>
+        $data["id_balita"] ?? "",
 
-    $update = mysqli_query($conn,"
-    UPDATE pengukuran_antropometri
-    SET
-        id_balita='$id_balita',
-        tanggal_pengukuran='$tanggal',
-        umur_bulan='$umur',
-        berat_badan='$bb',
-        tinggi_panjang_badan='$tb',
-        lingkar_kepala='$lk',
-        lila='$lila'
-    WHERE id_pengukuran='$id'
-    ");
+    "tanggal_pengukuran" =>
+        $data["tanggal_pengukuran"] ?? "",
 
-    if($update){
+    "umur_bulan" =>
+        $data["umur_bulan"] ?? "",
 
-        echo "<script>
-                alert('Data berhasil diperbarui');
-                window.location='data_pengukuran.php';
-              </script>";
+    "berat_badan" =>
+        $data["berat_badan"] ?? "",
 
-    }else{
+    "tinggi_panjang_badan" =>
+        $data["tinggi_panjang_badan"] ?? "",
 
-        echo "<script>
-                alert('Data gagal diperbarui');
-              </script>";
+    "lingkar_kepala" =>
+        $data["lingkar_kepala"] ?? "",
 
+    "lila" =>
+        $data["lila"] ?? ""
+];
+
+/*
+|--------------------------------------------------------------------------
+| Proses update data
+|--------------------------------------------------------------------------
+*/
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
+    $old["id_balita"] =
+        trim($_POST["id_balita"] ?? "");
+
+    $old["tanggal_pengukuran"] =
+        trim($_POST["tanggal_pengukuran"] ?? "");
+
+    $old["umur_bulan"] =
+        trim($_POST["umur_bulan"] ?? "");
+
+    $old["berat_badan"] =
+        trim($_POST["berat_badan"] ?? "");
+
+    $old["tinggi_panjang_badan"] =
+        trim($_POST["tinggi_panjang_badan"] ?? "");
+
+    $old["lingkar_kepala"] =
+        trim($_POST["lingkar_kepala"] ?? "");
+
+    $old["lila"] =
+        trim($_POST["lila"] ?? "");
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mengubah dan memvalidasi input
+    |--------------------------------------------------------------------------
+    */
+
+    $idBalita = filter_var(
+        $old["id_balita"],
+        FILTER_VALIDATE_INT
+    );
+
+    $tanggalPengukuran =
+        $old["tanggal_pengukuran"];
+
+    $umurBulan = filter_var(
+        $old["umur_bulan"],
+        FILTER_VALIDATE_INT
+    );
+
+    $beratBadan = filter_var(
+        $old["berat_badan"],
+        FILTER_VALIDATE_FLOAT
+    );
+
+    $tinggiPanjangBadan = filter_var(
+        $old["tinggi_panjang_badan"],
+        FILTER_VALIDATE_FLOAT
+    );
+
+    $lingkarKepala =
+        $old["lingkar_kepala"] === ""
+            ? null
+            : filter_var(
+                $old["lingkar_kepala"],
+                FILTER_VALIDATE_FLOAT
+            );
+
+    $lila =
+        $old["lila"] === ""
+            ? null
+            : filter_var(
+                $old["lila"],
+                FILTER_VALIDATE_FLOAT
+            );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validasi tanggal
+    |--------------------------------------------------------------------------
+    */
+
+    $objekTanggal = DateTime::createFromFormat(
+        "Y-m-d",
+        $tanggalPengukuran
+    );
+
+    $tanggalValid =
+        $objekTanggal !== false
+        && $objekTanggal->format("Y-m-d")
+            === $tanggalPengukuran;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validasi input wajib
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        $old["id_balita"] === ""
+        || $old["tanggal_pengukuran"] === ""
+        || $old["umur_bulan"] === ""
+        || $old["berat_badan"] === ""
+        || $old["tinggi_panjang_badan"] === ""
+    ) {
+        $error =
+            "Nama balita, tanggal, umur, berat badan, dan tinggi badan wajib diisi.";
+
+    } elseif (
+        $idBalita === false
+        || $idBalita < 1
+    ) {
+        $error =
+            "Data balita yang dipilih tidak valid.";
+
+    } elseif (!$tanggalValid) {
+        $error =
+            "Tanggal pengukuran tidak valid.";
+
+    } elseif (
+        $tanggalPengukuran > date("Y-m-d")
+    ) {
+        $error =
+            "Tanggal pengukuran tidak boleh melebihi tanggal hari ini.";
+
+    } elseif (
+        $umurBulan === false
+        || $umurBulan < 0
+        || $umurBulan > 59
+    ) {
+        $error =
+            "Umur balita harus berada antara 0 sampai 59 bulan.";
+
+    } elseif (
+        $beratBadan === false
+        || $beratBadan <= 0
+        || $beratBadan > 100
+    ) {
+        $error =
+            "Berat badan harus lebih dari 0 dan maksimal 100 kg.";
+
+    } elseif (
+        $tinggiPanjangBadan === false
+        || $tinggiPanjangBadan <= 0
+        || $tinggiPanjangBadan > 200
+    ) {
+        $error =
+            "Tinggi atau panjang badan harus lebih dari 0 dan maksimal 200 cm.";
+
+    } elseif (
+        $old["lingkar_kepala"] !== ""
+        && (
+            $lingkarKepala === false
+            || $lingkarKepala <= 0
+            || $lingkarKepala > 100
+        )
+    ) {
+        $error =
+            "Lingkar kepala harus lebih dari 0 dan maksimal 100 cm.";
+
+    } elseif (
+        $old["lila"] !== ""
+        && (
+            $lila === false
+            || $lila <= 0
+            || $lila > 100
+        )
+    ) {
+        $error =
+            "Nilai LiLA harus lebih dari 0 dan maksimal 100 cm.";
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Memastikan balita tersedia
+    |--------------------------------------------------------------------------
+    */
+
+    if ($error === "") {
+
+        $stmtCekBalita = mysqli_prepare(
+            $conn,
+            "SELECT id_balita
+             FROM balita
+             WHERE id_balita = ?
+             LIMIT 1"
+        );
+
+        if (!$stmtCekBalita) {
+            $error =
+                "Sistem gagal memeriksa data balita.";
+
+        } else {
+
+            mysqli_stmt_bind_param(
+                $stmtCekBalita,
+                "i",
+                $idBalita
+            );
+
+            mysqli_stmt_execute($stmtCekBalita);
+
+            $resultBalita =
+                mysqli_stmt_get_result(
+                    $stmtCekBalita
+                );
+
+            $dataBalita =
+                mysqli_fetch_assoc(
+                    $resultBalita
+                );
+
+            mysqli_stmt_close(
+                $stmtCekBalita
+            );
+
+            if (!$dataBalita) {
+                $error =
+                    "Data balita tidak ditemukan.";
+            }
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Menyimpan perubahan
+    |--------------------------------------------------------------------------
+    */
+
+    if ($error === "") {
+
+        /*
+         * Nilai kosong untuk lingkar kepala atau LiLA
+         * akan disimpan sebagai NULL.
+         */
+
+        $lingkarKepalaInput =
+            $old["lingkar_kepala"];
+
+        $lilaInput =
+            $old["lila"];
+
+        $stmtUpdate = mysqli_prepare(
+            $conn,
+            "UPDATE pengukuran_antropometri
+             SET
+                id_balita = ?,
+                tanggal_pengukuran = ?,
+                umur_bulan = ?,
+                berat_badan = ?,
+                tinggi_panjang_badan = ?,
+                lingkar_kepala = NULLIF(?, ''),
+                lila = NULLIF(?, '')
+             WHERE id_pengukuran = ?"
+        );
+
+        if (!$stmtUpdate) {
+            $error =
+                "Sistem gagal menyiapkan perubahan data.";
+
+        } else {
+
+            mysqli_stmt_bind_param(
+                $stmtUpdate,
+                "isiddssi",
+                $idBalita,
+                $tanggalPengukuran,
+                $umurBulan,
+                $beratBadan,
+                $tinggiPanjangBadan,
+                $lingkarKepalaInput,
+                $lilaInput,
+                $idPengukuran
+            );
+
+            $berhasil =
+                mysqli_stmt_execute(
+                    $stmtUpdate
+                );
+
+            if ($berhasil) {
+
+                mysqli_stmt_close(
+                    $stmtUpdate
+                );
+
+                header(
+                    "Location: data_pengukuran.php?pesan=edit_berhasil"
+                );
+
+                exit;
+            }
+
+            $error =
+                "Data pengukuran gagal diperbarui: "
+                . mysqli_stmt_error(
+                    $stmtUpdate
+                );
+
+            mysqli_stmt_close(
+                $stmtUpdate
+            );
+        }
+    }
 }
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil daftar balita
+|--------------------------------------------------------------------------
+*/
+
+$queryBalita = mysqli_query(
+    $conn,
+    "SELECT
+        id_balita,
+        nama_balita
+     FROM balita
+     ORDER BY nama_balita ASC"
+);
+
+if (!$queryBalita) {
+    die(
+        "Gagal mengambil daftar balita: "
+        . mysqli_error($conn)
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Memanggil template utama
+|--------------------------------------------------------------------------
+*/
+
+require_once "../includes/header.php";
+require_once "../includes/navbar.php";
 
 ?>
 
-<!DOCTYPE html>
-<html lang="id">
+<div class="layout-wrapper">
 
-<head>
+    <?php require_once "../includes/sidebar.php"; ?>
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <main class="main-content">
 
-<title>Edit Pengukuran</title>
+        <div class="page-header">
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+            <div>
 
-<style>
+                <h1 class="page-title">
+                    <i class="bi bi-pencil-square me-2"></i>
+                    Edit Pengukuran
+                </h1>
 
-body{
-    background:#f5f6fa;
-}
+                <p class="page-subtitle">
+                    Perbarui hasil pengukuran antropometri balita
+                    dengan data yang benar.
+                </p>
 
-.card{
-    border:none;
-    border-radius:15px;
-    box-shadow:0 5px 15px rgba(0,0,0,.1);
-}
+            </div>
 
-</style>
+            <a
+                href="data_pengukuran.php"
+                class="btn btn-secondary"
+            >
+                <i class="bi bi-arrow-left"></i>
+                Kembali ke Data Pengukuran
+            </a>
 
-</head>
+        </div>
 
-<body>
+        <?php if ($error !== ""): ?>
 
-<div class="container mt-4">
+            <div
+                class="alert alert-danger alert-dismissible fade show"
+                role="alert"
+            >
 
-<div class="card">
+                <i class="bi bi-exclamation-circle me-1"></i>
 
-<div class="card-header bg-warning">
+                <?= amanEditPengukuran($error); ?>
 
-<h4>Edit Data Pengukuran</h4>
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"
+                    aria-label="Tutup"
+                ></button>
+
+            </div>
+
+        <?php endif; ?>
+
+        <div class="card content-card">
+
+            <div class="card-header">
+
+                <div>
+
+                    <h4 class="mb-1">
+                        Form Edit Pengukuran
+                    </h4>
+
+                    <small class="text-muted">
+                        ID Pengukuran:
+                        <?= $idPengukuran; ?>
+                    </small>
+
+                </div>
+
+                <span class="badge badge-info">
+                    <i class="bi bi-rulers"></i>
+                    Antropometri
+                </span>
+
+            </div>
+
+            <div class="card-body">
+
+                <form
+                    method="POST"
+                    action="edit_pengukuran.php?id=<?= $idPengukuran; ?>"
+                    autocomplete="off"
+                >
+
+                    <!-- Nama balita -->
+                    <div class="form-group">
+
+                        <label
+                            for="id_balita"
+                            class="form-label"
+                        >
+                            Nama Balita
+                            <span class="text-danger">*</span>
+                        </label>
+
+                        <select
+                            name="id_balita"
+                            id="id_balita"
+                            class="form-select"
+                            required
+                        >
+
+                            <option value="">
+                                -- Pilih Balita --
+                            </option>
+
+                            <?php
+                            while (
+                                $balita =
+                                    mysqli_fetch_assoc(
+                                        $queryBalita
+                                    )
+                            ):
+                            ?>
+
+                                <option
+                                    value="<?= (int) $balita["id_balita"]; ?>"
+                                    <?= (
+                                        (string) $old["id_balita"]
+                                        ===
+                                        (string) $balita["id_balita"]
+                                    )
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    <?= amanEditPengukuran(
+                                        $balita["nama_balita"]
+                                    ); ?>
+                                </option>
+
+                            <?php endwhile; ?>
+
+                        </select>
+
+                    </div>
+
+                    <div class="form-row">
+
+                        <!-- Tanggal -->
+                        <div class="form-group">
+
+                            <label
+                                for="tanggal_pengukuran"
+                                class="form-label"
+                            >
+                                Tanggal Pengukuran
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <input
+                                type="date"
+                                name="tanggal_pengukuran"
+                                id="tanggal_pengukuran"
+                                class="form-control"
+                                value="<?= amanEditPengukuran(
+                                    $old["tanggal_pengukuran"]
+                                ); ?>"
+                                max="<?= date("Y-m-d"); ?>"
+                                required
+                            >
+
+                        </div>
+
+                        <!-- Umur -->
+                        <div class="form-group">
+
+                            <label
+                                for="umur_bulan"
+                                class="form-label"
+                            >
+                                Umur Balita
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <div class="input-group">
+
+                                <input
+                                    type="number"
+                                    name="umur_bulan"
+                                    id="umur_bulan"
+                                    class="form-control"
+                                    value="<?= amanEditPengukuran(
+                                        $old["umur_bulan"]
+                                    ); ?>"
+                                    min="0"
+                                    max="59"
+                                    placeholder="Contoh: 24"
+                                    required
+                                >
+
+                                <span class="input-group-text">
+                                    bulan
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="form-row">
+
+                        <!-- Berat badan -->
+                        <div class="form-group">
+
+                            <label
+                                for="berat_badan"
+                                class="form-label"
+                            >
+                                Berat Badan
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <div class="input-group">
+
+                                <input
+                                    type="number"
+                                    name="berat_badan"
+                                    id="berat_badan"
+                                    class="form-control"
+                                    value="<?= amanEditPengukuran(
+                                        $old["berat_badan"]
+                                    ); ?>"
+                                    min="0.01"
+                                    max="100"
+                                    step="0.01"
+                                    placeholder="Contoh: 12.50"
+                                    required
+                                >
+
+                                <span class="input-group-text">
+                                    kg
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                        <!-- Tinggi badan -->
+                        <div class="form-group">
+
+                            <label
+                                for="tinggi_panjang_badan"
+                                class="form-label"
+                            >
+                                Tinggi/Panjang Badan
+                                <span class="text-danger">*</span>
+                            </label>
+
+                            <div class="input-group">
+
+                                <input
+                                    type="number"
+                                    name="tinggi_panjang_badan"
+                                    id="tinggi_panjang_badan"
+                                    class="form-control"
+                                    value="<?= amanEditPengukuran(
+                                        $old[
+                                            "tinggi_panjang_badan"
+                                        ]
+                                    ); ?>"
+                                    min="0.01"
+                                    max="200"
+                                    step="0.01"
+                                    placeholder="Contoh: 85.50"
+                                    required
+                                >
+
+                                <span class="input-group-text">
+                                    cm
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="form-row">
+
+                        <!-- Lingkar kepala -->
+                        <div class="form-group">
+
+                            <label
+                                for="lingkar_kepala"
+                                class="form-label"
+                            >
+                                Lingkar Kepala
+                            </label>
+
+                            <div class="input-group">
+
+                                <input
+                                    type="number"
+                                    name="lingkar_kepala"
+                                    id="lingkar_kepala"
+                                    class="form-control"
+                                    value="<?= amanEditPengukuran(
+                                        $old["lingkar_kepala"]
+                                    ); ?>"
+                                    min="0.01"
+                                    max="100"
+                                    step="0.01"
+                                    placeholder="Opsional"
+                                >
+
+                                <span class="input-group-text">
+                                    cm
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                        <!-- LiLA -->
+                        <div class="form-group">
+
+                            <label
+                                for="lila"
+                                class="form-label"
+                            >
+                                Lingkar Lengan Atas (LiLA)
+                            </label>
+
+                            <div class="input-group">
+
+                                <input
+                                    type="number"
+                                    name="lila"
+                                    id="lila"
+                                    class="form-control"
+                                    value="<?= amanEditPengukuran(
+                                        $old["lila"]
+                                    ); ?>"
+                                    min="0.01"
+                                    max="100"
+                                    step="0.01"
+                                    placeholder="Opsional"
+                                >
+
+                                <span class="input-group-text">
+                                    cm
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="form-actions">
+
+                        <button
+                            type="submit"
+                            name="update"
+                            class="btn btn-primary"
+                        >
+                            <i class="bi bi-floppy"></i>
+                            Simpan Perubahan
+                        </button>
+
+                        <a
+                            href="data_pengukuran.php"
+                            class="btn btn-light"
+                        >
+                            <i class="bi bi-x-circle"></i>
+                            Batal
+                        </a>
+
+                    </div>
+
+                </form>
+
+            </div>
+
+        </div>
+
+    </main>
 
 </div>
 
-<div class="card-body">
-
-<form method="POST">
-
-<div class="mb-3">
-
-<label class="form-label">
-
-Nama Balita
-
-</label>
-
-<select
-name="id_balita"
-class="form-select"
-required>
-
-<?php while($b=mysqli_fetch_assoc($balita)){ ?>
-
-<option
-value="<?= $b['id_balita']; ?>"
-<?= ($b['id_balita']==$data['id_balita']) ? "selected" : ""; ?>>
-
-<?= $b['nama_balita']; ?>
-
-</option>
-
-<?php } ?>
-
-</select>
-
-</div>
-
-<div class="row">
-
-<div class="col-md-6 mb-3">
-
-<label class="form-label">
-
-Tanggal Pengukuran
-
-</label>
-
-<input
-type="date"
-name="tanggal_pengukuran"
-class="form-control"
-value="<?= $data['tanggal_pengukuran']; ?>"
-required>
-
-</div>
-
-<div class="col-md-6 mb-3">
-
-<label class="form-label">
-
-Umur (Bulan)
-
-</label>
-
-<input
-type="number"
-name="umur_bulan"
-class="form-control"
-value="<?= $data['umur_bulan']; ?>"
-required>
-
-</div>
-
-</div>
-
-<div class="row">
-
-<div class="col-md-6 mb-3">
-
-<label class="form-label">
-
-Berat Badan (kg)
-
-</label>
-
-<input
-type="number"
-step="0.01"
-name="berat_badan"
-class="form-control"
-value="<?= $data['berat_badan']; ?>"
-required>
-
-</div>
-
-<div class="col-md-6 mb-3">
-
-<label class="form-label">
-
-Tinggi / Panjang Badan (cm)
-
-</label>
-
-<input
-type="number"
-step="0.01"
-name="tinggi_panjang_badan"
-class="form-control"
-value="<?= $data['tinggi_panjang_badan']; ?>"
-required>
-
-</div>
-
-</div>
-
-<div class="row">
-
-<div class="col-md-6 mb-3">
-
-<label class="form-label">
-
-Lingkar Kepala (cm)
-
-</label>
-
-<input
-type="number"
-step="0.01"
-name="lingkar_kepala"
-class="form-control"
-value="<?= $data['lingkar_kepala']; ?>">
-
-</div>
-
-<div class="col-md-6 mb-3">
-
-<label class="form-label">
-
-LiLA (cm)
-
-</label>
-
-<input
-type="number"
-step="0.01"
-name="lila"
-class="form-control"
-value="<?= $data['lila']; ?>">
-
-</div>
-
-</div>
-
-<div class="mt-4">
-
-<button
-type="submit"
-name="update"
-class="btn btn-warning">
-
-Update
-
-</button>
-
-<a
-href="data_pengukuran.php"
-class="btn btn-secondary">
-
-Kembali
-
-</a>
-
-</div>
-
-</form>
-
-</div>
-
-</div>
-
-</div>
-
-</body>
-</html>
+<?php require_once "../includes/footer.php"; ?>

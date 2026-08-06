@@ -1,35 +1,151 @@
 <?php
-session_start();
+
+require_once "../auth/session.php";
+require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
-// Cek apakah ID dikirim
-if (!isset($_GET['id'])) {
-    header("Location: data_pengukuran.php");
+/*
+|--------------------------------------------------------------------------
+| Hak akses
+|--------------------------------------------------------------------------
+*/
+
+cekRole(["kader"]);
+
+/*
+|--------------------------------------------------------------------------
+| Hanya menerima request POST
+|--------------------------------------------------------------------------
+*/
+
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    header(
+        "Location: data_pengukuran.php?pesan=akses_tidak_valid"
+    );
     exit;
 }
 
-$id = $_GET['id'];
+/*
+|--------------------------------------------------------------------------
+| Memvalidasi ID pengukuran
+|--------------------------------------------------------------------------
+*/
 
-// Hapus data
-$hapus = mysqli_query($conn, "
-    DELETE FROM pengukuran_antropometri
-    WHERE id_pengukuran = '$id'
-");
+$idPengukuran = filter_input(
+    INPUT_POST,
+    "id_pengukuran",
+    FILTER_VALIDATE_INT
+);
 
-// Cek hasil
-if ($hapus) {
-
-    echo "<script>
-            alert('Data pengukuran berhasil dihapus');
-            window.location='data_pengukuran.php';
-          </script>";
-
-} else {
-
-    echo "<script>
-            alert('Data pengukuran gagal dihapus');
-            window.location='data_pengukuran.php';
-          </script>";
-
+if (
+    !$idPengukuran
+    || $idPengukuran < 1
+) {
+    header(
+        "Location: data_pengukuran.php?pesan=id_tidak_valid"
+    );
+    exit;
 }
-?>
+
+/*
+|--------------------------------------------------------------------------
+| Memastikan data pengukuran tersedia
+|--------------------------------------------------------------------------
+*/
+
+$stmtCek = mysqli_prepare(
+    $conn,
+    "SELECT id_pengukuran
+     FROM pengukuran_antropometri
+     WHERE id_pengukuran = ?
+     LIMIT 1"
+);
+
+if (!$stmtCek) {
+    header(
+        "Location: data_pengukuran.php?pesan=gagal_hapus"
+    );
+    exit;
+}
+
+mysqli_stmt_bind_param(
+    $stmtCek,
+    "i",
+    $idPengukuran
+);
+
+mysqli_stmt_execute($stmtCek);
+
+$resultCek = mysqli_stmt_get_result($stmtCek);
+
+$dataPengukuran = mysqli_fetch_assoc($resultCek);
+
+mysqli_stmt_close($stmtCek);
+
+if (!$dataPengukuran) {
+    header(
+        "Location: data_pengukuran.php?pesan=tidak_ditemukan"
+    );
+    exit;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Menghapus data pengukuran
+|--------------------------------------------------------------------------
+*/
+
+$stmtHapus = mysqli_prepare(
+    $conn,
+    "DELETE FROM pengukuran_antropometri
+     WHERE id_pengukuran = ?"
+);
+
+if (!$stmtHapus) {
+    header(
+        "Location: data_pengukuran.php?pesan=gagal_hapus"
+    );
+    exit;
+}
+
+mysqli_stmt_bind_param(
+    $stmtHapus,
+    "i",
+    $idPengukuran
+);
+
+$berhasil = mysqli_stmt_execute($stmtHapus);
+
+$kodeError = mysqli_stmt_errno($stmtHapus);
+
+mysqli_stmt_close($stmtHapus);
+
+/*
+|--------------------------------------------------------------------------
+| Redirect berdasarkan hasil
+|--------------------------------------------------------------------------
+*/
+
+if ($berhasil) {
+    header(
+        "Location: data_pengukuran.php?pesan=hapus_berhasil"
+    );
+    exit;
+}
+
+/*
+ * Error 1451 berarti data masih digunakan tabel lain,
+ * misalnya tabel hasil_deteksi.
+ */
+
+if ($kodeError === 1451) {
+    header(
+        "Location: data_pengukuran.php?pesan=data_digunakan"
+    );
+    exit;
+}
+
+header(
+    "Location: data_pengukuran.php?pesan=gagal_hapus"
+);
+exit;
