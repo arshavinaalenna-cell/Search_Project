@@ -1,13 +1,31 @@
 <?php
-require_once '../config/koneksi.php';
+
+require_once "../auth/session.php";
+require_once "../includes/cek_role.php";
+require_once "../config/koneksi.php";
+
+
+cekRole([
+    "kader",
+    "petugas_kia"
+]);
+
+
+$judulHalaman = "Tambah Riwayat Kelahiran | Sistem Deteksi Stunting";
+
+
+// SIMPAN DATA
 
 if(isset($_POST['simpan'])){
+
 
     $id_balita        = $_POST['id_balita'];
     $berat_lahir      = $_POST['berat_lahir'];
     $panjang_lahir    = $_POST['panjang_lahir'];
     $usia_kehamilan   = $_POST['usia_kehamilan'];
     $jenis_persalinan = $_POST['jenis_persalinan'];
+
+
 
     if(
         empty($id_balita) ||
@@ -17,11 +35,14 @@ if(isset($_POST['simpan'])){
         empty($jenis_persalinan)
     ){
 
-        echo "<script>
-                alert('Semua data harus diisi');
-              </script>";
+        echo "
+        <script>
+            alert('Semua data harus diisi');
+        </script>";
+
 
     }else{
+
 
         $query = mysqli_query($conn,"
             INSERT INTO riwayat_kelahiran
@@ -42,102 +63,169 @@ if(isset($_POST['simpan'])){
             )
         ");
 
+
+
         if($query){
 
-            echo "<script>
-                    alert('Data riwayat kelahiran berhasil ditambahkan');
-                    window.location='riwayat_kelahiran.php';
-                  </script>";
+
+            echo "
+            <script>
+                alert('Data riwayat kelahiran berhasil ditambahkan');
+                window.location='riwayat_kelahiran.php';
+            </script>";
+
+            exit;
+
 
         }else{
 
-            echo "<script>
-                    alert('Data gagal disimpan');
-                  </script>";
+
+            echo "
+            <script>
+                alert('Data gagal disimpan');
+            </script>";
 
         }
 
     }
 
 }
+
+
+
+// DATA BALITA
+
+$balita = mysqli_query($conn,"
+    SELECT *
+    FROM balita
+    ORDER BY nama_balita ASC
+");
+
+
+
+require_once "../includes/header.php";
+require_once "../includes/navbar.php";
+
 ?>
 
-<!DOCTYPE html>
-<html lang="id">
 
-<head>
+<div class="layout-wrapper">
 
-<meta charset="UTF-8">
 
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<?php require_once "../includes/sidebar.php"; ?>
 
-<title>Tambah Riwayat Kelahiran</title>
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<main class="main-content">
 
-</head>
 
-<body>
 
-<div class="container mt-5">
+<div class="d-flex flex-column flex-md-row
+justify-content-between align-items-md-center
+gap-3 mb-4">
 
-<div class="card shadow">
 
-<div class="card-header bg-success text-white">
+<div>
 
-<h4>Tambah Riwayat Kelahiran</h4>
+<h2 class="mb-1">
+Tambah Riwayat Kelahiran
+</h2>
+
+
+<p class="text-muted mb-0">
+Input data riwayat kelahiran balita.
+</p>
+
 
 </div>
 
-<div class="card-body">
+
+
+<a
+href="riwayat_kelahiran.php"
+class="btn btn-outline-secondary">
+
+<i class="bi bi-arrow-left"></i>
+
+Kembali
+
+</a>
+
+
+
+</div>
+
+
+
+
+<div class="card content-card">
+
+
+<div class="card-body p-4">
+
+
 
 <form method="POST">
 
+
+
 <div class="mb-3">
 
+
 <label class="form-label">
-
-Balita
-
+Nama Balita
 </label>
 
-<select name="id_balita" class="form-select" required>
 
-<option value="">-- Pilih Balita --</option>
 
-<?php
+<select
+name="id_balita"
+class="form-select"
+required>
 
-$balita = mysqli_query($conn,"
-SELECT *
-FROM balita
-ORDER BY nama_balita ASC
-");
 
-while($b=mysqli_fetch_assoc($balita)){
+<option value="">
+-- Pilih Balita --
+</option>
 
-?>
 
-<option value="<?= $b['id_balita']; ?>">
+
+<?php while($b=mysqli_fetch_assoc($balita)){ ?>
+
+
+<option
+value="<?= $b['id_balita']; ?>">
+
 
 <?= $b['nama_balita']; ?>
 
 (<?= $b['nik_balita']; ?>)
 
+
 </option>
+
+
 
 <?php } ?>
 
+
 </select>
+
+
 
 </div>
 
+
+
+
+
 <div class="mb-3">
 
+
 <label class="form-label">
-
 Berat Lahir (Kg)
-
 </label>
+
+
 
 <input
 
@@ -149,17 +237,25 @@ name="berat_lahir"
 
 class="form-control"
 
+placeholder="Contoh: 3.20"
+
 required>
+
 
 </div>
 
+
+
+
+
 <div class="mb-3">
 
+
 <label class="form-label">
-
 Panjang Lahir (cm)
-
 </label>
+
+
 
 <input
 
@@ -171,17 +267,25 @@ name="panjang_lahir"
 
 class="form-control"
 
+placeholder="Contoh: 49"
+
 required>
+
 
 </div>
 
+
+
+
+
 <div class="mb-3">
 
+
 <label class="form-label">
-
 Usia Kehamilan (Minggu)
-
 </label>
+
+
 
 <input
 
@@ -191,17 +295,25 @@ name="usia_kehamilan"
 
 class="form-control"
 
+placeholder="Contoh: 39"
+
 required>
+
 
 </div>
 
+
+
+
+
 <div class="mb-3">
 
+
 <label class="form-label">
-
 Jenis Persalinan
-
 </label>
+
+
 
 <select
 
@@ -211,19 +323,43 @@ class="form-select"
 
 required>
 
-<option value="">-- Pilih --</option>
 
-<option value="Normal">Normal</option>
+<option value="">
+-- Pilih Jenis Persalinan --
+</option>
 
-<option value="Caesar">Caesar</option>
 
-<option value="Vakum">Vakum</option>
+<option value="Normal">
+Normal
+</option>
 
-<option value="Forceps">Forceps</option>
+
+<option value="Caesar">
+Caesar
+</option>
+
+
+<option value="Vakum">
+Vakum
+</option>
+
+
+<option value="Forceps">
+Forceps
+</option>
+
 
 </select>
 
+
 </div>
+
+
+
+
+
+<div class="d-flex gap-2">
+
 
 <button
 
@@ -237,24 +373,41 @@ Simpan
 
 </button>
 
+
+
 <a
 
 href="riwayat_kelahiran.php"
 
-class="btn btn-secondary">
+class="btn btn-outline-secondary">
+
+<i class="bi bi-arrow-left"></i>
 
 Kembali
 
 </a>
 
+
+
+</div>
+
+
+
 </form>
 
-</div>
 
 </div>
 
+
 </div>
 
-</body>
 
-</html>
+
+</main>
+
+
+</div>
+
+
+
+<?php require_once "../includes/footer.php"; ?>
