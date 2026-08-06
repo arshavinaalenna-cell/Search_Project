@@ -4,13 +4,20 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+
 cekRole([
     "kader",
     "petugas_kia"
 ]);
 
 
+$judulHalaman = "Tambah Riwayat Kelahiran | Sistem Deteksi Stunting";
+
+
+// SIMPAN DATA
+
 if(isset($_POST['simpan'])){
+
 
     $id_balita        = $_POST['id_balita'];
     $berat_lahir      = $_POST['berat_lahir'];
@@ -19,53 +26,81 @@ if(isset($_POST['simpan'])){
     $jenis_persalinan = $_POST['jenis_persalinan'];
 
 
-    $query = mysqli_query($conn,"
-        INSERT INTO riwayat_kelahiran
-        (
-            id_balita,
-            berat_lahir,
-            panjang_lahir,
-            usia_kehamilan,
-            jenis_persalinan
-        )
-        VALUES
-        (
-            '$id_balita',
-            '$berat_lahir',
-            '$panjang_lahir',
-            '$usia_kehamilan',
-            '$jenis_persalinan'
-        )
-    ");
 
-
-    if($query){
+    if(
+        empty($id_balita) ||
+        empty($berat_lahir) ||
+        empty($panjang_lahir) ||
+        empty($usia_kehamilan) ||
+        empty($jenis_persalinan)
+    ){
 
         echo "
         <script>
-            alert('Data riwayat kelahiran berhasil ditambahkan');
-            window.location='riwayat_kelahiran.php';
+            alert('Semua data harus diisi');
         </script>";
 
-        exit;
 
     }else{
 
-        echo "
-        <script>
-            alert('Data gagal disimpan');
-        </script>";
+
+        $query = mysqli_query($conn,"
+            INSERT INTO riwayat_kelahiran
+            (
+                id_balita,
+                berat_lahir,
+                panjang_lahir,
+                usia_kehamilan,
+                jenis_persalinan
+            )
+            VALUES
+            (
+                '$id_balita',
+                '$berat_lahir',
+                '$panjang_lahir',
+                '$usia_kehamilan',
+                '$jenis_persalinan'
+            )
+        ");
+
+
+
+        if($query){
+
+
+            echo "
+            <script>
+                alert('Data riwayat kelahiran berhasil ditambahkan');
+               header(
+    "Location: riwayat_kelahiran.php?pesan=tambah_berhasil"
+);
+exit;
+
+
+        }else{
+
+
+            echo "
+            <script>
+                alert('Data gagal disimpan');
+            </script>";
+
+        }
 
     }
 
 }
 
 
+
+// DATA BALITA
+
 $balita = mysqli_query($conn,"
     SELECT *
     FROM balita
     ORDER BY nama_balita ASC
 ");
+
 
 
 require_once "../includes/header.php";
@@ -81,6 +116,7 @@ require_once "../includes/navbar.php";
 
 
 <main class="main-content">
+
 
 
 <div class="d-flex flex-column flex-md-row
@@ -103,18 +139,21 @@ Input data riwayat kelahiran balita.
 </div>
 
 
-<button
-type="button"
-class="btn btn-successy"
-onclick="history.back()">
+
+<a
+href="riwayat_kelahiran.php"
+class="btn btn-outline-secondary">
 
 <i class="bi bi-arrow-left"></i>
+
 Kembali
 
-</button>
+</a>
+
 
 
 </div>
+
 
 
 
@@ -124,15 +163,18 @@ Kembali
 <div class="card-body p-4">
 
 
+
 <form method="POST">
 
 
 
 <div class="mb-3">
 
+
 <label class="form-label">
-Balita
+Nama Balita
 </label>
+
 
 
 <select
@@ -146,16 +188,21 @@ required>
 </option>
 
 
+
 <?php while($b=mysqli_fetch_assoc($balita)){ ?>
 
 
-<option value="<?= $b['id_balita']; ?>">
+<option
+value="<?= $b['id_balita']; ?>">
+
 
 <?= $b['nama_balita']; ?>
--
-<?= $b['nik_balita']; ?>
+
+(<?= $b['nik_balita']; ?>)
+
 
 </option>
+
 
 
 <?php } ?>
@@ -164,15 +211,20 @@ required>
 </select>
 
 
+
 </div>
+
+
 
 
 
 <div class="mb-3">
 
+
 <label class="form-label">
 Berat Lahir (Kg)
 </label>
+
 
 
 <input
@@ -185,18 +237,24 @@ name="berat_lahir"
 
 class="form-control"
 
+placeholder="Contoh: 3.20"
+
 required>
+
 
 </div>
 
 
 
 
+
 <div class="mb-3">
+
 
 <label class="form-label">
 Panjang Lahir (cm)
 </label>
+
 
 
 <input
@@ -209,18 +267,24 @@ name="panjang_lahir"
 
 class="form-control"
 
+placeholder="Contoh: 49"
+
 required>
+
 
 </div>
 
 
 
 
+
 <div class="mb-3">
+
 
 <label class="form-label">
 Usia Kehamilan (Minggu)
 </label>
+
 
 
 <input
@@ -231,10 +295,13 @@ name="usia_kehamilan"
 
 class="form-control"
 
+placeholder="Contoh: 39"
+
 required>
 
 
 </div>
+
 
 
 
@@ -247,15 +314,20 @@ Jenis Persalinan
 </label>
 
 
+
 <select
+
 name="jenis_persalinan"
+
 class="form-select"
+
 required>
 
 
 <option value="">
--- Pilih --
+-- Pilih Jenis Persalinan --
 </option>
+
 
 <option value="Normal">
 Normal
@@ -285,6 +357,7 @@ Forceps
 
 
 
+
 <div class="d-flex gap-2">
 
 
@@ -302,22 +375,22 @@ Simpan
 
 
 
-<button
+<a
 
-type="button"
+href="riwayat_kelahiran.php"
 
-class="btn btn-success"
-
-onclick="history.back()">
+class="btn btn-outline-secondary">
 
 <i class="bi bi-arrow-left"></i>
 
 Kembali
 
-</button>
+</a>
+
 
 
 </div>
+
 
 
 </form>
@@ -325,13 +398,16 @@ Kembali
 
 </div>
 
+
 </div>
+
 
 
 </main>
 
 
 </div>
+
 
 
 <?php require_once "../includes/footer.php"; ?>

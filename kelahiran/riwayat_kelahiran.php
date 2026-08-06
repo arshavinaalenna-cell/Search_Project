@@ -4,410 +4,523 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+/*
+|--------------------------------------------------------------------------
+| Hak akses
+|--------------------------------------------------------------------------
+*/
 
 cekRole([
     "kader",
     "petugas_kia"
 ]);
 
+$judulHalaman =
+    "Riwayat Kelahiran | Sistem Deteksi Stunting";
 
-$judulHalaman = "Tambah Riwayat Kelahiran | Sistem Deteksi Stunting";
+/*
+|--------------------------------------------------------------------------
+| Mendeteksi primary key tabel riwayat_kelahiran
+|--------------------------------------------------------------------------
+|
+| Kode ini tetap bekerja jika primary key bernama:
+| id_kelahiran, id_riwayat, atau id_riwayat_kelahiran.
+|
+*/
 
+$queryPrimaryKey = mysqli_query(
+    $conn,
+    "SHOW KEYS
+     FROM riwayat_kelahiran
+     WHERE Key_name = 'PRIMARY'"
+);
 
-// SIMPAN DATA
+$dataPrimaryKey = $queryPrimaryKey
+    ? mysqli_fetch_assoc($queryPrimaryKey)
+    : null;
 
-if(isset($_POST['simpan'])){
+$kolomPrimaryKey =
+    $dataPrimaryKey["Column_name"] ?? "";
 
-
-    $id_balita        = $_POST['id_balita'];
-    $berat_lahir      = $_POST['berat_lahir'];
-    $panjang_lahir    = $_POST['panjang_lahir'];
-    $usia_kehamilan   = $_POST['usia_kehamilan'];
-    $jenis_persalinan = $_POST['jenis_persalinan'];
-
-
-
-    if(
-        empty($id_balita) ||
-        empty($berat_lahir) ||
-        empty($panjang_lahir) ||
-        empty($usia_kehamilan) ||
-        empty($jenis_persalinan)
-    ){
-
-        echo "
-        <script>
-            alert('Semua data harus diisi');
-        </script>";
-
-
-    }else{
-
-
-        $query = mysqli_query($conn,"
-            INSERT INTO riwayat_kelahiran
-            (
-                id_balita,
-                berat_lahir,
-                panjang_lahir,
-                usia_kehamilan,
-                jenis_persalinan
-            )
-            VALUES
-            (
-                '$id_balita',
-                '$berat_lahir',
-                '$panjang_lahir',
-                '$usia_kehamilan',
-                '$jenis_persalinan'
-            )
-        ");
-
-
-
-        if($query){
-
-
-            echo "
-            <script>
-                alert('Data riwayat kelahiran berhasil ditambahkan');
-                window.location='riwayat_kelahiran.php';
-            </script>";
-
-            exit;
-
-
-        }else{
-
-
-            echo "
-            <script>
-                alert('Data gagal disimpan');
-            </script>";
-
-        }
-
-    }
-
+if ($kolomPrimaryKey === "") {
+    die(
+        "Primary key tabel riwayat_kelahiran tidak ditemukan."
+    );
 }
 
+/*
+|--------------------------------------------------------------------------
+| Mengambil data riwayat kelahiran dan data balita
+|--------------------------------------------------------------------------
+*/
 
+$sql = "
+    SELECT
+        rk.*,
+        b.nama_balita,
+        b.nik_balita
+    FROM riwayat_kelahiran AS rk
+    INNER JOIN balita AS b
+        ON rk.id_balita = b.id_balita
+    ORDER BY rk.$kolomPrimaryKey DESC
+";
 
-// DATA BALITA
+$query = mysqli_query($conn, $sql);
 
-$balita = mysqli_query($conn,"
-    SELECT *
-    FROM balita
-    ORDER BY nama_balita ASC
-");
+if (!$query) {
+    die(
+        "Gagal mengambil data riwayat kelahiran: "
+        . mysqli_error($conn)
+    );
+}
 
+/*
+|--------------------------------------------------------------------------
+| Fungsi mengamankan output
+|--------------------------------------------------------------------------
+*/
 
+function amanKelahiran($nilai): string
+{
+    if (
+        $nilai === null
+        || $nilai === ""
+    ) {
+        return "-";
+    }
+
+    return htmlspecialchars(
+        (string) $nilai,
+        ENT_QUOTES,
+        "UTF-8"
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Pesan halaman
+|--------------------------------------------------------------------------
+*/
+
+$pesan = $_GET["pesan"] ?? "";
+
+$jenisAlert = "";
+$isiPesan = "";
+
+switch ($pesan) {
+
+    case "tambah_berhasil":
+        $jenisAlert = "success";
+        $isiPesan =
+            "Data riwayat kelahiran berhasil ditambahkan.";
+        break;
+
+    case "edit_berhasil":
+        $jenisAlert = "success";
+        $isiPesan =
+            "Data riwayat kelahiran berhasil diperbarui.";
+        break;
+
+    case "hapus_berhasil":
+        $jenisAlert = "success";
+        $isiPesan =
+            "Data riwayat kelahiran berhasil dihapus.";
+        break;
+
+    case "tidak_ditemukan":
+        $jenisAlert = "warning";
+        $isiPesan =
+            "Data riwayat kelahiran tidak ditemukan.";
+        break;
+
+    case "gagal_hapus":
+        $jenisAlert = "danger";
+        $isiPesan =
+            "Data riwayat kelahiran gagal dihapus.";
+        break;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Template aplikasi
+|--------------------------------------------------------------------------
+*/
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
 
 ?>
 
-
 <div class="layout-wrapper">
 
+    <?php require_once "../includes/sidebar.php"; ?>
 
-<?php require_once "../includes/sidebar.php"; ?>
+    <main class="main-content">
 
+        <div class="page-header">
 
-<main class="main-content">
+            <div>
 
+                <h1 class="page-title">
 
+                    <i class="bi bi-balloon-heart me-2"></i>
 
-<div class="d-flex flex-column flex-md-row
-justify-content-between align-items-md-center
-gap-3 mb-4">
+                    Riwayat Kelahiran
 
+                </h1>
 
-<div>
+                <p class="page-subtitle">
 
-<h2 class="mb-1">
-Tambah Riwayat Kelahiran
-</h2>
+                    Kelola informasi berat lahir, panjang lahir,
+                    usia kehamilan, dan jenis persalinan balita.
 
+                </p>
 
-<p class="text-muted mb-0">
-Input data riwayat kelahiran balita.
-</p>
+            </div>
 
+            <div class="d-flex flex-wrap gap-2">
+
+                <a
+                    href="../dashboard/dashboard.php"
+                    class="btn btn-secondary"
+                >
+                    <i class="bi bi-arrow-left"></i>
+                    Kembali ke Dashboard
+                </a>
+
+                <a
+                    href="tambah_kelahiran.php"
+                    class="btn btn-primary"
+                >
+                    <i class="bi bi-plus-circle"></i>
+                    Tambah Riwayat
+                </a>
+
+            </div>
+
+        </div>
+
+        <?php if ($isiPesan !== ""): ?>
+
+            <div
+                class="alert alert-<?= amanKelahiran(
+                    $jenisAlert
+                ); ?> alert-dismissible fade show"
+                role="alert"
+            >
+
+                <?= amanKelahiran($isiPesan); ?>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"
+                    aria-label="Tutup"
+                ></button>
+
+            </div>
+
+        <?php endif; ?>
+
+        <div class="card content-card">
+
+            <div class="card-header">
+
+                <div>
+
+                    <h4 class="mb-1">
+                        Daftar Riwayat Kelahiran
+                    </h4>
+
+                    <small class="text-muted">
+
+                        Total data:
+
+                        <?= mysqli_num_rows($query); ?>
+
+                        riwayat kelahiran
+
+                    </small>
+
+                </div>
+
+                <span class="badge badge-info">
+
+                    <i class="bi bi-heart-pulse"></i>
+
+                    Data Kelahiran
+
+                </span>
+
+            </div>
+
+            <div class="card-body">
+
+                <div class="table-responsive">
+
+                    <table class="table table-hover align-middle">
+
+                        <thead>
+
+                            <tr>
+
+                                <th class="text-center">
+                                    No
+                                </th>
+
+                                <th>
+                                    Nama Balita
+                                </th>
+
+                                <th>
+                                    NIK Balita
+                                </th>
+
+                                <th class="text-center">
+                                    Berat Lahir
+                                </th>
+
+                                <th class="text-center">
+                                    Panjang Lahir
+                                </th>
+
+                                <th class="text-center">
+                                    Usia Kehamilan
+                                </th>
+
+                                <th class="text-center">
+                                    Jenis Persalinan
+                                </th>
+
+                                <th class="text-center">
+                                    Aksi
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                        <?php if (mysqli_num_rows($query) > 0): ?>
+
+                            <?php
+
+                            $nomor = 1;
+
+                            while (
+                                $data =
+                                    mysqli_fetch_assoc($query)
+                            ):
+
+                                $idRiwayat =
+                                    (int) $data[$kolomPrimaryKey];
+
+                            ?>
+
+                                <tr>
+
+                                    <td class="text-center">
+
+                                        <?= $nomor++; ?>
+
+                                    </td>
+
+                                    <td>
+
+                                        <div
+                                            class="d-flex
+                                            align-items-center gap-2"
+                                        >
+
+                                            <span
+                                                class="badge badge-primary"
+                                            >
+                                                <i
+                                                    class="bi
+                                                    bi-person-heart"
+                                                ></i>
+                                            </span>
+
+                                            <strong>
+
+                                                <?= amanKelahiran(
+                                                    $data["nama_balita"]
+                                                ); ?>
+
+                                            </strong>
+
+                                        </div>
+
+                                    </td>
+
+                                    <td>
+
+                                        <?= amanKelahiran(
+                                            $data["nik_balita"]
+                                        ); ?>
+
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <?= amanKelahiran(
+                                            $data["berat_lahir"]
+                                        ); ?>
+
+                                        kg
+
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <?= amanKelahiran(
+                                            $data["panjang_lahir"]
+                                        ); ?>
+
+                                        cm
+
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <?= amanKelahiran(
+                                            $data["usia_kehamilan"]
+                                        ); ?>
+
+                                        minggu
+
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <span class="badge badge-info">
+
+                                            <?= amanKelahiran(
+                                                $data[
+                                                    "jenis_persalinan"
+                                                ]
+                                            ); ?>
+
+                                        </span>
+
+                                    </td>
+
+                                    <td>
+
+                                        <div
+                                            class="table-actions
+                                            justify-content-center"
+                                        >
+
+                                            <a
+                                                href="edit_kelahiran.php?id=<?= $idRiwayat; ?>"
+                                                class="btn btn-warning btn-sm"
+                                            >
+                                                <i
+                                                    class="bi
+                                                    bi-pencil-square"
+                                                ></i>
+
+                                                Edit
+                                            </a>
+
+                                            <form
+                                                action="hapus_kelahiran.php"
+                                                method="POST"
+                                                class="d-inline"
+                                                onsubmit="return confirm(
+                                                    'Yakin ingin menghapus riwayat kelahiran ini?'
+                                                );"
+                                            >
+
+                                                <input
+                                                    type="hidden"
+                                                    name="id"
+                                                    value="<?= $idRiwayat; ?>"
+                                                >
+
+                                                <button
+                                                    type="submit"
+                                                    class="btn btn-danger btn-sm"
+                                                >
+                                                    <i
+                                                        class="bi
+                                                        bi-trash3"
+                                                    ></i>
+
+                                                    Hapus
+                                                </button>
+
+                                            </form>
+
+                                        </div>
+
+                                    </td>
+
+                                </tr>
+
+                            <?php endwhile; ?>
+
+                        <?php else: ?>
+
+                            <tr>
+
+                                <td colspan="8">
+
+                                    <div class="empty-state">
+
+                                        <div
+                                            class="empty-state-icon"
+                                        >
+                                            <i
+                                                class="bi
+                                                bi-balloon-heart"
+                                            ></i>
+                                        </div>
+
+                                        <h3>
+                                            Belum ada riwayat kelahiran
+                                        </h3>
+
+                                        <p>
+                                            Tambahkan data kelahiran
+                                            balita untuk melengkapi
+                                            informasi pertumbuhan.
+                                        </p>
+
+                                        <a
+                                            href="tambah_kelahiran.php"
+                                            class="btn btn-primary mt-3"
+                                        >
+                                            <i
+                                                class="bi
+                                                bi-plus-circle"
+                                            ></i>
+
+                                            Tambah Riwayat
+                                        </a>
+
+                                    </div>
+
+                                </td>
+
+                            </tr>
+
+                        <?php endif; ?>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
 
 </div>
-
-
-
-<a
-href="riwayat_kelahiran.php"
-class="btn btn-outline-secondary">
-
-<i class="bi bi-arrow-left"></i>
-
-Kembali
-
-</a>
-
-
-
-</div>
-
-
-
-
-<div class="card content-card">
-
-
-<div class="card-body p-4">
-
-
-
-<form method="POST">
-
-
-
-<div class="mb-3">
-
-
-<label class="form-label">
-Nama Balita
-</label>
-
-
-
-<select
-name="id_balita"
-class="form-select"
-required>
-
-
-<option value="">
--- Pilih Balita --
-</option>
-
-
-
-<?php while($b=mysqli_fetch_assoc($balita)){ ?>
-
-
-<option
-value="<?= $b['id_balita']; ?>">
-
-
-<?= $b['nama_balita']; ?>
-
-(<?= $b['nik_balita']; ?>)
-
-
-</option>
-
-
-
-<?php } ?>
-
-
-</select>
-
-
-
-</div>
-
-
-
-
-
-<div class="mb-3">
-
-
-<label class="form-label">
-Berat Lahir (Kg)
-</label>
-
-
-
-<input
-
-type="number"
-
-step="0.01"
-
-name="berat_lahir"
-
-class="form-control"
-
-placeholder="Contoh: 3.20"
-
-required>
-
-
-</div>
-
-
-
-
-
-<div class="mb-3">
-
-
-<label class="form-label">
-Panjang Lahir (cm)
-</label>
-
-
-
-<input
-
-type="number"
-
-step="0.01"
-
-name="panjang_lahir"
-
-class="form-control"
-
-placeholder="Contoh: 49"
-
-required>
-
-
-</div>
-
-
-
-
-
-<div class="mb-3">
-
-
-<label class="form-label">
-Usia Kehamilan (Minggu)
-</label>
-
-
-
-<input
-
-type="number"
-
-name="usia_kehamilan"
-
-class="form-control"
-
-placeholder="Contoh: 39"
-
-required>
-
-
-</div>
-
-
-
-
-
-<div class="mb-3">
-
-
-<label class="form-label">
-Jenis Persalinan
-</label>
-
-
-
-<select
-
-name="jenis_persalinan"
-
-class="form-select"
-
-required>
-
-
-<option value="">
--- Pilih Jenis Persalinan --
-</option>
-
-
-<option value="Normal">
-Normal
-</option>
-
-
-<option value="Caesar">
-Caesar
-</option>
-
-
-<option value="Vakum">
-Vakum
-</option>
-
-
-<option value="Forceps">
-Forceps
-</option>
-
-
-</select>
-
-
-</div>
-
-
-
-
-
-<div class="d-flex gap-2">
-
-
-<button
-
-type="submit"
-
-name="simpan"
-
-class="btn btn-success">
-
-Simpan
-
-</button>
-
-
-
-<a
-
-href="riwayat_kelahiran.php"
-
-class="btn btn-outline-secondary">
-
-<i class="bi bi-arrow-left"></i>
-
-Kembali
-
-</a>
-
-
-
-</div>
-
-
-
-</form>
-
-
-</div>
-
-
-</div>
-
-
-
-</main>
-
-
-</div>
-
-
 
 <?php require_once "../includes/footer.php"; ?>
