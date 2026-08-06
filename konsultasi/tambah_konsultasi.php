@@ -4,6 +4,57 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+/*
+|--------------------------------------------------------------------------
+| Pastikan koneksi menggunakan database yang benar
+|--------------------------------------------------------------------------
+*/
+
+if (!mysqli_select_db($conn, "db_stunting")) {
+    die(
+        "Database db_stunting tidak dapat dipilih: "
+        . mysqli_error($conn)
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Memastikan kolom keluhan tersedia
+|--------------------------------------------------------------------------
+| Ini hanya menambahkan kolom jika pada database yang sedang dipakai PHP
+| kolom tersebut memang belum ada.
+*/
+
+$cekKolomKeluhan = mysqli_query(
+    $conn,
+    "SHOW COLUMNS
+     FROM `db_stunting`.`konsultasi`
+     LIKE 'keluhan'"
+);
+
+if (!$cekKolomKeluhan) {
+    die(
+        "Gagal memeriksa struktur tabel konsultasi: "
+        . mysqli_error($conn)
+    );
+}
+
+if (mysqli_num_rows($cekKolomKeluhan) === 0) {
+    $tambahKolomKeluhan = mysqli_query(
+        $conn,
+        "ALTER TABLE `db_stunting`.`konsultasi`
+         ADD COLUMN `keluhan` TEXT NULL
+         AFTER `tanggal`"
+    );
+
+    if (!$tambahKolomKeluhan) {
+        die(
+            "Kolom keluhan belum ada dan gagal ditambahkan: "
+            . mysqli_error($conn)
+        );
+    }
+}
+
 cekRole([
     "orang_tua",
     "petugas_gizi"
@@ -305,16 +356,30 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     */
 
     if ($pesanError === "") {
+        $sqlSimpan = "
+            INSERT INTO `db_stunting`.`konsultasi`
+            (
+                `id_balita`,
+                `id_petugas`,
+                `tanggal`,
+                `keluhan`,
+                `hasil_konsultasi`,
+                `tindak_lanjut`
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                NULLIF(?, ''),
+                NULLIF(?, '')
+            )
+        ";
+
         $stmtSimpan = mysqli_prepare(
             $conn,
-            "INSERT INTO konsultasi (
-                id_balita,
-                id_petugas,
-                tanggal,
-                keluhan,
-                hasil_konsultasi,
-                tindak_lanjut
-            ) VALUES (?, ?, ?, ?, ?, ?)"
+            $sqlSimpan
         );
 
         if (!$stmtSimpan) {
@@ -333,9 +398,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $tindakLanjut
             );
 
-            if (
-                mysqli_stmt_execute($stmtSimpan)
-            ) {
+            if (mysqli_stmt_execute($stmtSimpan)) {
                 mysqli_stmt_close($stmtSimpan);
 
                 header(
