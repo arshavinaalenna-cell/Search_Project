@@ -106,6 +106,19 @@ function formatTanggal($tanggal): string
 
 /*
 |--------------------------------------------------------------------------
+| Pengaturan tampilan berdasarkan role
+|--------------------------------------------------------------------------
+|
+| Hanya Kader yang melihat fitur tambah, edit, dan hapus.
+| Role lain melihat data pengukuran dalam mode read-only.
+|
+*/
+
+$roleAktif = $_SESSION["role"] ?? "";
+$bolehKelolaPengukuran = $roleAktif === "kader";
+
+/*
+|--------------------------------------------------------------------------
 | Memanggil template utama
 |--------------------------------------------------------------------------
 */
@@ -121,133 +134,91 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-    <?php
+        <?php
 
-$pesan = $_GET["pesan"] ?? "";
+        $pesan = $_GET["pesan"] ?? "";
 
-$jenisAlert = "";
-$isiPesan = "";
+        $jenisAlert = "";
+        $isiPesan = "";
 
-switch ($pesan) {
+        switch ($pesan) {
+            case "tambah_berhasil":
+                $jenisAlert = "success";
+                $isiPesan =
+                    "Data pengukuran berhasil ditambahkan.";
+                break;
 
-    case "tambah_berhasil":
-        $jenisAlert = "success";
-        $isiPesan =
-            "Data pengukuran berhasil ditambahkan.";
-        break;
+            case "edit_berhasil":
+                $jenisAlert = "success";
+                $isiPesan =
+                    "Data pengukuran berhasil diperbarui.";
+                break;
 
-    case "edit_berhasil":
-        $jenisAlert = "success";
-        $isiPesan =
-            "Data pengukuran berhasil diperbarui.";
-        break;
+            case "hapus_berhasil":
+                $jenisAlert = "success";
+                $isiPesan =
+                    "Data pengukuran berhasil dihapus.";
+                break;
 
-    case "hapus_berhasil":
-        $jenisAlert = "success";
-        $isiPesan =
-            "Data pengukuran berhasil dihapus.";
-        break;
+            case "tidak_ditemukan":
+                $jenisAlert = "warning";
+                $isiPesan =
+                    "Data pengukuran tidak ditemukan.";
+                break;
 
-    case "tidak_ditemukan":
-        $jenisAlert = "warning";
-        $isiPesan =
-            "Data pengukuran tidak ditemukan.";
-        break;
+            case "id_tidak_valid":
+                $jenisAlert = "warning";
+                $isiPesan =
+                    "ID pengukuran tidak valid.";
+                break;
 
-    case "id_tidak_valid":
-        $jenisAlert = "warning";
-        $isiPesan =
-            "ID pengukuran tidak valid.";
-        break;
+            case "data_digunakan":
+                $jenisAlert = "warning";
+                $isiPesan =
+                    "Data pengukuran tidak dapat dihapus karena sudah digunakan pada hasil deteksi.";
+                break;
 
-    case "data_digunakan":
-        $jenisAlert = "warning";
-        $isiPesan =
-            "Data pengukuran tidak dapat dihapus karena sudah digunakan pada hasil deteksi.";
-        break;
+            case "gagal_hapus":
+                $jenisAlert = "danger";
+                $isiPesan =
+                    "Data pengukuran gagal dihapus.";
+                break;
 
-    case "gagal_hapus":
-        $jenisAlert = "danger";
-        $isiPesan =
-            "Data pengukuran gagal dihapus.";
-        break;
+            case "akses_tidak_valid":
+                $jenisAlert = "danger";
+                $isiPesan =
+                    "Permintaan penghapusan tidak valid.";
+                break;
+        }
 
-    case "akses_tidak_valid":
-        $jenisAlert = "danger";
-        $isiPesan =
-            "Permintaan penghapusan tidak valid.";
-        break;
-}
+        ?>
 
-?>
+        <?php if ($isiPesan !== ""): ?>
 
-<?php if ($isiPesan !== ""): ?>
+            <div
+                class="alert alert-<?= htmlspecialchars(
+                    $jenisAlert,
+                    ENT_QUOTES,
+                    "UTF-8"
+                ); ?> alert-dismissible fade show"
+                role="alert"
+            >
+                <?= htmlspecialchars(
+                    $isiPesan,
+                    ENT_QUOTES,
+                    "UTF-8"
+                ); ?>
 
-    <div
-        class="alert alert-<?= htmlspecialchars(
-            $jenisAlert,
-            ENT_QUOTES,
-            "UTF-8"
-        ); ?> alert-dismissible fade show"
-        role="alert"
-    >
-        <?= htmlspecialchars(
-            $isiPesan,
-            ENT_QUOTES,
-            "UTF-8"
-        ); ?>
-
-        <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="alert"
-            aria-label="Tutup"
-        ></button>
-    </div>
-
-<?php endif; ?>
-
-        <!-- Judul halaman -->
-        <div class="page-header">
-
-            <div>
-
-                <h1 class="page-title">
-                    <i class="bi bi-rulers me-2"></i>
-                    Data Pengukuran Antropometri
-                </h1>
-
-                <p class="page-subtitle">
-                    Kelola hasil pengukuran pertumbuhan balita,
-                    meliputi berat badan, tinggi badan, lingkar kepala,
-                    dan LiLA.
-                </p>
-
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"
+                    aria-label="Tutup"
+                ></button>
             </div>
 
-            <div class="d-flex flex-wrap gap-2">
+        <?php endif; ?>
 
-                <a
-                    href="../dashboard/dashboard.php"
-                    class="btn btn-secondary"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali ke Dashboard
-                </a>
-
-                <a
-                    href="tambah_pengukuran.php"
-                    class="btn btn-primary"
-                >
-                    <i class="bi bi-plus-circle"></i>
-                    Tambah Pengukuran
-                </a>
-
-            </div>
-
-        </div>
-
-        <!-- Card data pengukuran -->
         <div class="card content-card">
 
             <div class="card-header">
@@ -255,20 +226,70 @@ switch ($pesan) {
                 <div>
 
                     <h4 class="mb-1">
-                        Daftar Pengukuran Balita
+                        <?= $bolehKelolaPengukuran
+                            ? "Input Antropometri"
+                            : "Grafik dan Riwayat Pertumbuhan"; ?>
                     </h4>
 
                     <small class="text-muted">
-                        Total data:
-                        <?= mysqli_num_rows($query); ?>
-                        pengukuran
+                        <?= $bolehKelolaPengukuran
+                            ? "Kelola hasil pengukuran fisik balita dari kegiatan Posyandu."
+                            : "Lihat riwayat pengukuran pertumbuhan balita."; ?>
                     </small>
+
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+
+                    <a
+                        href="../dashboard/dashboard.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                    <?php if ($bolehKelolaPengukuran): ?>
+
+                        <a
+                            href="tambah_pengukuran.php"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-plus-circle"></i>
+                            Tambah Pengukuran
+                        </a>
+
+                    <?php endif; ?>
 
                 </div>
 
             </div>
 
             <div class="card-body">
+
+                <div
+                    class="d-flex flex-wrap
+                    justify-content-between align-items-center
+                    gap-2 mb-3"
+                >
+                    <span class="text-muted small">
+                        Total data:
+                        <strong>
+                            <?= mysqli_num_rows($query); ?>
+                        </strong>
+                        pengukuran
+                    </span>
+
+                    <?php if (!$bolehKelolaPengukuran): ?>
+
+                        <span class="badge badge-info">
+                            <i class="bi bi-eye"></i>
+                            Mode lihat
+                        </span>
+
+                    <?php endif; ?>
+
+                </div>
 
                 <div class="table-responsive">
 
@@ -310,9 +331,13 @@ switch ($pesan) {
                                     LiLA
                                 </th>
 
-                                <th class="text-center">
-                                    Aksi
-                                </th>
+                                <?php if ($bolehKelolaPengukuran): ?>
+
+                                    <th class="text-center">
+                                        Aksi
+                                    </th>
+
+                                <?php endif; ?>
 
                             </tr>
 
@@ -340,12 +365,18 @@ switch ($pesan) {
 
                                     <td>
 
-                                        <div class="d-flex align-items-center gap-2">
+                                        <div
+                                            class="d-flex
+                                            align-items-center gap-2"
+                                        >
 
                                             <span
                                                 class="badge badge-primary"
                                             >
-                                                <i class="bi bi-person-heart"></i>
+                                                <i
+                                                    class="bi
+                                                    bi-person-heart"
+                                                ></i>
                                             </span>
 
                                             <strong>
@@ -359,101 +390,103 @@ switch ($pesan) {
                                     </td>
 
                                     <td class="text-center">
-
                                         <?= formatTanggal(
-                                            $data["tanggal_pengukuran"]
+                                            $data[
+                                                "tanggal_pengukuran"
+                                            ]
                                         ); ?>
-
                                     </td>
 
                                     <td class="text-center">
-
                                         <?= aman(
                                             $data["umur_bulan"]
                                         ); ?>
                                         bulan
-
                                     </td>
 
                                     <td class="text-center">
-
                                         <?= tampilkanUkuran(
                                             $data["berat_badan"],
                                             "kg"
                                         ); ?>
-
                                     </td>
 
                                     <td class="text-center">
-
                                         <?= tampilkanUkuran(
                                             $data[
                                                 "tinggi_panjang_badan"
                                             ],
                                             "cm"
                                         ); ?>
-
                                     </td>
 
                                     <td class="text-center">
-
                                         <?= tampilkanUkuran(
                                             $data["lingkar_kepala"],
                                             "cm"
                                         ); ?>
-
                                     </td>
 
                                     <td class="text-center">
-
                                         <?= tampilkanUkuran(
                                             $data["lila"],
                                             "cm"
                                         ); ?>
-
                                     </td>
 
-                                    <td>
+                                    <?php if (
+                                        $bolehKelolaPengukuran
+                                    ): ?>
 
-                                        <div
-                                            class="table-actions
-                                            justify-content-center"
-                                        >
+                                        <td>
 
-                                            <a
-                                                href="edit_pengukuran.php?id=<?= $idPengukuran; ?>"
-                                                class="btn btn-warning btn-sm"
+                                            <div
+                                                class="table-actions
+                                                justify-content-center"
                                             >
-                                                <i class="bi bi-pencil-square"></i>
-                                                Edit
-                                            </a>
 
-                                            <form
-    action="hapus_pengukuran.php"
-    method="POST"
-    class="d-inline"
-    onsubmit="return confirm(
-        'Yakin ingin menghapus data pengukuran ini?'
-    );"
->
-    <input
-        type="hidden"
-        name="id_pengukuran"
-        value="<?= $idPengukuran; ?>"
-    >
+                                                <a
+                                                    href="edit_pengukuran.php?id=<?= $idPengukuran; ?>"
+                                                    class="btn btn-warning btn-sm"
+                                                >
+                                                    <i
+                                                        class="bi
+                                                        bi-pencil-square"
+                                                    ></i>
+                                                    Edit
+                                                </a>
 
-    <button
-        type="submit"
-        class="btn btn-danger btn-sm"
-    >
-        <i class="bi bi-trash3"></i>
-        Hapus
-    </button>
-</form>
+                                                <form
+                                                    action="hapus_pengukuran.php"
+                                                    method="POST"
+                                                    class="d-inline"
+                                                    onsubmit="return confirm(
+                                                        'Yakin ingin menghapus data pengukuran ini?'
+                                                    );"
+                                                >
+                                                    <input
+                                                        type="hidden"
+                                                        name="id_pengukuran"
+                                                        value="<?= $idPengukuran; ?>"
+                                                    >
 
-                                        </div>
+                                                    <button
+                                                        type="submit"
+                                                        class="btn btn-danger btn-sm"
+                                                    >
+                                                        <i
+                                                            class="bi
+                                                            bi-trash3"
+                                                        ></i>
+                                                        Hapus
+                                                    </button>
+                                                </form>
 
-                                    </td>
+                                            </div>
+
+                                        </td>
+
+                                    <?php endif; ?>
 
                                 </tr>
 
@@ -463,12 +496,19 @@ switch ($pesan) {
 
                             <tr>
 
-                                <td colspan="9">
+                                <td
+                                    colspan="<?= $bolehKelolaPengukuran
+                                        ? "9"
+                                        : "8"; ?>"
+                                >
 
                                     <div class="empty-state">
 
                                         <div class="empty-state-icon">
-                                            <i class="bi bi-clipboard2-pulse"></i>
+                                            <i
+                                                class="bi
+                                                bi-clipboard2-pulse"
+                                            ></i>
                                         </div>
 
                                         <h3>
@@ -476,18 +516,27 @@ switch ($pesan) {
                                         </h3>
 
                                         <p>
-                                            Tambahkan pengukuran pertama
-                                            untuk mulai memantau pertumbuhan
-                                            balita.
+                                            <?= $bolehKelolaPengukuran
+                                                ? "Tambahkan pengukuran pertama untuk mulai memantau pertumbuhan balita."
+                                                : "Data pengukuran pertumbuhan balita belum tersedia."; ?>
                                         </p>
 
-                                        <a
-                                            href="tambah_pengukuran.php"
-                                            class="btn btn-primary mt-3"
-                                        >
-                                            <i class="bi bi-plus-circle"></i>
-                                            Tambah Pengukuran
-                                        </a>
+                                        <?php if (
+                                            $bolehKelolaPengukuran
+                                        ): ?>
+
+                                            <a
+                                                href="tambah_pengukuran.php"
+                                                class="btn btn-primary mt-3"
+                                            >
+                                                <i
+                                                    class="bi
+                                                    bi-plus-circle"
+                                                ></i>
+                                                Tambah Pengukuran
+                                            </a>
+
+                                        <?php endif; ?>
 
                                     </div>
 
@@ -511,8 +560,4 @@ switch ($pesan) {
 
 </div>
 
-<?php
-
-require_once "../includes/footer.php";
-
-?>
+<?php require_once "../includes/footer.php"; ?>
