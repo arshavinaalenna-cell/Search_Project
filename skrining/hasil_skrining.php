@@ -72,6 +72,20 @@ function amanSkrining($nilai): string
 
 /*
 |--------------------------------------------------------------------------
+| Pengaturan hak akses berdasarkan role
+|--------------------------------------------------------------------------
+|
+| Hanya Petugas Gizi yang dapat menambah, menganalisis,
+| mengedit, dan menghapus data skrining.
+| Role lain hanya melihat data dalam mode read-only.
+|
+*/
+
+$roleAktif = $_SESSION["role"] ?? "";
+$bolehKelolaSkrining = $roleAktif === "petugas_gizi";
+
+/*
+|--------------------------------------------------------------------------
 | Pesan halaman
 |--------------------------------------------------------------------------
 */
@@ -166,16 +180,20 @@ require_once "../includes/navbar.php";
 
                 </a>
 
-                <a
-                    href="form_skrining.php"
-                    class="btn btn-primary"
-                >
+                <?php if ($bolehKelolaSkrining): ?>
 
-                    <i class="bi bi-plus-circle"></i>
+                    <a
+                        href="form_skrining.php"
+                        class="btn btn-primary"
+                    >
 
-                    Tambah Skrining
+                        <i class="bi bi-plus-circle"></i>
 
-                </a>
+                        Tambah Skrining
+
+                    </a>
+
+                <?php endif; ?>
 
             </div>
 
@@ -301,9 +319,13 @@ require_once "../includes/navbar.php";
                                     Air Bersih
                                 </th>
 
-                                <th class="text-center">
-                                    Aksi
-                                </th>
+                                <?php if ($bolehKelolaSkrining): ?>
+
+                                    <th class="text-center">
+                                        Aksi
+                                    </th>
+
+                                <?php endif; ?>
 
                             </tr>
 
@@ -452,61 +474,65 @@ require_once "../includes/navbar.php";
 
                                     </td>
 
-                                    <td>
+                                    <?php if ($bolehKelolaSkrining): ?>
 
-                                        <div
-                                            class="table-actions
-                                            justify-content-center"
-                                        >
+                                        <td>
 
-                                            <a
-                                                href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
-                                                class="btn btn-info btn-sm"
+                                            <div
+                                                class="table-actions
+                                                justify-content-center"
                                             >
 
-                                                <i
-                                                    class="bi
-                                                    bi-search-heart"
-                                                ></i>
+                                                <a
+                                                    href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
+                                                    class="btn btn-info btn-sm"
+                                                >
 
-                                                Pilih
+                                                    <i
+                                                        class="bi
+                                                        bi-search-heart"
+                                                    ></i>
 
-                                            </a>
+                                                    Analisis
 
-                                            <a
-                                                href="edit_skrining.php?id=<?= $idSkrining; ?>"
-                                                class="btn btn-warning btn-sm"
-                                            >
+                                                </a>
 
-                                                <i
-                                                    class="bi
-                                                    bi-pencil-square"
-                                                ></i>
+                                                <a
+                                                    href="edit_skrining.php?id=<?= $idSkrining; ?>"
+                                                    class="btn btn-warning btn-sm"
+                                                >
 
-                                                Edit
+                                                    <i
+                                                        class="bi
+                                                        bi-pencil-square"
+                                                    ></i>
 
-                                            </a>
+                                                    Edit
 
-                                            <a
-                                                href="hapus_skrining.php?id=<?= $idSkrining; ?>"
-                                                class="btn btn-danger btn-sm"
-                                                onclick="return confirm(
-                                                    'Yakin ingin menghapus data skrining ini?'
-                                                );"
-                                            >
+                                                </a>
 
-                                                <i
-                                                    class="bi
-                                                    bi-trash3"
-                                                ></i>
+                                                <a
+                                                    href="hapus_skrining.php?id=<?= $idSkrining; ?>"
+                                                    class="btn btn-danger btn-sm"
+                                                    onclick="return confirm(
+                                                        'Yakin ingin menghapus data skrining ini?'
+                                                    );"
+                                                >
 
-                                                Hapus
+                                                    <i
+                                                        class="bi
+                                                        bi-trash3"
+                                                    ></i>
 
-                                            </a>
+                                                    Hapus
 
-                                        </div>
+                                                </a>
 
-                                    </td>
+                                            </div>
+
+                                        </td>
+
+                                    <?php endif; ?>
 
                                 </tr>
 
@@ -516,7 +542,11 @@ require_once "../includes/navbar.php";
 
                             <tr>
 
-                                <td colspan="13">
+                                <td
+                                    colspan="<?= $bolehKelolaSkrining
+                                        ? "13"
+                                        : "12"; ?>"
+                                >
 
                                     <div class="empty-state">
 
@@ -537,25 +567,29 @@ require_once "../includes/navbar.php";
 
                                         <p>
 
-                                            Tambahkan skrining awal
-                                            untuk mulai mencatat faktor
-                                            risiko balita.
+                                            <?= $bolehKelolaSkrining
+                                                ? "Tambahkan skrining awal untuk mulai mencatat faktor risiko balita."
+                                                : "Data skrining awal balita belum tersedia."; ?>
 
                                         </p>
 
-                                        <a
-                                            href="form_skrining.php"
-                                            class="btn btn-primary mt-3"
-                                        >
+                                        <?php if ($bolehKelolaSkrining): ?>
 
-                                            <i
-                                                class="bi
-                                                bi-plus-circle"
-                                            ></i>
+                                            <a
+                                                href="form_skrining.php"
+                                                class="btn btn-primary mt-3"
+                                            >
 
-                                            Tambah Skrining
+                                                <i
+                                                    class="bi
+                                                    bi-plus-circle"
+                                                ></i>
 
-                                        </a>
+                                                Tambah Skrining
+
+                                            </a>
+
+                                        <?php endif; ?>
 
                                     </div>
 
