@@ -12,6 +12,85 @@ if (session_status() === PHP_SESSION_NONE) {
 
 /*
 |--------------------------------------------------------------------------
+| Menentukan base URL aplikasi secara otomatis
+|--------------------------------------------------------------------------
+|
+| Contoh:
+| - Jika aplikasi berada di C:/laragon/www/PROJECT_FIKS/Search_Project,
+|   BASE_URL menjadi /Search_Project.
+| - Jika virtual host langsung menunjuk ke folder Search_Project,
+|   BASE_URL menjadi kosong.
+|
+*/
+
+if (!defined("BASE_URL")) {
+    $documentRoot = realpath(
+        $_SERVER["DOCUMENT_ROOT"] ?? ""
+    );
+
+    $applicationRoot = realpath(
+        __DIR__ . "/.."
+    );
+
+    $baseUrl = "";
+
+    if ($documentRoot && $applicationRoot) {
+        $documentRootNormal = rtrim(
+            str_replace("\\", "/", $documentRoot),
+            "/"
+        );
+
+        $applicationRootNormal = rtrim(
+            str_replace("\\", "/", $applicationRoot),
+            "/"
+        );
+
+        if (
+            stripos(
+                $applicationRootNormal,
+                $documentRootNormal
+            ) === 0
+        ) {
+            $relativePath = trim(
+                substr(
+                    $applicationRootNormal,
+                    strlen($documentRootNormal)
+                ),
+                "/"
+            );
+
+            if ($relativePath !== "") {
+                $baseUrl = "/" . $relativePath;
+            }
+        }
+    }
+
+    define("BASE_URL", $baseUrl);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Membuat URL aplikasi
+|--------------------------------------------------------------------------
+*/
+
+if (!function_exists("appUrl")) {
+    function appUrl(string $path = ""): string
+    {
+        $path = ltrim($path, "/");
+
+        if ($path === "") {
+            return BASE_URL !== ""
+                ? BASE_URL
+                : "/";
+        }
+
+        return BASE_URL . "/" . $path;
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
 | Mengubah nama role menjadi lebih mudah dibaca
 |--------------------------------------------------------------------------
 */
@@ -46,7 +125,8 @@ function cekRole(array $roleDiizinkan): void
 
     if (!isset($_SESSION["id_user"])) {
         header(
-            "Location: /auth/login.php?pesan=belum_login"
+            "Location: "
+            . appUrl("auth/login.php?pesan=belum_login")
         );
         exit;
     }
@@ -145,8 +225,22 @@ function cekRole(array $roleDiizinkan): void
             rel="stylesheet"
         >
 
+        <?php
+
+        $fileCss = __DIR__ . "/../assets/css/style.css";
+
+        $versiCss = file_exists($fileCss)
+            ? filemtime($fileCss)
+            : "1.0";
+
+        ?>
+
         <link
-            href="/assets/css/style.css"
+            href="<?= htmlspecialchars(
+                appUrl("assets/css/style.css"),
+                ENT_QUOTES,
+                "UTF-8"
+            ); ?>?v=<?= $versiCss; ?>"
             rel="stylesheet"
         >
 
@@ -701,7 +795,11 @@ function cekRole(array $roleDiizinkan): void
                 <div class="access-actions">
 
                     <a
-                        href="/dashboard/dashboard.php"
+                        href="<?= htmlspecialchars(
+                            appUrl("dashboard/dashboard.php"),
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>"
                         class="access-button access-button-primary"
                     >
                         <i class="bi bi-house-heart-fill"></i>
@@ -709,7 +807,11 @@ function cekRole(array $roleDiizinkan): void
                     </a>
 
                     <a
-                        href="/auth/logout.php"
+                        href="<?= htmlspecialchars(
+                            appUrl("auth/logout.php"),
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>"
                         class="access-button access-button-secondary"
                     >
                         <i class="bi bi-box-arrow-right"></i>
