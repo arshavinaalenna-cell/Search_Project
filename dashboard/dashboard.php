@@ -6,17 +6,6 @@ require_once "statistik.php";
 
 $rolePengguna = $_SESSION["role"] ?? "";
 
-$namaRole = [
-    "kader" => "Kader",
-    "petugas_kia" => "Petugas KIA",
-    "petugas_gizi" => "Petugas Gizi",
-    "orang_tua" => "Orang Tua",
-    "kepala_puskesmas" => "Kepala Puskesmas",
-    "dinkes" => "Dinas Kesehatan"
-];
-
-$roleTampil = $namaRole[$rolePengguna] ?? "Pengguna";
-
 $judulHalaman =
     "Dashboard | Sistem Deteksi Stunting";
 
@@ -398,35 +387,94 @@ require_once "../includes/navbar.php";
 
 ?>
 
+<style>
+    .dashboard-stat-grid {
+        display: grid;
+        grid-template-columns:
+            repeat(auto-fit, minmax(240px, 1fr));
+        gap: 18px;
+        width: 100%;
+        margin-bottom: 24px;
+    }
+
+    .dashboard-stat-grid .stat-card {
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+    }
+
+    .dashboard-feature-grid {
+        display: grid;
+        grid-template-columns:
+            repeat(auto-fit, minmax(300px, 1fr));
+        gap: 16px;
+        width: 100%;
+    }
+
+    .dashboard-feature-card {
+        width: 100%;
+        min-width: 0;
+        height: 100%;
+        display: flex;
+        border: 1px solid rgba(124, 135, 151, .12);
+        border-radius: 18px;
+        background:
+            linear-gradient(
+                145deg,
+                rgba(255, 255, 255, .96),
+                rgba(250, 247, 252, .92)
+            );
+        box-shadow:
+            0 8px 22px rgba(70, 83, 102, .06);
+    }
+
+    .dashboard-feature-card .card-body {
+        width: 100%;
+        display: flex;
+        padding: 20px;
+    }
+
+    .dashboard-feature-content {
+        width: 100%;
+        display: flex;
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    .dashboard-feature-text {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .dashboard-feature-text p {
+        flex: 1;
+    }
+
+    .dashboard-feature-text .btn {
+        align-self: flex-start;
+    }
+
+    @media (max-width: 575.98px) {
+        .dashboard-stat-grid,
+        .dashboard-feature-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .dashboard-feature-card .card-body {
+            padding: 17px;
+        }
+    }
+</style>
+
 <div class="layout-wrapper">
 
     <?php require_once "../includes/sidebar.php"; ?>
 
     <main class="main-content">
 
-        <div class="page-header">
-
-            <div>
-
-                <h1 class="page-title">
-                    <i class="bi bi-grid-1x2 me-2"></i>
-                    Dashboard
-                </h1>
-
-                <p class="page-subtitle">
-                    Ringkasan informasi untuk
-                    <?= htmlspecialchars(
-                        $roleTampil,
-                        ENT_QUOTES,
-                        "UTF-8"
-                    ); ?>.
-                </p>
-
-            </div>
-
-        </div>
-
-        <div class="stat-grid">
+        <div class="dashboard-stat-grid">
 
             <?php foreach (
                 $statistikDashboard
@@ -502,26 +550,18 @@ require_once "../includes/navbar.php";
 
                 <div class="card-body">
 
-                    <div class="row g-3">
+                    <div class="dashboard-feature-grid">
 
                         <?php foreach (
                             $aksiDashboard
                             as $aksi
                         ): ?>
 
-                            <div class="col-12 col-md-6 col-xl-4">
+                            <div class="dashboard-feature-card">
 
-                                <div
-                                    class="card h-100 border-0
-                                    bg-light"
-                                >
+                                <div class="card-body">
 
-                                    <div class="card-body">
-
-                                        <div
-                                            class="d-flex
-                                            align-items-start gap-3"
-                                        >
+                                    <div class="dashboard-feature-content">
 
                                             <div
                                                 class="stat-icon
@@ -536,7 +576,7 @@ require_once "../includes/navbar.php";
                                                 ></i>
                                             </div>
 
-                                            <div class="flex-grow-1">
+                                        <div class="dashboard-feature-text">
 
                                                 <h5 class="mb-2">
                                                     <?= htmlspecialchars(
@@ -577,8 +617,6 @@ require_once "../includes/navbar.php";
                                                         bi-arrow-right"
                                                     ></i>
                                                 </a>
-
-                                            </div>
 
                                         </div>
 
