@@ -246,7 +246,6 @@ MENAMPILKAN HASIL ANALISIS
 body{
     background:#f5f6fa;
 }
-
 .card{
     border:none;
     border-radius:15px;

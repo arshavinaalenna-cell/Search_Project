@@ -1673,3 +1673,50 @@ input[type="checkbox"] {
         box-shadow: none !important;
     }
 }
+
+/* Tombol Tambah / Kembali */
+.btn-kembali {
+    background: linear-gradient(
+        135deg,
+        #d86fa1,
+        #8da9e8
+    );
+
+    color: white;
+    border: none;
+
+    padding: 12px 28px;
+
+    border-radius: 18px;
+
+    font-size: 16px;
+    font-weight: 600;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    cursor: pointer;
+
+    box-shadow:
+        0 8px 20px rgba(141,169,232,0.35);
+
+    transition: all 0.3s ease;
+}
+
+
+.btn-kembali:hover {
+
+    transform: translateY(-2px);
+
+    background: linear-gradient(
+        135deg,
+        #c95d90,
+        #7695df
+    );
+
+    color:white;
+
+    box-shadow:
+        0 12px 25px rgba(141,169,232,0.45);
+}

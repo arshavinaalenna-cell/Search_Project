@@ -301,12 +301,15 @@ require_once "../includes/navbar.php";
                 </p>
             </div>
 
-            <a
-                href="data_balita.php"
-                class="btn btn-outline-secondary"
-            >
-                Kembali
-            </a>
+            <button
+type="button"
+class="btn btn-success w-auto"
+onclick="history.back()">
+
+<i class="bi bi-arrow-left"></i>
+Kembali
+
+</button>
         </div>
 
         <?php if ($pesanError !== ""): ?>
@@ -611,7 +614,7 @@ require_once "../includes/navbar.php";
 
                         <a
                             href="data_balita.php"
-                            class="btn btn-outline-secondary"
+                             class="btn btn-success"
                         >
                             Batal
                         </a>
