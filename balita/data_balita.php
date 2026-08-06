@@ -169,45 +169,6 @@ $query = mysqli_stmt_get_result($stmt);
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
 
-/*
-|--------------------------------------------------------------------------
-| Teks interface berdasarkan role
-|--------------------------------------------------------------------------
-|
-| Hanya mengubah tampilan halaman. Query, proses, dan hak akses tidak diubah.
-|
-*/
-
-$judulDataBalita = "Data Balita";
-$deskripsiDataBalita =
-    "Daftar balita yang terdaftar dalam sistem.";
-
-if ($roleAktif === "kader") {
-    $judulDataBalita = "Kelola Data Balita";
-    $deskripsiDataBalita =
-        "Daftarkan balita baru dan kelola data profil dasar balita.";
-} elseif ($roleAktif === "petugas_kia") {
-    $judulDataBalita = "Data Balita";
-    $deskripsiDataBalita =
-        "Pilih data balita untuk meninjau identitas dan melengkapi riwayat medis.";
-} elseif ($roleAktif === "petugas_gizi") {
-    $judulDataBalita = "Verifikasi Data Balita";
-    $deskripsiDataBalita =
-        "Tinjau kelengkapan data balita sebelum proses deteksi dan konsultasi gizi.";
-} elseif ($roleAktif === "orang_tua") {
-    $judulDataBalita = "Data Anak";
-    $deskripsiDataBalita =
-        "Lihat data anak yang terhubung dengan akunmu.";
-} elseif ($roleAktif === "kepala_puskesmas") {
-    $judulDataBalita = "Data Balita";
-    $deskripsiDataBalita =
-        "Tinjau data balita sebagai informasi monitoring tingkat Puskesmas.";
-} elseif ($roleAktif === "dinkes") {
-    $judulDataBalita = "Data Balita Wilayah";
-    $deskripsiDataBalita =
-        "Tinjau data balita sebagai informasi monitoring tingkat wilayah.";
-}
-
 ?>
 
 <div class="layout-wrapper">
@@ -215,55 +176,6 @@ if ($roleAktif === "kader") {
     <?php require_once "../includes/sidebar.php"; ?>
 
     <main class="main-content">
-
-        <div class="page-header">
-
-            <div>
-
-                <h1 class="page-title">
-                    <i class="bi bi-person-heart me-2"></i>
-                    <?= htmlspecialchars(
-                        $judulDataBalita,
-                        ENT_QUOTES,
-                        "UTF-8"
-                    ); ?>
-                </h1>
-
-                <p class="page-subtitle">
-                    <?= htmlspecialchars(
-                        $deskripsiDataBalita,
-                        ENT_QUOTES,
-                        "UTF-8"
-                    ); ?>
-                </p>
-
-            </div>
-
-            <div class="d-flex flex-wrap gap-2">
-
-                <a
-                    href="../dashboard/dashboard.php"
-                    class="btn btn-secondary"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali
-                </a>
-
-                <?php if ($roleAktif === "kader"): ?>
-
-                    <a
-                        href="tambah_balita.php"
-                        class="btn btn-primary"
-                    >
-                        <i class="bi bi-person-plus"></i>
-                        Tambah Balita
-                    </a>
-
-                <?php endif; ?>
-
-            </div>
-
-        </div>
 
         <?php if (isset($_GET["pesan"])): ?>
 
@@ -330,10 +242,29 @@ if ($roleAktif === "kader") {
 
                 </div>
 
-                <span class="badge badge-primary">
-                    <i class="bi bi-people"></i>
-                    Data
-                </span>
+                <div class="d-flex flex-wrap gap-2">
+
+                    <a
+                        href="../dashboard/dashboard.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                    <?php if ($roleAktif === "kader"): ?>
+
+                        <a
+                            href="tambah_balita.php"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-person-plus"></i>
+                            Tambah Balita
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
 
             </div>
 
