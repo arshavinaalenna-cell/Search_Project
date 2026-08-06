@@ -172,13 +172,15 @@ Simpan
 
 </button>
 
-<a
-href="riwayat_kelahiran.php"
-class="btn btn-secondary">
+<button
+type="button"
+class="btn btn-secondary"
+onclick="history.back()">
 
+<i class="bi bi-arrow-left"></i>
 Kembali
 
-</a>
+</button>
 
 </form>
 
