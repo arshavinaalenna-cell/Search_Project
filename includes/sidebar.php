@@ -44,6 +44,17 @@ $menuSidebar = [
             "halaman" => ["dashboard.php"]
         ],
         [
+            "nama" => "Kelola Pengguna",
+            "ikon" => "◎",
+            "url" => "../user/data_user.php",
+            "halaman" => [
+                "data_user.php",
+                "tambah_user.php",
+                "edit_user.php",
+                "hapus_user.php"
+            ]
+        ],
+        [
             "nama" => "Grafik Pertumbuhan",
             "ikon" => "↗",
             "url" => "../pengukuran/data_pengukuran.php",

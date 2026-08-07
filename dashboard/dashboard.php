@@ -158,22 +158,28 @@ switch ($rolePengguna) {
     case "dinkes":
         $statistikDashboard = [
             [
+                "label" => "Total Pengguna",
+                "nilai" => $totalPengguna ?? 0,
+                "ikon" => "bi-people-fill",
+                "kelas" => "stat-info"
+            ],
+            [
                 "label" => "Total Balita",
                 "nilai" => $totalBalita ?? 0,
-                "ikon" => "bi-people",
-                "kelas" => "stat-info"
+                "ikon" => "bi-person-heart",
+                "kelas" => "stat-success"
             ],
             [
                 "label" => "Total Pengukuran",
                 "nilai" => $totalPengukuran ?? 0,
                 "ikon" => "bi-graph-up-arrow",
-                "kelas" => "stat-success"
+                "kelas" => "stat-warning"
             ],
             [
                 "label" => "Hasil Deteksi",
                 "nilai" => $totalHasilDeteksi ?? 0,
                 "ikon" => "bi-clipboard2-data",
-                "kelas" => "stat-warning"
+                "kelas" => "stat-info"
             ]
         ];
         break;
@@ -362,6 +368,14 @@ switch ($rolePengguna) {
 
     case "dinkes":
         $aksiDashboard = [
+            [
+                "judul" => "Kelola Pengguna",
+                "deskripsi" =>
+                    "Tambah, lihat, edit, dan hapus akun pengguna sistem.",
+                "ikon" => "bi-people",
+                "url" => "../user/data_user.php",
+                "tombol" => "Kelola Pengguna"
+            ],
             [
                 "judul" => "Grafik Pertumbuhan Agregat",
                 "deskripsi" =>
