@@ -153,10 +153,14 @@ $stmtDetail = mysqli_prepare(
         pa.lila,
 
         b.id_balita,
+        b.id_puskesmas,
         b.nama_balita,
         b.nik_balita,
         b.jenis_kelamin,
         b.tanggal_lahir,
+        b.nama_posyandu,
+
+        ps.nama_puskesmas,
 
         s.tinggi_badan_ibu,
         s.pendidikan_ibu,
@@ -176,6 +180,9 @@ $stmtDetail = mysqli_prepare(
 
      INNER JOIN balita AS b
         ON pa.id_balita = b.id_balita
+
+     LEFT JOIN puskesmas AS ps
+        ON b.id_puskesmas = ps.id_puskesmas
 
      LEFT JOIN skrining_awal AS s
         ON s.id_skrining = (
@@ -292,7 +299,7 @@ require_once "../includes/navbar.php";
 
                 <p class="page-subtitle">
                     Informasi lengkap hasil deteksi, pengukuran,
-                    dan faktor risiko balita.
+                    faktor risiko, Posyandu, dan Puskesmas balita.
                 </p>
 
             </div>
@@ -407,7 +414,7 @@ require_once "../includes/navbar.php";
                             </h4>
 
                             <small class="text-muted">
-                                Data dasar balita
+                                Data dasar dan fasilitas kesehatan balita
                             </small>
                         </div>
 
@@ -490,6 +497,30 @@ require_once "../includes/navbar.php";
                                         $data["umur_bulan"]
                                     ); ?>
                                     bulan
+                                </span>
+                            </div>
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Nama Posyandu
+                                </span>
+
+                                <span class="detail-value">
+                                    <?= amanDetailLaporan(
+                                        $data["nama_posyandu"]
+                                    ); ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Puskesmas Pembina
+                                </span>
+
+                                <span class="detail-value">
+                                    <?= amanDetailLaporan(
+                                        $data["nama_puskesmas"]
+                                    ); ?>
                                 </span>
                             </div>
 

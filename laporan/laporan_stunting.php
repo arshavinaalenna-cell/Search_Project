@@ -140,11 +140,41 @@ function kelasStatusLaporan($status): string
 
 /*
 |--------------------------------------------------------------------------
-| Filter tanggal
+| Mengambil master Puskesmas
+|--------------------------------------------------------------------------
+*/
+
+$queryPuskesmas = mysqli_query(
+    $conn,
+    "SELECT
+        id_puskesmas,
+        nama_puskesmas
+     FROM puskesmas
+     ORDER BY nama_puskesmas ASC"
+);
+
+if (!$queryPuskesmas) {
+    die(
+        "Gagal mengambil data Puskesmas: "
+        . mysqli_error($conn)
+    );
+}
+
+$daftarPuskesmas = [];
+
+while (
+    $puskesmas = mysqli_fetch_assoc($queryPuskesmas)
+) {
+    $daftarPuskesmas[] = $puskesmas;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Filter laporan
 |--------------------------------------------------------------------------
 |
 | Secara default laporan menampilkan data dari awal bulan berjalan
-| sampai tanggal hari ini.
+| sampai tanggal hari ini dan seluruh Puskesmas.
 |
 */
 
@@ -161,7 +191,20 @@ $tanggalAkhir = trim(
     ?? $tanggalAkhirDefault
 );
 
+$idPuskesmas = filter_input(
+    INPUT_GET,
+    "id_puskesmas",
+    FILTER_VALIDATE_INT
+);
+
+if ($idPuskesmas === false || $idPuskesmas === null) {
+    $idPuskesmas = 0;
+}
+
+$idPuskesmas = (int) $idPuskesmas;
+
 $pesanError = "";
+$namaPuskesmasDipilih = "Semua Puskesmas";
 
 if (!tanggalLaporanValid($tanggalAwal)) {
     $pesanError =
@@ -192,6 +235,43 @@ if ($tanggalAwal > $tanggalAkhir) {
 
 /*
 |--------------------------------------------------------------------------
+| Memvalidasi Puskesmas yang dipilih
+|--------------------------------------------------------------------------
+*/
+
+if ($idPuskesmas > 0) {
+
+    $puskesmasDitemukan = false;
+
+    foreach (
+        $daftarPuskesmas
+        as $dataPuskesmas
+    ) {
+        if (
+            (int) $dataPuskesmas["id_puskesmas"]
+            === $idPuskesmas
+        ) {
+            $puskesmasDitemukan = true;
+
+            $namaPuskesmasDipilih =
+                $dataPuskesmas["nama_puskesmas"];
+
+            break;
+        }
+    }
+
+    if (!$puskesmasDitemukan) {
+        $pesanError =
+            "Puskesmas yang dipilih tidak ditemukan.";
+
+        $idPuskesmas = 0;
+        $namaPuskesmasDipilih =
+            "Semua Puskesmas";
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
 | Mengambil data hasil deteksi
 |--------------------------------------------------------------------------
 */
@@ -209,9 +289,13 @@ $sql = "
         pa.tinggi_panjang_badan,
 
         b.id_balita,
+        b.id_puskesmas,
         b.nama_balita,
         b.nik_balita,
-        b.jenis_kelamin
+        b.jenis_kelamin,
+        b.nama_posyandu,
+
+        ps.nama_puskesmas
 
     FROM hasil_deteksi AS hd
 
@@ -221,9 +305,20 @@ $sql = "
     INNER JOIN balita AS b
         ON pa.id_balita = b.id_balita
 
+    LEFT JOIN puskesmas AS ps
+        ON b.id_puskesmas = ps.id_puskesmas
+
     WHERE hd.tanggal_deteksi
         BETWEEN ? AND ?
+";
 
+if ($idPuskesmas > 0) {
+    $sql .= "
+        AND b.id_puskesmas = ?
+    ";
+}
+
+$sql .= "
     ORDER BY
         hd.tanggal_deteksi DESC,
         hd.id_deteksi DESC
@@ -241,12 +336,25 @@ if (!$stmtLaporan) {
     );
 }
 
-mysqli_stmt_bind_param(
-    $stmtLaporan,
-    "ss",
-    $tanggalAwal,
-    $tanggalAkhir
-);
+if ($idPuskesmas > 0) {
+
+    mysqli_stmt_bind_param(
+        $stmtLaporan,
+        "ssi",
+        $tanggalAwal,
+        $tanggalAkhir,
+        $idPuskesmas
+    );
+
+} else {
+
+    mysqli_stmt_bind_param(
+        $stmtLaporan,
+        "ss",
+        $tanggalAwal,
+        $tanggalAkhir
+    );
+}
 
 mysqli_stmt_execute($stmtLaporan);
 
@@ -324,6 +432,18 @@ mysqli_stmt_close($stmtLaporan);
 
 /*
 |--------------------------------------------------------------------------
+| URL cetak mengikuti filter aktif
+|--------------------------------------------------------------------------
+*/
+
+$parameterCetak = http_build_query([
+    "tanggal_awal" => $tanggalAwal,
+    "tanggal_akhir" => $tanggalAkhir,
+    "id_puskesmas" => $idPuskesmas
+]);
+
+/*
+|--------------------------------------------------------------------------
 | Memanggil template aplikasi
 |--------------------------------------------------------------------------
 */
@@ -355,7 +475,7 @@ require_once "../includes/navbar.php";
                 <p class="page-subtitle">
 
                     Rekap hasil deteksi risiko stunting berdasarkan
-                    periode tanggal yang dipilih.
+                    periode dan Puskesmas yang dipilih.
 
                 </p>
 
@@ -371,18 +491,16 @@ require_once "../includes/navbar.php";
                     Kembali ke Dashboard
                 </a>
 
-<a
-    href="cetak_laporan.php?tanggal_awal=<?= urlencode(
-        $tanggalAwal
-    ); ?>&tanggal_akhir=<?= urlencode(
-        $tanggalAkhir
-    ); ?>"
-    class="btn btn-primary"
-    target="_blank"
->
-    <i class="bi bi-printer"></i>
-    Cetak Laporan
-</a>
+                <a
+                    href="cetak_laporan.php?<?= amanLaporan(
+                        $parameterCetak
+                    ); ?>"
+                    class="btn btn-primary"
+                    target="_blank"
+                >
+                    <i class="bi bi-printer"></i>
+                    Cetak Laporan
+                </a>
 
             </div>
 
@@ -411,7 +529,7 @@ require_once "../includes/navbar.php";
 
         <?php endif; ?>
 
-        <!-- Filter periode -->
+        <!-- Filter laporan -->
         <div class="card content-card">
 
             <div class="card-header">
@@ -419,18 +537,18 @@ require_once "../includes/navbar.php";
                 <div>
 
                     <h4 class="mb-1">
-                        Filter Periode Laporan
+                        Filter Laporan
                     </h4>
 
                     <small class="text-muted">
-                        Pilih rentang tanggal hasil deteksi.
+                        Pilih rentang tanggal dan Puskesmas.
                     </small>
 
                 </div>
 
                 <span class="badge badge-info">
-                    <i class="bi bi-calendar-range"></i>
-                    Periode
+                    <i class="bi bi-funnel"></i>
+                    Filter
                 </span>
 
             </div>
@@ -442,9 +560,9 @@ require_once "../includes/navbar.php";
                     action="laporan_stunting.php"
                 >
 
-                    <div class="form-row">
+                    <div class="row g-3">
 
-                        <div class="form-group">
+                        <div class="col-12 col-lg-4">
 
                             <label
                                 for="tanggal_awal"
@@ -467,7 +585,7 @@ require_once "../includes/navbar.php";
 
                         </div>
 
-                        <div class="form-group">
+                        <div class="col-12 col-lg-4">
 
                             <label
                                 for="tanggal_akhir"
@@ -490,9 +608,58 @@ require_once "../includes/navbar.php";
 
                         </div>
 
+                        <div class="col-12 col-lg-4">
+
+                            <label
+                                for="id_puskesmas"
+                                class="form-label"
+                            >
+                                Puskesmas
+                            </label>
+
+                            <select
+                                name="id_puskesmas"
+                                id="id_puskesmas"
+                                class="form-select"
+                            >
+
+                                <option value="0">
+                                    Semua Puskesmas
+                                </option>
+
+                                <?php foreach (
+                                    $daftarPuskesmas
+                                    as $puskesmas
+                                ): ?>
+
+                                    <option
+                                        value="<?= (int)
+                                            $puskesmas[
+                                                "id_puskesmas"
+                                            ]; ?>"
+                                        <?= $idPuskesmas ===
+                                            (int) $puskesmas[
+                                                "id_puskesmas"
+                                            ]
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= amanLaporan(
+                                            $puskesmas[
+                                                "nama_puskesmas"
+                                            ]
+                                        ); ?>
+                                    </option>
+
+                                <?php endforeach; ?>
+
+                            </select>
+
+                        </div>
+
                     </div>
 
-                    <div class="form-actions">
+                    <div class="form-actions mt-3">
 
                         <button
                             type="submit"
@@ -507,7 +674,7 @@ require_once "../includes/navbar.php";
                             class="btn btn-light"
                         >
                             <i class="bi bi-arrow-counterclockwise"></i>
-                            Reset Periode
+                            Reset Filter
                         </a>
 
                     </div>
@@ -628,6 +795,14 @@ require_once "../includes/navbar.php";
                             $tanggalAkhir
                         ); ?>
 
+                        &nbsp;|&nbsp;
+
+                        Puskesmas:
+
+                        <?= amanLaporan(
+                            $namaPuskesmasDipilih
+                        ); ?>
+
                     </small>
 
                 </div>
@@ -662,6 +837,10 @@ require_once "../includes/navbar.php";
 
                                 <th>
                                     NIK Balita
+                                </th>
+
+                                <th>
+                                    Puskesmas Pembina
                                 </th>
 
                                 <th class="text-center">
@@ -759,6 +938,14 @@ require_once "../includes/navbar.php";
                                         ); ?>
                                     </td>
 
+                                    <td>
+                                        <?= amanLaporan(
+                                            $data[
+                                                "nama_puskesmas"
+                                            ]
+                                        ); ?>
+                                    </td>
+
                                     <td class="text-center">
                                         <?= amanLaporan(
                                             $data["jenis_kelamin"]
@@ -840,13 +1027,13 @@ require_once "../includes/navbar.php";
                                             justify-content-center"
                                         >
 
-<a
-    href="detail_laporan.php?id=<?= $idDeteksi; ?>"
-    class="btn btn-info btn-sm"
->
-    <i class="bi bi-eye"></i>
-    Detail
-</a>
+                                            <a
+                                                href="detail_laporan.php?id=<?= $idDeteksi; ?>"
+                                                class="btn btn-info btn-sm"
+                                            >
+                                                <i class="bi bi-eye"></i>
+                                                Detail
+                                            </a>
 
                                         </div>
 
@@ -860,7 +1047,7 @@ require_once "../includes/navbar.php";
 
                             <tr>
 
-                                <td colspan="11">
+                                <td colspan="12">
 
                                     <div class="empty-state">
 
@@ -879,8 +1066,8 @@ require_once "../includes/navbar.php";
 
                                         <p>
                                             Tidak ditemukan hasil
-                                            deteksi pada periode tanggal
-                                            yang dipilih.
+                                            deteksi pada periode dan
+                                            Puskesmas yang dipilih.
                                         </p>
 
                                     </div>

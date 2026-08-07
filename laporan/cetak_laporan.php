@@ -175,13 +175,75 @@ if ($tanggalAwal > $tanggalAkhir) {
 
 /*
 |--------------------------------------------------------------------------
+| Filter Puskesmas
+|--------------------------------------------------------------------------
+*/
+
+$idPuskesmas = filter_input(
+    INPUT_GET,
+    "id_puskesmas",
+    FILTER_VALIDATE_INT
+);
+
+if ($idPuskesmas === false || $idPuskesmas === null) {
+    $idPuskesmas = 0;
+}
+
+$idPuskesmas = (int) $idPuskesmas;
+
+$namaPuskesmasDipilih = "Semua Puskesmas";
+
+if ($idPuskesmas > 0) {
+
+    $stmtPuskesmas = mysqli_prepare(
+        $conn,
+        "SELECT
+            id_puskesmas,
+            nama_puskesmas
+         FROM puskesmas
+         WHERE id_puskesmas = ?
+         LIMIT 1"
+    );
+
+    if ($stmtPuskesmas) {
+
+        mysqli_stmt_bind_param(
+            $stmtPuskesmas,
+            "i",
+            $idPuskesmas
+        );
+
+        mysqli_stmt_execute($stmtPuskesmas);
+
+        $hasilPuskesmas =
+            mysqli_stmt_get_result($stmtPuskesmas);
+
+        $dataPuskesmas =
+            mysqli_fetch_assoc($hasilPuskesmas);
+
+        if ($dataPuskesmas) {
+            $namaPuskesmasDipilih =
+                $dataPuskesmas["nama_puskesmas"];
+        } else {
+            $idPuskesmas = 0;
+        }
+
+        mysqli_stmt_close($stmtPuskesmas);
+
+    } else {
+
+        $idPuskesmas = 0;
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
 | Mengambil data laporan
 |--------------------------------------------------------------------------
 */
 
-$stmtLaporan = mysqli_prepare(
-    $conn,
-    "SELECT
+$sqlLaporan = "
+    SELECT
         hd.id_deteksi,
         hd.status_gizi,
         hd.status_stunting,
@@ -191,9 +253,13 @@ $stmtLaporan = mysqli_prepare(
         pa.berat_badan,
         pa.tinggi_panjang_badan,
 
+        b.id_puskesmas,
         b.nama_balita,
         b.nik_balita,
-        b.jenis_kelamin
+        b.jenis_kelamin,
+        b.nama_posyandu,
+
+        ps.nama_puskesmas
 
      FROM hasil_deteksi AS hd
 
@@ -203,13 +269,29 @@ $stmtLaporan = mysqli_prepare(
      INNER JOIN balita AS b
         ON pa.id_balita = b.id_balita
 
-     WHERE hd.tanggal_deteksi >= ?
-       AND hd.tanggal_deteksi < DATE_ADD(?, INTERVAL 1 DAY)
+     LEFT JOIN puskesmas AS ps
+        ON b.id_puskesmas = ps.id_puskesmas
 
+     WHERE hd.tanggal_deteksi
+        BETWEEN ? AND ?
+";
+
+if ($idPuskesmas > 0) {
+    $sqlLaporan .= "
+        AND b.id_puskesmas = ?
+    ";
+}
+
+$sqlLaporan .= "
      ORDER BY
         hd.tanggal_deteksi ASC,
         b.nama_balita ASC,
-        hd.id_deteksi ASC"
+        hd.id_deteksi ASC
+";
+
+$stmtLaporan = mysqli_prepare(
+    $conn,
+    $sqlLaporan
 );
 
 if (!$stmtLaporan) {
@@ -219,12 +301,25 @@ if (!$stmtLaporan) {
     );
 }
 
-mysqli_stmt_bind_param(
-    $stmtLaporan,
-    "ss",
-    $tanggalAwal,
-    $tanggalAkhir
-);
+if ($idPuskesmas > 0) {
+
+    mysqli_stmt_bind_param(
+        $stmtLaporan,
+        "ssi",
+        $tanggalAwal,
+        $tanggalAkhir,
+        $idPuskesmas
+    );
+
+} else {
+
+    mysqli_stmt_bind_param(
+        $stmtLaporan,
+        "ss",
+        $tanggalAwal,
+        $tanggalAkhir
+    );
+}
 
 mysqli_stmt_execute($stmtLaporan);
 
@@ -299,6 +394,12 @@ $namaPencetak = $_SESSION["nama"] ?? "Pengguna";
 $rolePencetak = namaRole(
     $_SESSION["role"] ?? ""
 );
+
+$parameterKembali = http_build_query([
+    "tanggal_awal" => $tanggalAwal,
+    "tanggal_akhir" => $tanggalAkhir,
+    "id_puskesmas" => $idPuskesmas
+]);
 
 ?>
 
@@ -746,10 +847,8 @@ $rolePencetak = namaRole(
     <div class="toolbar">
 
         <a
-            href="laporan_stunting.php?tanggal_awal=<?= amanCetak(
-                $tanggalAwal
-            ); ?>&tanggal_akhir=<?= amanCetak(
-                $tanggalAkhir
+            href="laporan_stunting.php?<?= amanCetak(
+                $parameterKembali
             ); ?>"
             class="button button-secondary"
         >
@@ -805,6 +904,9 @@ $rolePencetak = namaRole(
                 <?= formatTanggalCetak($tanggalAwal); ?>
                 sampai
                 <?= formatTanggalCetak($tanggalAkhir); ?>
+                <br>
+                Puskesmas:
+                <?= amanCetak($namaPuskesmasDipilih); ?>
             </p>
 
         </section>
@@ -843,6 +945,19 @@ $rolePencetak = namaRole(
                 <td>
                     :
                     <?= amanCetak($rolePencetak); ?>
+                </td>
+            </tr>
+
+            <tr>
+                <td>
+                    Puskesmas
+                </td>
+
+                <td>
+                    :
+                    <?= amanCetak(
+                        $namaPuskesmasDipilih
+                    ); ?>
                 </td>
             </tr>
 
@@ -916,6 +1031,10 @@ $rolePencetak = namaRole(
                         </th>
 
                         <th>
+                            Puskesmas
+                        </th>
+
+                        <th>
                             JK
                         </th>
 
@@ -972,6 +1091,12 @@ $rolePencetak = namaRole(
                             <td>
                                 <?= amanCetak(
                                     $data["nik_balita"]
+                                ); ?>
+                            </td>
+
+                            <td>
+                                <?= amanCetak(
+                                    $data["nama_puskesmas"]
                                 ); ?>
                             </td>
 
@@ -1036,11 +1161,11 @@ $rolePencetak = namaRole(
 
                     <tr>
                         <td
-                            colspan="10"
+                            colspan="11"
                             class="empty-row"
                         >
                             Tidak ada hasil deteksi pada periode
-                            yang dipilih.
+                            dan Puskesmas yang dipilih.
                         </td>
                     </tr>
 
@@ -1054,7 +1179,8 @@ $rolePencetak = namaRole(
 
         <p class="report-note">
             Keterangan: laporan ini dihasilkan berdasarkan data
-            hasil deteksi yang tersimpan di dalam sistem.
+            hasil deteksi yang tersimpan di dalam sistem sesuai
+            periode dan filter Puskesmas yang dipilih.
         </p>
 
         <section class="signature-grid">
