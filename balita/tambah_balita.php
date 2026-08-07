@@ -698,8 +698,6 @@ require_once "../includes/navbar.php";
                             </select>
 
                             <small class="text-muted">
-                                Pilihan diambil otomatis dari master
-                                Puskesmas pada database.
                             </small>
                         </div>
 
