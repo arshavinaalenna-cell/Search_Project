@@ -37,6 +37,7 @@ $stmtBalita = mysqli_prepare(
     "SELECT
         id_balita,
         id_user,
+        id_puskesmas,
         nik_balita,
         nama_balita,
         jenis_kelamin,
@@ -44,14 +45,17 @@ $stmtBalita = mysqli_prepare(
         umur,
         nama_ibu,
         alamat,
-        wilayah_posyandu
+        nama_posyandu
      FROM balita
      WHERE id_balita = ?
      LIMIT 1"
 );
 
 if (!$stmtBalita) {
-    die("Terjadi kesalahan saat mengambil data balita.");
+    die(
+        "Terjadi kesalahan saat mengambil data balita: "
+        . mysqli_error($conn)
+    );
 }
 
 mysqli_stmt_bind_param(
@@ -78,14 +82,16 @@ if (!$dataBalita) {
 |--------------------------------------------------------------------------
 */
 
-$idUser = (int) $dataBalita["id_user"];
-$nikBalita = $dataBalita["nik_balita"];
-$namaBalita = $dataBalita["nama_balita"];
-$jenisKelamin = $dataBalita["jenis_kelamin"];
-$tanggalLahir = $dataBalita["tanggal_lahir"];
-$namaIbu = $dataBalita["nama_ibu"];
-$alamat = $dataBalita["alamat"];
-$wilayahPosyandu = $dataBalita["wilayah_posyandu"];
+$idUser = (int) ($dataBalita["id_user"] ?? 0);
+$idPuskesmas = (int) ($dataBalita["id_puskesmas"] ?? 0);
+
+$nikBalita = $dataBalita["nik_balita"] ?? "";
+$namaBalita = $dataBalita["nama_balita"] ?? "";
+$jenisKelamin = $dataBalita["jenis_kelamin"] ?? "";
+$tanggalLahir = $dataBalita["tanggal_lahir"] ?? "";
+$namaIbu = $dataBalita["nama_ibu"] ?? "";
+$alamat = $dataBalita["alamat"] ?? "";
+$namaPosyandu = $dataBalita["nama_posyandu"] ?? "";
 
 /*
 |--------------------------------------------------------------------------
@@ -95,7 +101,10 @@ $wilayahPosyandu = $dataBalita["wilayah_posyandu"];
 
 $queryOrangTua = mysqli_query(
     $conn,
-    "SELECT id_user, nama, username
+    "SELECT
+        id_user,
+        nama,
+        username
      FROM pengguna
      WHERE role = 'orang_tua'
      ORDER BY nama ASC"
@@ -110,14 +119,45 @@ if (!$queryOrangTua) {
 
 /*
 |--------------------------------------------------------------------------
+| Mengambil daftar Puskesmas
+|--------------------------------------------------------------------------
+*/
+
+$queryPuskesmas = mysqli_query(
+    $conn,
+    "SELECT
+        id_puskesmas,
+        nama_puskesmas
+     FROM puskesmas
+     ORDER BY nama_puskesmas ASC"
+);
+
+if (!$queryPuskesmas) {
+    die(
+        "Gagal mengambil data Puskesmas: "
+        . mysqli_error($conn)
+    );
+}
+
+$jumlahPuskesmas = mysqli_num_rows($queryPuskesmas);
+
+/*
+|--------------------------------------------------------------------------
 | Memproses perubahan data
 |--------------------------------------------------------------------------
 */
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
     $idUser = filter_input(
         INPUT_POST,
         "id_user",
+        FILTER_VALIDATE_INT
+    );
+
+    $idPuskesmas = filter_input(
+        INPUT_POST,
+        "id_puskesmas",
         FILTER_VALIDATE_INT
     );
 
@@ -127,9 +167,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $tanggalLahir = $_POST["tanggal_lahir"] ?? "";
     $namaIbu = trim($_POST["nama_ibu"] ?? "");
     $alamat = trim($_POST["alamat"] ?? "");
-    $wilayahPosyandu = trim(
-        $_POST["wilayah_posyandu"] ?? ""
-    );
+    $namaPosyandu = trim($_POST["nama_posyandu"] ?? "");
 
     $jenisKelaminDiizinkan = [
         "Laki-laki",
@@ -144,13 +182,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     if (
         !$idUser
+        || !$idPuskesmas
         || $nikBalita === ""
         || $namaBalita === ""
         || $jenisKelamin === ""
         || $tanggalLahir === ""
         || $namaIbu === ""
         || $alamat === ""
-        || $wilayahPosyandu === ""
+        || $namaPosyandu === ""
     ) {
         $pesanError = "Semua data wajib diisi.";
     } elseif (!preg_match("/^[0-9]{16}$/", $nikBalita)) {
@@ -166,7 +205,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     } elseif (strtotime($tanggalLahir) === false) {
         $pesanError = "Tanggal lahir tidak valid.";
     } elseif (strtotime($tanggalLahir) > time()) {
-        $pesanError = "Tanggal lahir tidak boleh melebihi hari ini.";
+        $pesanError =
+            "Tanggal lahir tidak boleh melebihi hari ini.";
     }
 
     /*
@@ -176,6 +216,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     */
 
     if ($pesanError === "") {
+
         $cekOrangTua = mysqli_prepare(
             $conn,
             "SELECT id_user
@@ -186,9 +227,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         );
 
         if (!$cekOrangTua) {
+
             $pesanError =
                 "Terjadi kesalahan saat memeriksa akun orang tua.";
+
         } else {
+
             mysqli_stmt_bind_param(
                 $cekOrangTua,
                 "i",
@@ -212,11 +256,56 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     /*
     |--------------------------------------------------------------------------
+    | Memastikan Puskesmas tersedia
+    |--------------------------------------------------------------------------
+    */
+
+    if ($pesanError === "") {
+
+        $cekPuskesmas = mysqli_prepare(
+            $conn,
+            "SELECT id_puskesmas
+             FROM puskesmas
+             WHERE id_puskesmas = ?
+             LIMIT 1"
+        );
+
+        if (!$cekPuskesmas) {
+
+            $pesanError =
+                "Terjadi kesalahan saat memeriksa Puskesmas.";
+
+        } else {
+
+            mysqli_stmt_bind_param(
+                $cekPuskesmas,
+                "i",
+                $idPuskesmas
+            );
+
+            mysqli_stmt_execute($cekPuskesmas);
+
+            $hasilPuskesmas = mysqli_stmt_get_result(
+                $cekPuskesmas
+            );
+
+            if (mysqli_num_rows($hasilPuskesmas) === 0) {
+                $pesanError =
+                    "Puskesmas yang dipilih tidak ditemukan.";
+            }
+
+            mysqli_stmt_close($cekPuskesmas);
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Memeriksa NIK duplikat
     |--------------------------------------------------------------------------
     */
 
     if ($pesanError === "") {
+
         $cekNik = mysqli_prepare(
             $conn,
             "SELECT id_balita
@@ -227,9 +316,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         );
 
         if (!$cekNik) {
+
             $pesanError =
                 "Terjadi kesalahan saat memeriksa NIK balita.";
+
         } else {
+
             mysqli_stmt_bind_param(
                 $cekNik,
                 "si",
@@ -259,7 +351,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $umur = 0;
 
     if ($pesanError === "") {
+
         try {
+
             $tanggalLahirObjek = new DateTime(
                 $tanggalLahir
             );
@@ -273,7 +367,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $umur = (
                 $selisih->y * 12
             ) + $selisih->m;
+
         } catch (Exception $exception) {
+
             $pesanError =
                 "Tanggal lahir tidak dapat diproses.";
         }
@@ -286,11 +382,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     */
 
     if ($pesanError === "") {
+
         $update = mysqli_prepare(
             $conn,
             "UPDATE balita
              SET
                 id_user = ?,
+                id_puskesmas = ?,
                 nik_balita = ?,
                 nama_balita = ?,
                 jenis_kelamin = ?,
@@ -298,18 +396,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 umur = ?,
                 nama_ibu = ?,
                 alamat = ?,
-                wilayah_posyandu = ?
+                nama_posyandu = ?
              WHERE id_balita = ?"
         );
 
         if (!$update) {
+
             $pesanError =
-                "Terjadi kesalahan saat menyiapkan perubahan data.";
+                "Terjadi kesalahan saat menyiapkan perubahan data: "
+                . mysqli_error($conn);
+
         } else {
+
             mysqli_stmt_bind_param(
                 $update,
-                "issssisssi",
+                "iissssisssi",
                 $idUser,
+                $idPuskesmas,
                 $nikBalita,
                 $namaBalita,
                 $jenisKelamin,
@@ -317,11 +420,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $umur,
                 $namaIbu,
                 $alamat,
-                $wilayahPosyandu,
+                $namaPosyandu,
                 $idBalita
             );
 
             if (mysqli_stmt_execute($update)) {
+
                 mysqli_stmt_close($update);
 
                 header(
@@ -339,8 +443,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Memanggil template aplikasi
+|--------------------------------------------------------------------------
+*/
+
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
+
 ?>
 
 <div class="layout-wrapper">
@@ -349,28 +460,42 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div
-            class="d-flex flex-column flex-md-row
-            justify-content-between align-items-md-center
-            gap-3 mb-4"
-        >
-            <div>
-                <h2 class="mb-1">
-                    Edit Data Balita
-                </h2>
+        <div class="page-header">
 
-                <p class="text-muted mb-0">
-                    Perbarui profil balita dan akun orang tua
-                    yang terhubung.
+            <div>
+
+                <h1 class="page-title">
+
+                    <i class="bi bi-pencil-square me-2"></i>
+
+                    Edit Data Balita
+
+                </h1>
+
+                <p class="page-subtitle">
+
+                    Perbarui profil balita, Posyandu, Puskesmas
+                    pembina, dan akun orang tua yang terhubung.
+
                 </p>
+
             </div>
 
-            <a
-                href="data_balita.php"
-                class="btn btn-outline-secondary"
-            >
-                Kembali
-            </a>
+            <div class="d-flex flex-wrap gap-2">
+
+                <a
+                    href="data_balita.php"
+                    class="btn btn-secondary"
+                >
+
+                    <i class="bi bi-arrow-left"></i>
+
+                    Kembali
+
+                </a>
+
+            </div>
+
         </div>
 
         <?php if ($pesanError !== ""): ?>
@@ -379,11 +504,12 @@ require_once "../includes/navbar.php";
                 class="alert alert-danger alert-dismissible fade show"
                 role="alert"
             >
+
                 <?= htmlspecialchars(
                     $pesanError,
                     ENT_QUOTES,
                     "UTF-8"
-                ) ?>
+                ); ?>
 
                 <button
                     type="button"
@@ -391,265 +517,400 @@ require_once "../includes/navbar.php";
                     data-bs-dismiss="alert"
                     aria-label="Tutup"
                 ></button>
+
+            </div>
+
+        <?php endif; ?>
+
+        <?php if ($jumlahPuskesmas === 0): ?>
+
+            <div
+                class="alert alert-warning"
+                role="alert"
+            >
+
+                <strong>Data Puskesmas belum tersedia.</strong>
+
+                Tambahkan data ke tabel
+                <code>puskesmas</code>
+                terlebih dahulu sebelum menyimpan perubahan.
+
             </div>
 
         <?php endif; ?>
 
         <div class="card content-card">
 
+            <div class="card-header">
+
+                <div>
+
+                    <h4 class="mb-1">
+                        Form Edit Balita
+                    </h4>
+
+                    <small class="text-muted">
+                        Data bertanda wajib harus dilengkapi.
+                    </small>
+
+                </div>
+
+                <span class="badge badge-primary">
+
+                    <i class="bi bi-person-heart"></i>
+
+                    Data Balita
+
+                </span>
+
+            </div>
+
             <div class="card-body p-4">
 
                 <form method="POST">
 
-                    <div class="mb-3">
-                        <label
-                            for="id_user"
-                            class="form-label"
-                        >
-                            Orang Tua
-                        </label>
+                    <div class="row g-3">
 
-                        <select
-                            id="id_user"
-                            name="id_user"
-                            class="form-select"
-                            required
-                        >
-                            <option value="">
-                                Pilih akun orang tua
-                            </option>
+                        <div class="col-12 col-lg-6">
 
-                            <?php while (
-                                $orangTua = mysqli_fetch_assoc(
-                                    $queryOrangTua
-                                )
-                            ): ?>
+                            <label
+                                for="id_user"
+                                class="form-label"
+                            >
+                                Orang Tua
+                            </label>
 
-                                <option
-                                    value="<?= (int)
-                                        $orangTua["id_user"] ?>"
-                                    <?= (int) $idUser ===
-                                        (int) $orangTua["id_user"]
-                                        ? "selected"
-                                        : "" ?>
-                                >
-                                    <?= htmlspecialchars(
-                                        $orangTua["nama"]
-                                        . " ("
-                                        . $orangTua["username"]
-                                        . ")",
-                                        ENT_QUOTES,
-                                        "UTF-8"
-                                    ) ?>
+                            <select
+                                id="id_user"
+                                name="id_user"
+                                class="form-select"
+                                required
+                            >
+
+                                <option value="">
+                                    Pilih akun orang tua
                                 </option>
 
-                            <?php endwhile; ?>
+                                <?php while (
+                                    $orangTua = mysqli_fetch_assoc(
+                                        $queryOrangTua
+                                    )
+                                ): ?>
 
-                        </select>
+                                    <option
+                                        value="<?= (int)
+                                            $orangTua["id_user"]; ?>"
+                                        <?= (int) $idUser ===
+                                            (int) $orangTua["id_user"]
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= htmlspecialchars(
+                                            $orangTua["nama"]
+                                            . " ("
+                                            . $orangTua["username"]
+                                            . ")",
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </option>
 
-                        <div class="form-text">
-                            ID akun orang tua disimpan otomatis
-                            oleh sistem.
+                                <?php endwhile; ?>
+
+                            </select>
+
+                            <div class="form-text">
+                                Akun harus memiliki role Orang Tua.
+                            </div>
+
                         </div>
-                    </div>
 
-                    <div class="mb-3">
-                        <label
-                            for="nik_balita"
-                            class="form-label"
-                        >
-                            NIK Balita
-                        </label>
+                        <div class="col-12 col-lg-6">
 
-                        <input
-                            type="text"
-                            id="nik_balita"
-                            name="nik_balita"
-                            class="form-control"
-                            value="<?= htmlspecialchars(
-                                $nikBalita,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ) ?>"
-                            minlength="16"
-                            maxlength="16"
-                            inputmode="numeric"
-                            pattern="[0-9]{16}"
-                            required
-                        >
-                    </div>
-
-                    <div class="mb-3">
-                        <label
-                            for="nama_balita"
-                            class="form-label"
-                        >
-                            Nama Balita
-                        </label>
-
-                        <input
-                            type="text"
-                            id="nama_balita"
-                            name="nama_balita"
-                            class="form-control"
-                            value="<?= htmlspecialchars(
-                                $namaBalita,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ) ?>"
-                            maxlength="100"
-                            required
-                        >
-                    </div>
-
-                    <div class="mb-3">
-                        <label
-                            for="jenis_kelamin"
-                            class="form-label"
-                        >
-                            Jenis Kelamin
-                        </label>
-
-                        <select
-                            id="jenis_kelamin"
-                            name="jenis_kelamin"
-                            class="form-select"
-                            required
-                        >
-                            <option value="">
-                                Pilih jenis kelamin
-                            </option>
-
-                            <option
-                                value="Laki-laki"
-                                <?= $jenisKelamin === "Laki-laki"
-                                    ? "selected"
-                                    : "" ?>
+                            <label
+                                for="id_puskesmas"
+                                class="form-label"
                             >
-                                Laki-laki
-                            </option>
+                                Puskesmas Pembina
+                            </label>
 
-                            <option
-                                value="Perempuan"
-                                <?= $jenisKelamin === "Perempuan"
-                                    ? "selected"
-                                    : "" ?>
+                            <select
+                                id="id_puskesmas"
+                                name="id_puskesmas"
+                                class="form-select"
+                                required
+                                <?= $jumlahPuskesmas === 0
+                                    ? "disabled"
+                                    : ""; ?>
                             >
-                                Perempuan
-                            </option>
-                        </select>
-                    </div>
 
-                    <div class="mb-3">
-                        <label
-                            for="tanggal_lahir"
-                            class="form-label"
-                        >
-                            Tanggal Lahir
-                        </label>
+                                <option value="">
+                                    Pilih Puskesmas
+                                </option>
 
-                        <input
-                            type="date"
-                            id="tanggal_lahir"
-                            name="tanggal_lahir"
-                            class="form-control"
-                            value="<?= htmlspecialchars(
-                                $tanggalLahir,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ) ?>"
-                            max="<?= date("Y-m-d") ?>"
-                            required
-                        >
+                                <?php while (
+                                    $puskesmas = mysqli_fetch_assoc(
+                                        $queryPuskesmas
+                                    )
+                                ): ?>
 
-                        <div class="form-text">
-                            Umur dalam bulan akan dihitung ulang
-                            secara otomatis.
+                                    <option
+                                        value="<?= (int)
+                                            $puskesmas["id_puskesmas"]; ?>"
+                                        <?= (int) $idPuskesmas ===
+                                            (int) $puskesmas["id_puskesmas"]
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= htmlspecialchars(
+                                            $puskesmas["nama_puskesmas"],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </option>
+
+                                <?php endwhile; ?>
+
+                            </select>
+
+                            <div class="form-text">
+                                Pilihan diambil dari master Puskesmas.
+                            </div>
+
                         </div>
-                    </div>
 
-                    <div class="mb-3">
-                        <label
-                            for="nama_ibu"
-                            class="form-label"
-                        >
-                            Nama Ibu
-                        </label>
+                        <div class="col-12 col-lg-6">
 
-                        <input
-                            type="text"
-                            id="nama_ibu"
-                            name="nama_ibu"
-                            class="form-control"
-                            value="<?= htmlspecialchars(
-                                $namaIbu,
+                            <label
+                                for="nik_balita"
+                                class="form-label"
+                            >
+                                NIK Balita
+                            </label>
+
+                            <input
+                                type="text"
+                                id="nik_balita"
+                                name="nik_balita"
+                                class="form-control"
+                                value="<?= htmlspecialchars(
+                                    $nikBalita,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                                minlength="16"
+                                maxlength="16"
+                                inputmode="numeric"
+                                pattern="[0-9]{16}"
+                                required
+                            >
+
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+
+                            <label
+                                for="nama_balita"
+                                class="form-label"
+                            >
+                                Nama Balita
+                            </label>
+
+                            <input
+                                type="text"
+                                id="nama_balita"
+                                name="nama_balita"
+                                class="form-control"
+                                value="<?= htmlspecialchars(
+                                    $namaBalita,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                                maxlength="100"
+                                required
+                            >
+
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+
+                            <label
+                                for="jenis_kelamin"
+                                class="form-label"
+                            >
+                                Jenis Kelamin
+                            </label>
+
+                            <select
+                                id="jenis_kelamin"
+                                name="jenis_kelamin"
+                                class="form-select"
+                                required
+                            >
+
+                                <option value="">
+                                    Pilih jenis kelamin
+                                </option>
+
+                                <option
+                                    value="Laki-laki"
+                                    <?= $jenisKelamin === "Laki-laki"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Laki-laki
+                                </option>
+
+                                <option
+                                    value="Perempuan"
+                                    <?= $jenisKelamin === "Perempuan"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Perempuan
+                                </option>
+
+                            </select>
+
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+
+                            <label
+                                for="tanggal_lahir"
+                                class="form-label"
+                            >
+                                Tanggal Lahir
+                            </label>
+
+                            <input
+                                type="date"
+                                id="tanggal_lahir"
+                                name="tanggal_lahir"
+                                class="form-control"
+                                value="<?= htmlspecialchars(
+                                    $tanggalLahir,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                                max="<?= date("Y-m-d"); ?>"
+                                required
+                            >
+
+                            <div class="form-text">
+                                Umur dihitung ulang otomatis dalam bulan.
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+
+                            <label
+                                for="nama_ibu"
+                                class="form-label"
+                            >
+                                Nama Ibu
+                            </label>
+
+                            <input
+                                type="text"
+                                id="nama_ibu"
+                                name="nama_ibu"
+                                class="form-control"
+                                value="<?= htmlspecialchars(
+                                    $namaIbu,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                                maxlength="100"
+                                required
+                            >
+
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+
+                            <label
+                                for="nama_posyandu"
+                                class="form-label"
+                            >
+                                Nama Posyandu
+                            </label>
+
+                            <input
+                                type="text"
+                                id="nama_posyandu"
+                                name="nama_posyandu"
+                                class="form-control"
+                                value="<?= htmlspecialchars(
+                                    $namaPosyandu,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                                maxlength="150"
+                                placeholder="Contoh: Posyandu Melati"
+                                required
+                            >
+
+                            <div class="form-text">
+                                Nama Posyandu diisi secara manual.
+                            </div>
+
+                        </div>
+
+                        <div class="col-12">
+
+                            <label
+                                for="alamat"
+                                class="form-label"
+                            >
+                                Alamat
+                            </label>
+
+                            <textarea
+                                id="alamat"
+                                name="alamat"
+                                class="form-control"
+                                rows="3"
+                                required
+                            ><?= htmlspecialchars(
+                                $alamat,
                                 ENT_QUOTES,
                                 "UTF-8"
-                            ) ?>"
-                            maxlength="100"
-                            required
-                        >
-                    </div>
+                            ); ?></textarea>
 
-                    <div class="mb-3">
-                        <label
-                            for="alamat"
-                            class="form-label"
-                        >
-                            Alamat
-                        </label>
+                        </div>
 
-                        <textarea
-                            id="alamat"
-                            name="alamat"
-                            class="form-control"
-                            rows="3"
-                            required
-                        ><?= htmlspecialchars(
-                            $alamat,
-                            ENT_QUOTES,
-                            "UTF-8"
-                        ) ?></textarea>
-                    </div>
+                        <div class="col-12">
 
-                    <div class="mb-3">
-                        <label
-                            for="wilayah_posyandu"
-                            class="form-label"
-                        >
-                            Wilayah Posyandu
-                        </label>
+                            <div class="d-flex flex-wrap gap-2">
 
-                        <input
-                            type="text"
-                            id="wilayah_posyandu"
-                            name="wilayah_posyandu"
-                            class="form-control"
-                            value="<?= htmlspecialchars(
-                                $wilayahPosyandu,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ) ?>"
-                            maxlength="100"
-                            required
-                        >
-                    </div>
+                                <button
+                                    type="submit"
+                                    class="btn btn-primary"
+                                    <?= $jumlahPuskesmas === 0
+                                        ? "disabled"
+                                        : ""; ?>
+                                >
 
-                    <div class="d-flex flex-wrap gap-2">
+                                    <i class="bi bi-check-circle"></i>
 
-                        <button
-                            type="submit"
-                            class="btn btn-warning"
-                        >
-                            Simpan Perubahan
-                        </button>
+                                    Simpan Perubahan
 
-                        <a
-                            href="data_balita.php"
-                            class="btn btn-outline-secondary"
-                        >
-                            Batal
-                        </a>
+                                </button>
+
+                                <a
+                                    href="data_balita.php"
+                                    class="btn btn-secondary"
+                                >
+
+                                    Batal
+
+                                </a>
+
+                            </div>
+
+                        </div>
 
                     </div>
 
