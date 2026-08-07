@@ -39,6 +39,7 @@ $sql = "
     SELECT
         b.id_balita,
         b.id_user,
+        b.id_puskesmas,
         b.nik_balita,
         b.nama_balita,
         b.jenis_kelamin,
@@ -46,12 +47,15 @@ $sql = "
         b.umur,
         b.nama_ibu,
         b.alamat,
-        b.wilayah_posyandu,
+        b.nama_posyandu,
         p.nama AS nama_orang_tua,
-        p.username AS username_orang_tua
+        p.username AS username_orang_tua,
+        ps.nama_puskesmas
     FROM balita b
     LEFT JOIN pengguna p
         ON b.id_user = p.id_user
+    LEFT JOIN puskesmas ps
+        ON b.id_puskesmas = ps.id_puskesmas
     WHERE b.id_balita = ?
 ";
 
@@ -132,8 +136,14 @@ $alamat = nl2br(
     )
 );
 
-$wilayahPosyandu = htmlspecialchars(
-    $data["wilayah_posyandu"] ?? "-",
+$namaPosyandu = htmlspecialchars(
+    $data["nama_posyandu"] ?? "-",
+    ENT_QUOTES,
+    "UTF-8"
+);
+
+$namaPuskesmas = htmlspecialchars(
+    $data["nama_puskesmas"] ?? "-",
     ENT_QUOTES,
     "UTF-8"
 );
@@ -159,14 +169,7 @@ if (!empty($data["tanggal_lahir"])) {
     );
 }
 
-$bolehEdit = in_array(
-    $roleAktif,
-    [
-        "kader",
-        "petugas_kia"
-    ],
-    true
-);
+$bolehEdit = ($roleAktif === "kader");
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
@@ -266,8 +269,13 @@ require_once "../includes/navbar.php";
                         </tr>
 
                         <tr>
-                            <th>Wilayah Posyandu</th>
-                            <td><?= $wilayahPosyandu ?></td>
+                            <th>Nama Posyandu</th>
+                            <td><?= $namaPosyandu ?></td>
+                        </tr>
+
+                        <tr>
+                            <th>Puskesmas Pembina</th>
+                            <td><?= $namaPuskesmas ?></td>
                         </tr>
 
                     </table>
