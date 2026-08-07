@@ -39,6 +39,7 @@ if ($roleAktif === "orang_tua") {
             "SELECT
                 b.id_balita,
                 b.id_user,
+                b.id_puskesmas,
                 b.nik_balita,
                 b.nama_balita,
                 b.jenis_kelamin,
@@ -46,14 +47,18 @@ if ($roleAktif === "orang_tua") {
                 b.umur,
                 b.nama_ibu,
                 b.alamat,
-                b.wilayah_posyandu
+                b.nama_posyandu,
+                p.nama_puskesmas
              FROM balita b
+             LEFT JOIN puskesmas p
+                ON b.id_puskesmas = p.id_puskesmas
              WHERE b.id_user = ?
              AND (
                 b.nik_balita LIKE ?
                 OR b.nama_balita LIKE ?
                 OR b.nama_ibu LIKE ?
-                OR b.wilayah_posyandu LIKE ?
+                OR b.nama_posyandu LIKE ?
+                OR p.nama_puskesmas LIKE ?
              )
              ORDER BY b.id_balita DESC"
         );
@@ -64,8 +69,9 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "issss",
+            "isssss",
             $idUserAktif,
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -77,6 +83,7 @@ if ($roleAktif === "orang_tua") {
             "SELECT
                 b.id_balita,
                 b.id_user,
+                b.id_puskesmas,
                 b.nik_balita,
                 b.nama_balita,
                 b.jenis_kelamin,
@@ -84,8 +91,11 @@ if ($roleAktif === "orang_tua") {
                 b.umur,
                 b.nama_ibu,
                 b.alamat,
-                b.wilayah_posyandu
+                b.nama_posyandu,
+                p.nama_puskesmas
              FROM balita b
+             LEFT JOIN puskesmas p
+                ON b.id_puskesmas = p.id_puskesmas
              WHERE b.id_user = ?
              ORDER BY b.id_balita DESC"
         );
@@ -109,6 +119,7 @@ if ($roleAktif === "orang_tua") {
             "SELECT
                 b.id_balita,
                 b.id_user,
+                b.id_puskesmas,
                 b.nik_balita,
                 b.nama_balita,
                 b.jenis_kelamin,
@@ -116,13 +127,17 @@ if ($roleAktif === "orang_tua") {
                 b.umur,
                 b.nama_ibu,
                 b.alamat,
-                b.wilayah_posyandu
+                b.nama_posyandu,
+                p.nama_puskesmas
              FROM balita b
+             LEFT JOIN puskesmas p
+                ON b.id_puskesmas = p.id_puskesmas
              WHERE
                 b.nik_balita LIKE ?
                 OR b.nama_balita LIKE ?
                 OR b.nama_ibu LIKE ?
-                OR b.wilayah_posyandu LIKE ?
+                OR b.nama_posyandu LIKE ?
+                OR p.nama_puskesmas LIKE ?
              ORDER BY b.id_balita DESC"
         );
 
@@ -132,7 +147,8 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "ssss",
+            "sssss",
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -144,6 +160,7 @@ if ($roleAktif === "orang_tua") {
             "SELECT
                 b.id_balita,
                 b.id_user,
+                b.id_puskesmas,
                 b.nik_balita,
                 b.nama_balita,
                 b.jenis_kelamin,
@@ -151,8 +168,11 @@ if ($roleAktif === "orang_tua") {
                 b.umur,
                 b.nama_ibu,
                 b.alamat,
-                b.wilayah_posyandu
+                b.nama_posyandu,
+                p.nama_puskesmas
              FROM balita b
+             LEFT JOIN puskesmas p
+                ON b.id_puskesmas = p.id_puskesmas
              ORDER BY b.id_balita DESC"
         );
 
@@ -287,7 +307,7 @@ require_once "../includes/navbar.php";
                                 type="text"
                                 name="cari"
                                 class="form-control"
-                                placeholder="Cari NIK, nama balita, nama ibu, atau wilayah"
+                                placeholder="Cari NIK, nama balita, nama ibu, Posyandu, atau Puskesmas"
                                 value="<?= htmlspecialchars(
                                     $cari,
                                     ENT_QUOTES,
@@ -363,7 +383,11 @@ require_once "../includes/navbar.php";
                                 </th>
 
                                 <th>
-                                    Wilayah
+                                    Posyandu
+                                </th>
+
+                                <th>
+                                    Puskesmas Pembina
                                 </th>
 
                                 <th
@@ -469,11 +493,33 @@ require_once "../includes/navbar.php";
                                         </td>
 
                                         <td>
-                                            <?= htmlspecialchars(
-                                                $d["wilayah_posyandu"],
-                                                ENT_QUOTES,
-                                                "UTF-8"
-                                            ); ?>
+                                            <?= trim(
+                                                (string) (
+                                                    $d["nama_posyandu"]
+                                                    ?? ""
+                                                )
+                                            ) !== ""
+                                                ? htmlspecialchars(
+                                                    $d["nama_posyandu"],
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                )
+                                                : "-"; ?>
+                                        </td>
+
+                                        <td>
+                                            <?= trim(
+                                                (string) (
+                                                    $d["nama_puskesmas"]
+                                                    ?? ""
+                                                )
+                                            ) !== ""
+                                                ? htmlspecialchars(
+                                                    $d["nama_puskesmas"],
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                )
+                                                : "-"; ?>
                                         </td>
 
                                         <td>
@@ -543,7 +589,7 @@ require_once "../includes/navbar.php";
 
                                 <tr>
 
-                                    <td colspan="9">
+                                    <td colspan="10">
 
                                         <div class="empty-state">
 
