@@ -247,10 +247,7 @@ require_once "../includes/navbar.php";
 
             <?php if ($roleAktif === "petugas_gizi"): ?>
 
-                <a
-                    href="analisis_deteksi.php"
-                    class="btn btn-success"
-                >
+                <a href="../skrining/hasil_skrining.php" class="btn btn-success">
                     + Analisis Pengukuran
                 </a>
 
@@ -373,47 +370,36 @@ require_once "../includes/navbar.php";
 
                                     <?php
                                     $statusStunting = strtolower(
-                                        trim(
-                                            $data["status_stunting"] ?? ""
-                                        )
-                                    );
+    trim($data["status_stunting"] ?? "")
+);
 
-                                    $kelasStunting = "bg-secondary";
+$kelasStunting = "bg-secondary";
 
-                                    if (
-                                        in_array(
-                                            $statusStunting,
-                                            [
-                                                "normal",
-                                                "tidak stunting"
-                                            ],
-                                            true
-                                        )
-                                    ) {
-                                        $kelasStunting = "bg-success";
-                                    } elseif (
-                                        in_array(
-                                            $statusStunting,
-                                            [
-                                                "stunting",
-                                                "pendek"
-                                            ],
-                                            true
-                                        )
-                                    ) {
-                                        $kelasStunting = "bg-warning text-dark";
-                                    } elseif (
-                                        in_array(
-                                            $statusStunting,
-                                            [
-                                                "severely stunted",
-                                                "sangat pendek"
-                                            ],
-                                            true
-                                        )
-                                    ) {
-                                        $kelasStunting = "bg-danger";
-                                    }
+if (
+    $statusStunting === "normal" ||
+    $statusStunting === "normal/sehat"
+) {
+
+    $kelasStunting = "bg-success";
+
+} elseif (
+    $statusStunting === "risiko stunting"
+) {
+
+    $kelasStunting = "bg-warning text-dark";
+
+} elseif (
+    $statusStunting === "stunting"
+) {
+
+    $kelasStunting = "bg-danger";
+
+} elseif (
+    $statusStunting === "stunting berat"
+) {
+
+    $kelasStunting = "bg-danger";
+}
                                     ?>
 
                                     <tr>

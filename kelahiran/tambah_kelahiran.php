@@ -65,20 +65,15 @@ if(isset($_POST['simpan'])){
 
 
 
-        if($query){
+        
+if($query){
 
+    header("Location: riwayat_kelahiran.php?pesan=tambah_berhasil");
+    exit;
 
-            echo "
-            <script>
-                alert('Data riwayat kelahiran berhasil ditambahkan');
-               header(
-    "Location: riwayat_kelahiran.php?pesan=tambah_berhasil"
-);
-exit;
+} else {
 
-
-        }else{
-
+       
 
             echo "
             <script>
