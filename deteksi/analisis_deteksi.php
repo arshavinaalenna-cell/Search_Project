@@ -12,12 +12,98 @@ require_once "../config/koneksi.php";
 */
 
 cekRole([
-    "petugas_gizi",
-    "kader"
+    "petugas_gizi"
 ]);
 
 $judulHalaman =
     "Analisis Risiko Stunting | Sistem Deteksi Stunting";
+
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil Puskesmas Petugas Gizi aktif
+|--------------------------------------------------------------------------
+|
+| Analisis hanya boleh dilakukan untuk balita pada Puskesmas
+| yang sama dengan akun Petugas Gizi.
+|
+*/
+
+$stmtPuskesmas = mysqli_prepare(
+    $conn,
+    "SELECT
+        u.id_puskesmas,
+        p.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS p
+        ON u.id_puskesmas = p.id_puskesmas
+     WHERE u.id_user = ?
+     AND u.role = 'petugas_gizi'
+     LIMIT 1"
+);
+
+if (!$stmtPuskesmas) {
+    die(
+        "Gagal memeriksa Puskesmas Petugas Gizi: "
+        . mysqli_error($conn)
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtPuskesmas,
+    "i",
+    $idUserAktif
+);
+
+mysqli_stmt_execute(
+    $stmtPuskesmas
+);
+
+$hasilPuskesmas =
+    mysqli_stmt_get_result(
+        $stmtPuskesmas
+    );
+
+$dataPuskesmas =
+    mysqli_fetch_assoc(
+        $hasilPuskesmas
+    );
+
+mysqli_stmt_close(
+    $stmtPuskesmas
+);
+
+if (
+    !$dataPuskesmas
+    || empty(
+        $dataPuskesmas["id_puskesmas"]
+    )
+) {
+    header(
+        "Location: hasil_deteksi.php?pesan=tidak_ditemukan"
+    );
+    exit;
+}
+
+$idPuskesmasAktif =
+    (int) $dataPuskesmas[
+        "id_puskesmas"
+    ];
+
+$namaPuskesmasAktif =
+    trim(
+        (string) (
+            $dataPuskesmas[
+                "nama_puskesmas"
+            ]
+            ?? ""
+        )
+    );
 
 /*
 |--------------------------------------------------------------------------
@@ -509,13 +595,18 @@ if (!$idBalita || $idBalita < 1) {
 $stmtBalita = mysqli_prepare(
     $conn,
     "SELECT
-        id_balita,
-        nama_balita,
-        nik_balita,
-        jenis_kelamin,
-        tanggal_lahir
-     FROM balita
-     WHERE id_balita = ?
+        b.id_balita,
+        b.nama_balita,
+        b.nik_balita,
+        b.jenis_kelamin,
+        b.tanggal_lahir,
+        b.id_puskesmas,
+        p.nama_puskesmas
+     FROM balita AS b
+     LEFT JOIN puskesmas AS p
+        ON b.id_puskesmas = p.id_puskesmas
+     WHERE b.id_balita = ?
+     AND b.id_puskesmas = ?
      LIMIT 1"
 );
 
@@ -528,8 +619,9 @@ if (!$stmtBalita) {
 
 mysqli_stmt_bind_param(
     $stmtBalita,
-    "i",
-    $idBalita
+    "ii",
+    $idBalita,
+    $idPuskesmasAktif
 );
 
 mysqli_stmt_execute($stmtBalita);
@@ -637,7 +729,7 @@ mysqli_stmt_close($stmtSkrining);
 
 if (!$skrining) {
     header(
-        "Location: ../skrining/form_skrining.php?pesan=belum_ada_skrining"
+        "Location: ../skrining/hasil_skrining.php?pesan=belum_ada_skrining"
     );
     exit;
 }
@@ -744,7 +836,11 @@ if ($jumlahData > 0) {
         SET
             status_gizi = ?,
             status_stunting = ?,
-            tanggal_deteksi = CURDATE()
+            tanggal_deteksi = CURDATE(),
+            status_verifikasi = 'Belum diverifikasi',
+            catatan_verifikasi = NULL,
+            diverifikasi_oleh = NULL,
+            tanggal_verifikasi = NULL
         WHERE id_pengukuran = ?
     ";
 
@@ -776,14 +872,22 @@ if ($jumlahData > 0) {
             id_pengukuran,
             status_gizi,
             status_stunting,
-            tanggal_deteksi
+            tanggal_deteksi,
+            status_verifikasi,
+            catatan_verifikasi,
+            diverifikasi_oleh,
+            tanggal_verifikasi
         )
         VALUES
         (
             ?,
             ?,
             ?,
-            CURDATE()
+            CURDATE(),
+            'Belum diverifikasi',
+            NULL,
+            NULL,
+            NULL
         )
     ";
 
@@ -846,68 +950,9 @@ mysqli_stmt_close($stmtSimpan);
 | Berhasil disimpan
 |--------------------------------------------------------------------------
 |
-| Jika analisis dipanggil otomatis setelah pengisian skrining,
-| hasil perhitungan dikirim melalui session flash agar dapat
-| ditampilkan sebagai modal pada halaman hasil skrining.
-|
-| Jika analisis dipanggil dari tombol Analisis biasa, alur lama
-| tetap dipertahankan menuju halaman hasil deteksi.
-|
-*/
-
-$sumberAnalisis = trim($_GET["sumber"] ?? "");
-
-if ($sumberAnalisis === "form_skrining") {
-
-    /*
-    |--------------------------------------------------------------------------
-    | Kirim hasil kembali ke form skrining
-    |--------------------------------------------------------------------------
-    |
-    | Seluruh nilai di bawah ini merupakan OUTPUT dari rumus analisis
-    | yang sudah dijalankan di atas. Tidak ada perhitungan ulang di sini.
-    |
-    */
-
-    $_SESSION["hasil_analisis_form"] = [
-        "id_balita" => (int) $idBalita,
-        "id_pengukuran" => (int) $idPengukuran,
-        "nama_balita" =>
-            $balita["nama_balita"] ?? "Balita",
-        "z_score_tbu" =>
-            $zScoreTbu,
-        "status_stunting" =>
-            $statusStunting,
-        "kelas_status_stunting" =>
-            $kelasStatus,
-        "keterangan_stunting" =>
-            $keteranganStunting,
-        "z_score_bbu" =>
-            $zScoreBbu,
-        "status_gizi" =>
-            $statusGizi,
-        "kelas_status_gizi" =>
-            $hasilKlasifikasiGizi["badge"]
-            ?? "badge-secondary",
-        "keterangan_gizi" =>
-            $hasilKlasifikasiGizi["keterangan"]
-            ?? ""
-    ];
-
-    header(
-        "Location: ../skrining/hasil_skrining.php?pesan=tambah_berhasil"
-    );
-
-    exit;
-}
-
-/*
-|--------------------------------------------------------------------------
-| Analisis manual dari tabel skrining
-|--------------------------------------------------------------------------
-|
-| Jika analisis dijalankan dari tombol Analisis pada daftar skrining,
-| alur lama tetap dipertahankan.
+| Analisis merupakan tugas Petugas Gizi.
+| Setelah proses selesai, pengguna selalu diarahkan ke Hasil Deteksi.
+| Tidak ada lagi jalur kembali ke form skrining milik Kader.
 |
 */
 

@@ -20,13 +20,155 @@ $cari = trim($_GET["cari"] ?? "");
 
 $kataKunci = "%" . $cari . "%";
 
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
+
+$roleBerbasisPuskesmas =
+    in_array(
+        $roleAktif,
+        [
+            "petugas_gizi",
+            "petugas_kia",
+            "kepala_puskesmas"
+        ],
+        true
+    );
+
 /*
 |--------------------------------------------------------------------------
-| Mengambil data hasil deteksi
+| Mengambil Puskesmas akun aktif
+|--------------------------------------------------------------------------
+*/
+
+if ($roleBerbasisPuskesmas) {
+
+    $stmtPuskesmas = mysqli_prepare(
+        $conn,
+        "SELECT
+            u.id_puskesmas,
+            p.nama_puskesmas
+         FROM pengguna AS u
+         LEFT JOIN puskesmas AS p
+            ON u.id_puskesmas = p.id_puskesmas
+         WHERE u.id_user = ?
+         LIMIT 1"
+    );
+
+    if (!$stmtPuskesmas) {
+        die(
+            "Gagal memeriksa Puskesmas pengguna: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmas,
+        "i",
+        $idUserAktif
+    );
+
+    mysqli_stmt_execute($stmtPuskesmas);
+
+    $hasilPuskesmas =
+        mysqli_stmt_get_result(
+            $stmtPuskesmas
+        );
+
+    $dataPuskesmas =
+        mysqli_fetch_assoc(
+            $hasilPuskesmas
+        );
+
+    mysqli_stmt_close(
+        $stmtPuskesmas
+    );
+
+    if (
+        !$dataPuskesmas
+        || empty(
+            $dataPuskesmas["id_puskesmas"]
+        )
+    ) {
+        $puskesmasBelumTerhubung = true;
+    } else {
+        $idPuskesmasAktif =
+            (int) $dataPuskesmas[
+                "id_puskesmas"
+            ];
+
+        $namaPuskesmasAktif =
+            trim(
+                (string) (
+                    $dataPuskesmas[
+                        "nama_puskesmas"
+                    ]
+                    ?? ""
+                )
+            );
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Query dasar hasil deteksi
+|--------------------------------------------------------------------------
+*/
+
+$selectDeteksi = "
+    SELECT
+        hd.id_deteksi,
+        hd.id_pengukuran,
+        hd.status_gizi,
+        hd.status_stunting,
+        hd.tanggal_deteksi,
+        hd.status_verifikasi,
+
+        pa.tanggal_pengukuran,
+        pa.umur_bulan,
+        pa.berat_badan,
+        pa.tinggi_panjang_badan,
+        pa.lingkar_kepala,
+        pa.lila,
+
+        b.id_balita,
+        b.nama_balita,
+        b.nik_balita,
+        b.jenis_kelamin,
+        b.id_puskesmas,
+
+        p.nama_puskesmas
+
+    FROM hasil_deteksi AS hd
+
+    INNER JOIN pengukuran_antropometri AS pa
+        ON hd.id_pengukuran = pa.id_pengukuran
+
+    INNER JOIN balita AS b
+        ON pa.id_balita = b.id_balita
+
+    LEFT JOIN puskesmas AS p
+        ON b.id_puskesmas = p.id_puskesmas
+";
+
+$filterCari = "
+    (
+        b.nama_balita LIKE ?
+        OR b.nik_balita LIKE ?
+        OR hd.status_gizi LIKE ?
+        OR hd.status_stunting LIKE ?
+        OR hd.status_verifikasi LIKE ?
+    )
+";
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil data berdasarkan role
 |--------------------------------------------------------------------------
 |
-| Orang tua hanya melihat hasil deteksi anak miliknya.
-| Role lainnya dapat melihat seluruh hasil deteksi.
+| Orang Tua         : anak sendiri.
+| Gizi/KIA/Kapus    : Puskesmas akun sendiri.
+| Dinkes            : seluruh Puskesmas.
 |
 */
 
@@ -36,36 +178,10 @@ if ($roleAktif === "orang_tua") {
 
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                hd.id_deteksi,
-                hd.id_pengukuran,
-                hd.status_gizi,
-                hd.status_stunting,
-                hd.tanggal_deteksi,
-                hd.status_verifikasi,
-                pa.tanggal_pengukuran,
-                pa.umur_bulan,
-                pa.berat_badan,
-                pa.tinggi_panjang_badan,
-                pa.lingkar_kepala,
-                pa.lila,
-                b.id_balita,
-                b.nama_balita,
-                b.nik_balita,
-                b.jenis_kelamin
-             FROM hasil_deteksi hd
-             INNER JOIN pengukuran_antropometri pa
-                ON hd.id_pengukuran = pa.id_pengukuran
-             INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-             WHERE b.id_user = ?
-             AND (
-                b.nama_balita LIKE ?
-                OR b.nik_balita LIKE ?
-                OR hd.status_gizi LIKE ?
-                OR hd.status_stunting LIKE ?
-             )
-             ORDER BY hd.id_deteksi DESC"
+            $selectDeteksi . "
+            WHERE b.id_user = ?
+            AND " . $filterCari . "
+            ORDER BY hd.id_deteksi DESC"
         );
 
         if (!$stmt) {
@@ -77,8 +193,9 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "issss",
+            "isssss",
             $idUserAktif,
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -89,30 +206,9 @@ if ($roleAktif === "orang_tua") {
 
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                hd.id_deteksi,
-                hd.id_pengukuran,
-                hd.status_gizi,
-                hd.status_stunting,
-                hd.tanggal_deteksi,
-                hd.status_verifikasi,
-                pa.tanggal_pengukuran,
-                pa.umur_bulan,
-                pa.berat_badan,
-                pa.tinggi_panjang_badan,
-                pa.lingkar_kepala,
-                pa.lila,
-                b.id_balita,
-                b.nama_balita,
-                b.nik_balita,
-                b.jenis_kelamin
-             FROM hasil_deteksi hd
-             INNER JOIN pengukuran_antropometri pa
-                ON hd.id_pengukuran = pa.id_pengukuran
-             INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-             WHERE b.id_user = ?
-             ORDER BY hd.id_deteksi DESC"
+            $selectDeteksi . "
+            WHERE b.id_user = ?
+            ORDER BY hd.id_deteksi DESC"
         );
 
         if (!$stmt) {
@@ -129,40 +225,31 @@ if ($roleAktif === "orang_tua") {
         );
     }
 
-} else {
+} elseif ($roleBerbasisPuskesmas) {
 
-    if ($cari !== "") {
+    if ($puskesmasBelumTerhubung) {
 
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                hd.id_deteksi,
-                hd.id_pengukuran,
-                hd.status_gizi,
-                hd.status_stunting,
-                hd.tanggal_deteksi,
-                hd.status_verifikasi,
-                pa.tanggal_pengukuran,
-                pa.umur_bulan,
-                pa.berat_badan,
-                pa.tinggi_panjang_badan,
-                pa.lingkar_kepala,
-                pa.lila,
-                b.id_balita,
-                b.nama_balita,
-                b.nik_balita,
-                b.jenis_kelamin
-             FROM hasil_deteksi hd
-             INNER JOIN pengukuran_antropometri pa
-                ON hd.id_pengukuran = pa.id_pengukuran
-             INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-             WHERE
-                b.nama_balita LIKE ?
-                OR b.nik_balita LIKE ?
-                OR hd.status_gizi LIKE ?
-                OR hd.status_stunting LIKE ?
-             ORDER BY hd.id_deteksi DESC"
+            $selectDeteksi . "
+            WHERE 1 = 0
+            ORDER BY hd.id_deteksi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal menyiapkan hasil deteksi."
+            );
+        }
+
+    } elseif ($cari !== "") {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectDeteksi . "
+            WHERE b.id_puskesmas = ?
+            AND " . $filterCari . "
+            ORDER BY hd.id_deteksi DESC"
         );
 
         if (!$stmt) {
@@ -174,7 +261,9 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "ssss",
+            "isssss",
+            $idPuskesmasAktif,
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -185,29 +274,59 @@ if ($roleAktif === "orang_tua") {
 
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                hd.id_deteksi,
-                hd.id_pengukuran,
-                hd.status_gizi,
-                hd.status_stunting,
-                hd.tanggal_deteksi,
-                hd.status_verifikasi,
-                pa.tanggal_pengukuran,
-                pa.umur_bulan,
-                pa.berat_badan,
-                pa.tinggi_panjang_badan,
-                pa.lingkar_kepala,
-                pa.lila,
-                b.id_balita,
-                b.nama_balita,
-                b.nik_balita,
-                b.jenis_kelamin
-             FROM hasil_deteksi hd
-             INNER JOIN pengukuran_antropometri pa
-                ON hd.id_pengukuran = pa.id_pengukuran
-             INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-             ORDER BY hd.id_deteksi DESC"
+            $selectDeteksi . "
+            WHERE b.id_puskesmas = ?
+            ORDER BY hd.id_deteksi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal mengambil hasil deteksi: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "i",
+            $idPuskesmasAktif
+        );
+    }
+
+} else {
+
+    if ($cari !== "") {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectDeteksi . "
+            WHERE " . $filterCari . "
+            ORDER BY hd.id_deteksi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal menyiapkan pencarian hasil deteksi: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "sssss",
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci
+        );
+
+    } else {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectDeteksi . "
+            ORDER BY hd.id_deteksi DESC"
         );
 
         if (!$stmt) {
@@ -221,7 +340,17 @@ if ($roleAktif === "orang_tua") {
 
 mysqli_stmt_execute($stmt);
 
-$query = mysqli_stmt_get_result($stmt);
+$query =
+    mysqli_stmt_get_result($stmt);
+
+if (!$query) {
+    die(
+        "Gagal membaca hasil deteksi."
+    );
+}
+
+$totalData =
+    mysqli_num_rows($query);
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
@@ -254,6 +383,25 @@ require_once "../includes/navbar.php";
 
                 <div class="d-flex flex-wrap gap-2">
 
+                    <?php if (
+                        $roleBerbasisPuskesmas
+                        && !$puskesmasBelumTerhubung
+                    ): ?>
+
+                        <span
+                            class="badge badge-info
+                            d-inline-flex align-items-center px-3"
+                        >
+                            <i class="bi bi-hospital me-1"></i>
+                            <?= htmlspecialchars(
+                                $namaPuskesmasAktif,
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ); ?>
+                        </span>
+
+                    <?php endif; ?>
+
                     <a
                         href="../dashboard/dashboard.php"
                         class="btn btn-secondary btn-sm"
@@ -262,14 +410,17 @@ require_once "../includes/navbar.php";
                         Kembali
                     </a>
 
-                    <?php if ($roleAktif === "petugas_gizi"): ?>
+                    <?php if (
+                        $roleAktif === "petugas_gizi"
+                        && !$puskesmasBelumTerhubung
+                    ): ?>
 
                         <a
                             href="../skrining/hasil_skrining.php"
                             class="btn btn-primary btn-sm"
                         >
                             <i class="bi bi-activity"></i>
-                            Analisis Pengukuran
+                            Pilih Data untuk Analisis
                         </a>
 
                     <?php endif; ?>
@@ -279,6 +430,19 @@ require_once "../includes/navbar.php";
             </div>
 
             <div class="card-body">
+
+                <?php if (
+                    $roleBerbasisPuskesmas
+                    && $puskesmasBelumTerhubung
+                ): ?>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Akun ini belum terhubung dengan Puskesmas.
+                        Data hasil deteksi wilayah tidak dapat ditampilkan.
+                    </div>
+
+                <?php endif; ?>
 
                 <?php if (isset($_GET["pesan"])): ?>
 
@@ -370,7 +534,7 @@ require_once "../includes/navbar.php";
                     <span class="text-muted small">
                         Total data:
                         <strong>
-                            <?= mysqli_num_rows($query); ?>
+                            <?= $totalData; ?>
                         </strong>
                         hasil deteksi
                     </span>
@@ -437,6 +601,10 @@ require_once "../includes/navbar.php";
                                     NIK
                                 </th>
 
+                                <th>
+                                    Puskesmas
+                                </th>
+
                                 <th class="text-center">
                                     JK
                                 </th>
@@ -475,7 +643,7 @@ require_once "../includes/navbar.php";
 
                         <tbody>
 
-                        <?php if (mysqli_num_rows($query) > 0): ?>
+                        <?php if ($totalData > 0): ?>
 
                             <?php
                             $no = 1;
@@ -620,6 +788,15 @@ require_once "../includes/navbar.php";
                                         ); ?>
                                     </td>
 
+                                    <td>
+                                        <?= htmlspecialchars(
+                                            $data["nama_puskesmas"]
+                                                ?? "-",
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </td>
+
                                     <td class="text-center">
                                         <?= htmlspecialchars(
                                             $data["jenis_kelamin"],
@@ -699,13 +876,34 @@ require_once "../includes/navbar.php";
 
                                     <td class="text-center">
 
-                                        <a
-                                            href="detail_deteksi.php?id=<?= (int) $data["id_deteksi"]; ?>"
-                                            class="btn btn-info btn-sm"
+                                        <div
+                                            class="table-actions
+                                            justify-content-center"
                                         >
-                                            <i class="bi bi-eye"></i>
-                                            Detail
-                                        </a>
+
+                                            <a
+                                                href="detail_deteksi.php?id=<?= (int) $data["id_deteksi"]; ?>"
+                                                class="btn btn-info btn-sm"
+                                            >
+                                                <i class="bi bi-eye"></i>
+                                                Detail
+                                            </a>
+
+                                            <?php if (
+                                                $roleAktif === "petugas_gizi"
+                                            ): ?>
+
+                                                <a
+                                                    href="verifikasi_deteksi.php?id=<?= (int) $data["id_deteksi"]; ?>"
+                                                    class="btn btn-success btn-sm"
+                                                >
+                                                    <i class="bi bi-check2-circle"></i>
+                                                    Verifikasi
+                                                </a>
+
+                                            <?php endif; ?>
+
+                                        </div>
 
                                     </td>
 
@@ -717,7 +915,7 @@ require_once "../includes/navbar.php";
 
                             <tr>
 
-                                <td colspan="12">
+                                <td colspan="13">
 
                                     <div class="empty-state">
 

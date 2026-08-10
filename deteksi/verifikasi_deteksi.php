@@ -9,9 +9,19 @@ cekRole(["petugas_gizi"]);
 $judulHalaman =
     "Verifikasi Hasil Deteksi | Sistem Deteksi Stunting";
 
-$id = (int) ($_GET["id"] ?? 0);
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
 
-if ($id <= 0) {
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+
+$id = filter_input(
+    INPUT_GET,
+    "id",
+    FILTER_VALIDATE_INT
+);
+
+if (!$id || $id < 1) {
     header(
         "Location: hasil_deteksi.php?pesan=tidak_ditemukan"
     );
@@ -20,7 +30,82 @@ if ($id <= 0) {
 
 /*
 |--------------------------------------------------------------------------
-| Ambil data hasil deteksi
+| Mengambil Puskesmas Petugas Gizi aktif
+|--------------------------------------------------------------------------
+*/
+
+$stmtPuskesmas = mysqli_prepare(
+    $conn,
+    "SELECT
+        u.id_puskesmas,
+        p.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS p
+        ON u.id_puskesmas = p.id_puskesmas
+     WHERE u.id_user = ?
+     AND u.role = 'petugas_gizi'
+     LIMIT 1"
+);
+
+if (!$stmtPuskesmas) {
+    die(
+        "Gagal memeriksa Puskesmas Petugas Gizi: "
+        . mysqli_error($conn)
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtPuskesmas,
+    "i",
+    $idUserAktif
+);
+
+mysqli_stmt_execute($stmtPuskesmas);
+
+$hasilPuskesmas =
+    mysqli_stmt_get_result(
+        $stmtPuskesmas
+    );
+
+$dataPuskesmas =
+    mysqli_fetch_assoc(
+        $hasilPuskesmas
+    );
+
+mysqli_stmt_close(
+    $stmtPuskesmas
+);
+
+if (
+    !$dataPuskesmas
+    || empty(
+        $dataPuskesmas["id_puskesmas"]
+    )
+) {
+    header(
+        "Location: hasil_deteksi.php?pesan=tidak_ditemukan"
+    );
+    exit;
+}
+
+$idPuskesmasAktif =
+    (int) $dataPuskesmas[
+        "id_puskesmas"
+    ];
+
+$namaPuskesmasAktif =
+    trim(
+        (string) (
+            $dataPuskesmas[
+                "nama_puskesmas"
+            ]
+            ?? ""
+        )
+    );
+
+/*
+|--------------------------------------------------------------------------
+| Ambil hasil deteksi yang boleh diverifikasi
 |--------------------------------------------------------------------------
 */
 
@@ -28,15 +113,33 @@ $stmtData = mysqli_prepare(
     $conn,
     "SELECT
         hd.id_deteksi,
+        hd.status_gizi,
+        hd.status_stunting,
         hd.status_verifikasi,
         hd.catatan_verifikasi,
-        b.nama_balita
-     FROM hasil_deteksi hd
-     INNER JOIN pengukuran_antropometri pa
+
+        pa.tanggal_pengukuran,
+
+        b.id_balita,
+        b.nama_balita,
+        b.nik_balita,
+
+        p.nama_puskesmas
+
+     FROM hasil_deteksi AS hd
+
+     INNER JOIN pengukuran_antropometri AS pa
         ON hd.id_pengukuran = pa.id_pengukuran
-     INNER JOIN balita b
+
+     INNER JOIN balita AS b
         ON pa.id_balita = b.id_balita
+
+     LEFT JOIN puskesmas AS p
+        ON b.id_puskesmas = p.id_puskesmas
+
      WHERE hd.id_deteksi = ?
+     AND b.id_puskesmas = ?
+
      LIMIT 1"
 );
 
@@ -49,19 +152,28 @@ if (!$stmtData) {
 
 mysqli_stmt_bind_param(
     $stmtData,
-    "i",
-    $id
+    "ii",
+    $id,
+    $idPuskesmasAktif
 );
 
-mysqli_stmt_execute($stmtData);
+mysqli_stmt_execute(
+    $stmtData
+);
 
 $resultData =
-    mysqli_stmt_get_result($stmtData);
+    mysqli_stmt_get_result(
+        $stmtData
+    );
 
 $dataDeteksi =
-    mysqli_fetch_assoc($resultData);
+    mysqli_fetch_assoc(
+        $resultData
+    );
 
-mysqli_stmt_close($stmtData);
+mysqli_stmt_close(
+    $stmtData
+);
 
 if (!$dataDeteksi) {
     header(
@@ -113,43 +225,101 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     if ($error === "") {
 
-        $stmt = mysqli_prepare(
-            $conn,
-            "UPDATE hasil_deteksi SET
-                status_verifikasi = ?,
-                catatan_verifikasi = ?,
-                diverifikasi_oleh = ?,
-                tanggal_verifikasi = NOW()
-             WHERE id_deteksi = ?"
-        );
+        if (
+            $statusVerifikasi ===
+            "Belum diverifikasi"
+        ) {
 
-        if (!$stmt) {
-            die(
-                "Gagal menyiapkan verifikasi hasil deteksi: "
-                . mysqli_error($conn)
+            $stmt = mysqli_prepare(
+                $conn,
+                "UPDATE hasil_deteksi AS hd
+                 INNER JOIN pengukuran_antropometri AS pa
+                    ON hd.id_pengukuran = pa.id_pengukuran
+                 INNER JOIN balita AS b
+                    ON pa.id_balita = b.id_balita
+                 SET
+                    hd.status_verifikasi = ?,
+                    hd.catatan_verifikasi = ?,
+                    hd.diverifikasi_oleh = NULL,
+                    hd.tanggal_verifikasi = NULL
+                 WHERE hd.id_deteksi = ?
+                 AND b.id_puskesmas = ?"
+            );
+
+            if (!$stmt) {
+                die(
+                    "Gagal menyiapkan verifikasi hasil deteksi: "
+                    . mysqli_error($conn)
+                );
+            }
+
+            mysqli_stmt_bind_param(
+                $stmt,
+                "ssii",
+                $statusVerifikasi,
+                $catatanVerifikasi,
+                $id,
+                $idPuskesmasAktif
+            );
+
+        } else {
+
+            $stmt = mysqli_prepare(
+                $conn,
+                "UPDATE hasil_deteksi AS hd
+                 INNER JOIN pengukuran_antropometri AS pa
+                    ON hd.id_pengukuran = pa.id_pengukuran
+                 INNER JOIN balita AS b
+                    ON pa.id_balita = b.id_balita
+                 SET
+                    hd.status_verifikasi = ?,
+                    hd.catatan_verifikasi = ?,
+                    hd.diverifikasi_oleh = ?,
+                    hd.tanggal_verifikasi = NOW()
+                 WHERE hd.id_deteksi = ?
+                 AND b.id_puskesmas = ?"
+            );
+
+            if (!$stmt) {
+                die(
+                    "Gagal menyiapkan verifikasi hasil deteksi: "
+                    . mysqli_error($conn)
+                );
+            }
+
+            mysqli_stmt_bind_param(
+                $stmt,
+                "ssiii",
+                $statusVerifikasi,
+                $catatanVerifikasi,
+                $idUserAktif,
+                $id,
+                $idPuskesmasAktif
             );
         }
 
-        $idUserAktif =
-            (int) ($_SESSION["id_user"] ?? 0);
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "ssii",
-            $statusVerifikasi,
-            $catatanVerifikasi,
-            $idUserAktif,
-            $id
-        );
-
-        if (!mysqli_stmt_execute($stmt)) {
+        if (
+            !mysqli_stmt_execute(
+                $stmt
+            )
+        ) {
             $error =
                 "Verifikasi hasil deteksi gagal disimpan.";
         }
 
-        mysqli_stmt_close($stmt);
+        $jumlahBerubah =
+            mysqli_stmt_affected_rows(
+                $stmt
+            );
 
-        if ($error === "") {
+        mysqli_stmt_close(
+            $stmt
+        );
+
+        if (
+            $error === ""
+            && $jumlahBerubah >= 0
+        ) {
             header(
                 "Location: detail_deteksi.php?id="
                 . $id
@@ -224,6 +394,101 @@ require_once "../includes/navbar.php";
 
                 <?php endif; ?>
 
+                <div class="row g-3 mb-4">
+
+                    <div class="col-12 col-md-4">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Balita
+                            </span>
+
+                            <div class="detail-value">
+                                <strong>
+                                    <?= htmlspecialchars(
+                                        $dataDeteksi["nama_balita"],
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
+                                </strong>
+                            </div>
+
+                            <div class="form-text">
+                                NIK:
+                                <?= htmlspecialchars(
+                                    $dataDeteksi["nik_balita"],
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-md-4">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Hasil Deteksi
+                            </span>
+
+                            <div class="detail-value">
+                                <?= htmlspecialchars(
+                                    $dataDeteksi["status_stunting"]
+                                        ?? "-",
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>
+                            </div>
+
+                            <div class="form-text">
+                                Status gizi:
+                                <?= htmlspecialchars(
+                                    $dataDeteksi["status_gizi"]
+                                        ?? "-",
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-md-4">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Puskesmas
+                            </span>
+
+                            <div class="detail-value">
+                                <i class="bi bi-hospital me-1"></i>
+                                <?= htmlspecialchars(
+                                    $dataDeteksi["nama_puskesmas"]
+                                        ?? $namaPuskesmasAktif,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Verifikasi ini menetapkan
+                    <strong>status hasil deteksi</strong>,
+                    bukan memverifikasi identitas atau data balita.
+                </div>
+
                 <form method="POST">
 
                     <div class="form-group">
@@ -265,6 +530,12 @@ require_once "../includes/navbar.php";
                             <?php endforeach; ?>
 
                         </select>
+
+                        <div class="form-text">
+                            Pilih hasil peninjauan Petugas Gizi:
+                            Belum diverifikasi, Sudah diverifikasi,
+                            atau Perlu pemeriksaan ulang.
+                        </div>
 
                     </div>
 
