@@ -11,12 +11,75 @@ require_once "../config/koneksi.php";
 */
 
 cekRole([
-    "kader",
     "petugas_kia"
 ]);
 
 $judulHalaman =
     "Riwayat Kelahiran | Sistem Deteksi Stunting";
+
+$roleAktif = $_SESSION["role"] ?? "";
+$idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
+
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil Puskesmas akun aktif
+|--------------------------------------------------------------------------
+*/
+
+$stmtPuskesmasAkun = mysqli_prepare(
+    $conn,
+    "SELECT u.id_puskesmas, p.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS p
+        ON u.id_puskesmas = p.id_puskesmas
+     WHERE u.id_user = ?
+     LIMIT 1"
+);
+
+if (!$stmtPuskesmasAkun) {
+    die(
+        "Gagal memeriksa Puskesmas pengguna: "
+        . mysqli_error($conn)
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtPuskesmasAkun,
+    "i",
+    $idUserAktif
+);
+
+mysqli_stmt_execute($stmtPuskesmasAkun);
+
+$hasilPuskesmasAkun =
+    mysqli_stmt_get_result($stmtPuskesmasAkun);
+
+$dataPuskesmasAkun =
+    mysqli_fetch_assoc($hasilPuskesmasAkun);
+
+mysqli_stmt_close($stmtPuskesmasAkun);
+
+if (
+    !$dataPuskesmasAkun
+    || empty($dataPuskesmasAkun["id_puskesmas"])
+) {
+    $puskesmasBelumTerhubung = true;
+} else {
+    $idPuskesmasAktif =
+        (int) $dataPuskesmasAkun["id_puskesmas"];
+
+    $namaPuskesmasAktif =
+        trim(
+            (string) (
+                $dataPuskesmasAkun["nama_puskesmas"]
+                ?? ""
+            )
+        );
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -52,6 +115,9 @@ if ($kolomPrimaryKey === "") {
 |--------------------------------------------------------------------------
 | Mengambil data riwayat kelahiran dan data balita
 |--------------------------------------------------------------------------
+|
+| Wilayah otomatis mengikuti id_puskesmas akun yang sedang login.
+|
 */
 
 $sql = "
@@ -62,17 +128,42 @@ $sql = "
     FROM riwayat_kelahiran AS rk
     INNER JOIN balita AS b
         ON rk.id_balita = b.id_balita
+    WHERE b.id_puskesmas = ?
     ORDER BY rk.$kolomPrimaryKey DESC
 ";
 
-$query = mysqli_query($conn, $sql);
+$stmtRiwayat = mysqli_prepare(
+    $conn,
+    $sql
+);
 
-if (!$query) {
+if (!$stmtRiwayat) {
     die(
-        "Gagal mengambil data riwayat kelahiran: "
+        "Gagal menyiapkan data riwayat kelahiran: "
         . mysqli_error($conn)
     );
 }
+
+mysqli_stmt_bind_param(
+    $stmtRiwayat,
+    "i",
+    $idPuskesmasAktif
+);
+
+mysqli_stmt_execute($stmtRiwayat);
+
+$query =
+    mysqli_stmt_get_result($stmtRiwayat);
+
+if (!$query) {
+    mysqli_stmt_close($stmtRiwayat);
+
+    die(
+        "Gagal mengambil data riwayat kelahiran."
+    );
+}
+
+$totalData = mysqli_num_rows($query);
 
 /*
 |--------------------------------------------------------------------------
@@ -140,6 +231,16 @@ switch ($pesan) {
         break;
 }
 
+if (
+    $puskesmasBelumTerhubung
+    && $isiPesan === ""
+) {
+    $jenisAlert = "warning";
+    $isiPesan =
+        "Akun ini belum terhubung dengan Puskesmas. "
+        . "Hubungkan akun ke Puskesmas terlebih dahulu agar data balita dapat ditampilkan.";
+}
+
 /*
 |--------------------------------------------------------------------------
 | Template aplikasi
@@ -157,100 +258,121 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div class="page-header">
-
-            <div>
-
-                <h1 class="page-title">
-                    <i class="bi bi-balloon-heart me-2"></i>
-                    Riwayat Kelahiran
-                </h1>
-
-                <p class="page-subtitle">
-                    Kelola data kelahiran balita untuk melengkapi
-                    informasi awal pertumbuhan.
-                </p>
-
-            </div>
-
-            <div class="d-flex flex-wrap gap-2">
-
-                <a
-                    href="../dashboard/dashboard.php"
-                    class="btn btn-secondary btn-sm"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali
-                </a>
-
-                <a
-                    href="tambah_kelahiran.php"
-                    class="btn btn-primary btn-sm"
-                >
-                    <i class="bi bi-plus-circle"></i>
-                    Tambah Riwayat
-                </a>
-
-            </div>
-
-        </div>
-
-        <?php if ($isiPesan !== ""): ?>
-
-            <div
-                class="alert alert-<?= amanKelahiran(
-                    $jenisAlert
-                ); ?> alert-dismissible fade show"
-                role="alert"
-            >
-                <i
-                    class="bi <?= $jenisAlert === "success"
-                        ? "bi-check-circle"
-                        : ($jenisAlert === "danger"
-                            ? "bi-x-circle"
-                            : "bi-exclamation-triangle"); ?> me-1"
-                ></i>
-
-                <?= amanKelahiran($isiPesan); ?>
-
-                <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Tutup"
-                ></button>
-            </div>
-
-        <?php endif; ?>
-
         <div class="card content-card">
 
-            <div class="card-header">
+            <div
+                class="card-header
+                d-flex
+                flex-wrap
+                justify-content-between
+                align-items-center
+                gap-3"
+            >
 
                 <div>
 
                     <h4 class="mb-1">
-                        Daftar Riwayat Kelahiran
+                        <i class="bi bi-balloon-heart me-2"></i>
+                        Riwayat Kelahiran
                     </h4>
 
                     <small class="text-muted">
-                        Total data:
-                        <strong>
-                            <?= mysqli_num_rows($query); ?>
-                        </strong>
-                        riwayat kelahiran
+                        Kelola data kelahiran balita pada Puskesmas
+                        yang terhubung dengan akun Petugas KIA.
                     </small>
 
                 </div>
 
-                <span class="badge badge-info">
-                    <i class="bi bi-heart-pulse"></i>
-                    Data Kelahiran
-                </span>
+                <div class="d-flex flex-wrap gap-2">
+
+                    <a
+                        href="../dashboard/dashboard.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                    <?php if (!$puskesmasBelumTerhubung): ?>
+
+                        <a
+                            href="tambah_kelahiran.php"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-plus-circle"></i>
+                            Tambah Riwayat
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
 
             </div>
 
             <div class="card-body">
+
+                <?php if ($isiPesan !== ""): ?>
+
+                    <div
+                        class="alert alert-<?= amanKelahiran(
+                            $jenisAlert
+                        ); ?> alert-dismissible fade show"
+                        role="alert"
+                    >
+                        <i
+                            class="bi <?= $jenisAlert === "success"
+                                ? "bi-check-circle"
+                                : ($jenisAlert === "danger"
+                                    ? "bi-x-circle"
+                                    : "bi-exclamation-triangle"); ?> me-1"
+                        ></i>
+
+                        <?= amanKelahiran($isiPesan); ?>
+
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="alert"
+                            aria-label="Tutup"
+                        ></button>
+                    </div>
+
+                <?php endif; ?>
+
+                <div
+                    class="d-flex
+                    flex-wrap
+                    justify-content-between
+                    align-items-center
+                    gap-2
+                    mb-4"
+                >
+
+                    <div class="d-flex flex-wrap gap-2">
+
+                        <span class="badge badge-primary">
+                            <i class="bi bi-clipboard2-data"></i>
+                            <?= $totalData; ?> data
+                        </span>
+
+                        <?php if (!$puskesmasBelumTerhubung): ?>
+
+                            <span class="badge badge-info">
+                                <i class="bi bi-hospital"></i>
+                                <?= amanKelahiran(
+                                    $namaPuskesmasAktif
+                                ); ?>
+                            </span>
+
+                        <?php endif; ?>
+
+                    </div>
+
+                    <small class="text-muted">
+                        Balita otomatis mengikuti wilayah Puskesmas akun.
+                    </small>
+
+                </div>
 
                 <div class="table-responsive">
 
@@ -299,7 +421,7 @@ require_once "../includes/navbar.php";
 
                         <tbody>
 
-                        <?php if (mysqli_num_rows($query) > 0): ?>
+                        <?php if ($totalData > 0): ?>
 
                             <?php
                             $nomor = 1;
@@ -325,13 +447,8 @@ require_once "../includes/navbar.php";
                                             align-items-center gap-2"
                                         >
 
-                                            <span
-                                                class="badge badge-primary"
-                                            >
-                                                <i
-                                                    class="bi
-                                                    bi-person-heart"
-                                                ></i>
+                                            <span class="badge badge-primary">
+                                                <i class="bi bi-person-heart"></i>
                                             </span>
 
                                             <strong>
@@ -386,15 +503,10 @@ require_once "../includes/navbar.php";
                                     <td class="text-center">
 
                                         <span class="badge badge-info">
-                                            <i
-                                                class="bi
-                                                bi-hospital me-1"
-                                            ></i>
+                                            <i class="bi bi-hospital me-1"></i>
 
                                             <?= amanKelahiran(
-                                                $data[
-                                                    "jenis_persalinan"
-                                                ]
+                                                $data["jenis_persalinan"]
                                             ); ?>
                                         </span>
 
@@ -411,10 +523,7 @@ require_once "../includes/navbar.php";
                                                 href="detail_kelahiran.php?id=<?= $idRiwayat; ?>"
                                                 class="btn btn-info btn-sm"
                                             >
-                                                <i
-                                                    class="bi
-                                                    bi-eye"
-                                                ></i>
+                                                <i class="bi bi-eye"></i>
                                                 Detail
                                             </a>
 
@@ -422,10 +531,7 @@ require_once "../includes/navbar.php";
                                                 href="edit_kelahiran.php?id=<?= $idRiwayat; ?>"
                                                 class="btn btn-warning btn-sm"
                                             >
-                                                <i
-                                                    class="bi
-                                                    bi-pencil-square"
-                                                ></i>
+                                                <i class="bi bi-pencil-square"></i>
                                                 Edit
                                             </a>
 
@@ -447,10 +553,7 @@ require_once "../includes/navbar.php";
                                                     type="submit"
                                                     class="btn btn-danger btn-sm"
                                                 >
-                                                    <i
-                                                        class="bi
-                                                        bi-trash3"
-                                                    ></i>
+                                                    <i class="bi bi-trash3"></i>
                                                     Hapus
                                                 </button>
                                             </form>
@@ -472,32 +575,45 @@ require_once "../includes/navbar.php";
                                     <div class="empty-state">
 
                                         <div class="empty-state-icon">
-                                            <i
-                                                class="bi
-                                                bi-balloon-heart"
-                                            ></i>
+                                            <i class="bi bi-balloon-heart"></i>
                                         </div>
 
-                                        <h3>
-                                            Belum ada riwayat kelahiran
-                                        </h3>
+                                        <?php if (
+                                            $puskesmasBelumTerhubung
+                                        ): ?>
 
-                                        <p>
-                                            Tambahkan data kelahiran
-                                            balita untuk melengkapi
-                                            informasi awal pertumbuhan.
-                                        </p>
+                                            <h3>
+                                                Puskesmas belum terhubung
+                                            </h3>
 
-                                        <a
-                                            href="tambah_kelahiran.php"
-                                            class="btn btn-primary mt-3"
-                                        >
-                                            <i
-                                                class="bi
-                                                bi-plus-circle"
-                                            ></i>
-                                            Tambah Riwayat
-                                        </a>
+                                            <p>
+                                                Hubungkan akun Petugas KIA
+                                                dengan Puskesmas terlebih dahulu.
+                                            </p>
+
+                                        <?php else: ?>
+
+                                            <h3>
+                                                Belum ada riwayat kelahiran
+                                            </h3>
+
+                                            <p>
+                                                Tambahkan data kelahiran balita
+                                                dari Puskesmas
+                                                <?= amanKelahiran(
+                                                    $namaPuskesmasAktif
+                                                ); ?>.
+                                            </p>
+
+                                            <a
+                                                href="tambah_kelahiran.php"
+                                                class="btn btn-primary btn-sm mt-2"
+                                            >
+                                                <i class="bi bi-plus-circle"></i>
+                                                Tambah Riwayat
+                                            </a>
+
+                                        <?php endif; ?>
 
                                     </div>
 
@@ -521,4 +637,9 @@ require_once "../includes/navbar.php";
 
 </div>
 
-<?php require_once "../includes/footer.php"; ?>
+<?php
+if (isset($stmtRiwayat)) {
+    mysqli_stmt_close($stmtRiwayat);
+}
+require_once "../includes/footer.php";
+?>

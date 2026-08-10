@@ -11,9 +11,11 @@ require_once "../config/koneksi.php";
 */
 
 cekRole([
-    "kader",
     "petugas_kia"
 ]);
+
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
 
 /*
 |--------------------------------------------------------------------------
@@ -23,7 +25,69 @@ cekRole([
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     header(
-        "Location: riwayat_kelahiran.php?pesan=akses_tidak_valid"
+        "Location: riwayat_kelahiran.php"
+    );
+    exit;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil Puskesmas Petugas KIA aktif
+|--------------------------------------------------------------------------
+*/
+
+$stmtPuskesmasAkun = mysqli_prepare(
+    $conn,
+    "SELECT id_puskesmas
+     FROM pengguna
+     WHERE id_user = ?
+     AND role = 'petugas_kia'
+     LIMIT 1"
+);
+
+if (!$stmtPuskesmasAkun) {
+    header(
+        "Location: riwayat_kelahiran.php?pesan=gagal_hapus"
+    );
+    exit;
+}
+
+mysqli_stmt_bind_param(
+    $stmtPuskesmasAkun,
+    "i",
+    $idUserAktif
+);
+
+mysqli_stmt_execute(
+    $stmtPuskesmasAkun
+);
+
+$hasilPuskesmasAkun =
+    mysqli_stmt_get_result(
+        $stmtPuskesmasAkun
+    );
+
+$dataPuskesmasAkun =
+    mysqli_fetch_assoc(
+        $hasilPuskesmasAkun
+    );
+
+mysqli_stmt_close(
+    $stmtPuskesmasAkun
+);
+
+$idPuskesmasAktif =
+    !empty(
+        $dataPuskesmasAkun["id_puskesmas"]
+    )
+        ? (int) $dataPuskesmasAkun[
+            "id_puskesmas"
+        ]
+        : 0;
+
+if ($idPuskesmasAktif < 1) {
+    header(
+        "Location: riwayat_kelahiran.php"
     );
     exit;
 }
@@ -42,7 +106,7 @@ $idRiwayat = filter_input(
 
 if (!$idRiwayat || $idRiwayat < 1) {
     header(
-        "Location: riwayat_kelahiran.php?pesan=id_tidak_valid"
+        "Location: riwayat_kelahiran.php?pesan=tidak_ditemukan"
     );
     exit;
 }
@@ -51,10 +115,6 @@ if (!$idRiwayat || $idRiwayat < 1) {
 |--------------------------------------------------------------------------
 | Mencari nama primary key tabel
 |--------------------------------------------------------------------------
-|
-| Tetap bekerja jika nama primary key adalah:
-| id_kelahiran, id_riwayat, atau id_riwayat_kelahiran.
-|
 */
 
 $queryPrimaryKey = mysqli_query(
@@ -80,15 +140,19 @@ if ($kolomPrimaryKey === "") {
 
 /*
 |--------------------------------------------------------------------------
-| Memastikan data tersedia
+| Memastikan data tersedia dan satu Puskesmas
 |--------------------------------------------------------------------------
 */
 
 $stmtCek = mysqli_prepare(
     $conn,
-    "SELECT `$kolomPrimaryKey`
-     FROM riwayat_kelahiran
-     WHERE `$kolomPrimaryKey` = ?
+    "SELECT
+        rk.`$kolomPrimaryKey`
+     FROM riwayat_kelahiran AS rk
+     INNER JOIN balita AS b
+        ON rk.id_balita = b.id_balita
+     WHERE rk.`$kolomPrimaryKey` = ?
+     AND b.id_puskesmas = ?
      LIMIT 1"
 );
 
@@ -101,15 +165,22 @@ if (!$stmtCek) {
 
 mysqli_stmt_bind_param(
     $stmtCek,
-    "i",
-    $idRiwayat
+    "ii",
+    $idRiwayat,
+    $idPuskesmasAktif
 );
 
 mysqli_stmt_execute($stmtCek);
 
-$hasilCek = mysqli_stmt_get_result($stmtCek);
+$hasilCek =
+    mysqli_stmt_get_result(
+        $stmtCek
+    );
 
-$dataRiwayat = mysqli_fetch_assoc($hasilCek);
+$dataRiwayat =
+    mysqli_fetch_assoc(
+        $hasilCek
+    );
 
 mysqli_stmt_close($stmtCek);
 
@@ -124,12 +195,20 @@ if (!$dataRiwayat) {
 |--------------------------------------------------------------------------
 | Menghapus data
 |--------------------------------------------------------------------------
+|
+| DELETE juga dibatasi berdasarkan Puskesmas agar manipulasi POST
+| tidak dapat menghapus riwayat milik wilayah lain.
+|
 */
 
 $stmtHapus = mysqli_prepare(
     $conn,
-    "DELETE FROM riwayat_kelahiran
-     WHERE `$kolomPrimaryKey` = ?"
+    "DELETE rk
+     FROM riwayat_kelahiran AS rk
+     INNER JOIN balita AS b
+        ON rk.id_balita = b.id_balita
+     WHERE rk.`$kolomPrimaryKey` = ?
+     AND b.id_puskesmas = ?"
 );
 
 if (!$stmtHapus) {
@@ -141,43 +220,54 @@ if (!$stmtHapus) {
 
 mysqli_stmt_bind_param(
     $stmtHapus,
-    "i",
-    $idRiwayat
+    "ii",
+    $idRiwayat,
+    $idPuskesmasAktif
 );
 
-$berhasil = mysqli_stmt_execute($stmtHapus);
+try {
 
-$kodeError = mysqli_stmt_errno($stmtHapus);
+    mysqli_stmt_execute(
+        $stmtHapus
+    );
 
-mysqli_stmt_close($stmtHapus);
+    $jumlahTerhapus =
+        mysqli_stmt_affected_rows(
+            $stmtHapus
+        );
 
-/*
-|--------------------------------------------------------------------------
-| Redirect hasil
-|--------------------------------------------------------------------------
-*/
+    mysqli_stmt_close(
+        $stmtHapus
+    );
 
-if ($berhasil) {
+    if ($jumlahTerhapus > 0) {
+        header(
+            "Location: riwayat_kelahiran.php?pesan=hapus_berhasil"
+        );
+        exit;
+    }
+
     header(
-        "Location: riwayat_kelahiran.php?pesan=hapus_berhasil"
+        "Location: riwayat_kelahiran.php?pesan=tidak_ditemukan"
+    );
+    exit;
+
+} catch (mysqli_sql_exception $exception) {
+
+    mysqli_stmt_close(
+        $stmtHapus
+    );
+
+    /*
+    |----------------------------------------------------------------------
+    | Tidak menghapus data turunan secara otomatis.
+    | Jika suatu saat riwayat ini dipakai tabel lain, tampilkan gagal hapus
+    | dan pertahankan integritas data.
+    |----------------------------------------------------------------------
+    */
+
+    header(
+        "Location: riwayat_kelahiran.php?pesan=gagal_hapus"
     );
     exit;
 }
-
-/*
-|--------------------------------------------------------------------------
-| Data masih digunakan oleh tabel lain
-|--------------------------------------------------------------------------
-*/
-
-if ($kodeError === 1451) {
-    header(
-        "Location: riwayat_kelahiran.php?pesan=data_digunakan"
-    );
-    exit;
-}
-
-header(
-    "Location: riwayat_kelahiran.php?pesan=gagal_hapus"
-);
-exit;

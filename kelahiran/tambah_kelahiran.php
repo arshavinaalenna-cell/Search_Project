@@ -5,14 +5,80 @@ require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
 cekRole([
-    "kader",
     "petugas_kia"
 ]);
 
 $judulHalaman =
     "Tambah Riwayat Kelahiran | Sistem Deteksi Stunting";
 
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
+
 $error = "";
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil Puskesmas Petugas KIA aktif
+|--------------------------------------------------------------------------
+*/
+
+$stmtPuskesmasAkun = mysqli_prepare(
+    $conn,
+    "SELECT
+        u.id_puskesmas,
+        p.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS p
+        ON u.id_puskesmas = p.id_puskesmas
+     WHERE u.id_user = ?
+     AND u.role = 'petugas_kia'
+     LIMIT 1"
+);
+
+if (!$stmtPuskesmasAkun) {
+    die(
+        "Gagal memeriksa Puskesmas Petugas KIA: "
+        . mysqli_error($conn)
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtPuskesmasAkun,
+    "i",
+    $idUserAktif
+);
+
+mysqli_stmt_execute($stmtPuskesmasAkun);
+
+$hasilPuskesmasAkun =
+    mysqli_stmt_get_result($stmtPuskesmasAkun);
+
+$dataPuskesmasAkun =
+    mysqli_fetch_assoc($hasilPuskesmasAkun);
+
+mysqli_stmt_close($stmtPuskesmasAkun);
+
+if (
+    !$dataPuskesmasAkun
+    || empty($dataPuskesmasAkun["id_puskesmas"])
+) {
+    $puskesmasBelumTerhubung = true;
+} else {
+    $idPuskesmasAktif =
+        (int) $dataPuskesmasAkun["id_puskesmas"];
+
+    $namaPuskesmasAktif =
+        trim(
+            (string) (
+                $dataPuskesmasAkun["nama_puskesmas"]
+                ?? ""
+            )
+        );
+}
 
 $old = [
     "id_balita" => "",
@@ -46,7 +112,10 @@ function amanTambahKelahiran($nilai): string
 |--------------------------------------------------------------------------
 */
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
+if (
+    $_SERVER["REQUEST_METHOD"] === "POST"
+    && !$puskesmasBelumTerhubung
+) {
 
     $old["id_balita"] =
         trim($_POST["id_balita"] ?? "");
@@ -158,13 +227,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             "SELECT id_balita
              FROM balita
              WHERE id_balita = ?
+             AND id_puskesmas = ?
              LIMIT 1"
         );
 
+        if (!$stmtBalita) {
+            die(
+                "Gagal memeriksa data balita: "
+                . mysqli_error($conn)
+            );
+        }
+
         mysqli_stmt_bind_param(
             $stmtBalita,
-            "i",
-            $idBalita
+            "ii",
+            $idBalita,
+            $idPuskesmasAktif
         );
 
         mysqli_stmt_execute(
@@ -187,9 +265,47 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         if (!$dataBalita) {
             $error =
-                "Balita tidak ditemukan.";
+                "Balita tidak ditemukan atau tidak termasuk Puskesmas akun Petugas KIA.";
 
         } else {
+
+            $stmtDuplikat = mysqli_prepare(
+                $conn,
+                "SELECT 1
+                 FROM riwayat_kelahiran
+                 WHERE id_balita = ?
+                 LIMIT 1"
+            );
+
+            if (!$stmtDuplikat) {
+                die(
+                    "Gagal memeriksa riwayat kelahiran: "
+                    . mysqli_error($conn)
+                );
+            }
+
+            mysqli_stmt_bind_param(
+                $stmtDuplikat,
+                "i",
+                $idBalita
+            );
+
+            mysqli_stmt_execute($stmtDuplikat);
+
+            $hasilDuplikat =
+                mysqli_stmt_get_result($stmtDuplikat);
+
+            $sudahAdaRiwayat =
+                mysqli_fetch_assoc($hasilDuplikat);
+
+            mysqli_stmt_close($stmtDuplikat);
+
+            if ($sudahAdaRiwayat) {
+
+                $error =
+                    "Balita yang dipilih sudah memiliki riwayat kelahiran.";
+
+            } else {
 
             $stmt = mysqli_prepare(
                 $conn,
@@ -246,6 +362,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             mysqli_stmt_close(
                 $stmt
             );
+            }
         }
     }
 }
@@ -254,24 +371,59 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 |--------------------------------------------------------------------------
 | Data balita
 |--------------------------------------------------------------------------
+|
+| Dropdown hanya menampilkan balita dari Puskesmas Petugas KIA aktif
+| yang belum memiliki riwayat kelahiran.
+|
 */
 
-$balita = mysqli_query(
-    $conn,
-    "SELECT
-        id_balita,
-        nik_balita,
-        nama_balita
-     FROM balita
-     ORDER BY nama_balita ASC"
-);
+if ($puskesmasBelumTerhubung) {
 
-if (!$balita) {
-    die(
-        "Gagal mengambil data balita: "
-        . mysqli_error($conn)
+    $balita = false;
+
+} else {
+
+    $stmtDaftarBalita = mysqli_prepare(
+        $conn,
+        "SELECT
+            b.id_balita,
+            b.nik_balita,
+            b.nama_balita
+         FROM balita AS b
+         LEFT JOIN riwayat_kelahiran AS rk
+            ON rk.id_balita = b.id_balita
+         WHERE b.id_puskesmas = ?
+         AND rk.id_balita IS NULL
+         ORDER BY b.nama_balita ASC"
     );
+
+    if (!$stmtDaftarBalita) {
+        die(
+            "Gagal menyiapkan data balita: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtDaftarBalita,
+        "i",
+        $idPuskesmasAktif
+    );
+
+    mysqli_stmt_execute($stmtDaftarBalita);
+
+    $balita =
+        mysqli_stmt_get_result($stmtDaftarBalita);
+
+    if (!$balita) {
+        mysqli_stmt_close($stmtDaftarBalita);
+        die("Gagal mengambil data balita.");
+    }
 }
+
+$adaBalitaTersedia =
+    $balita
+    && mysqli_num_rows($balita) > 0;
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
@@ -301,17 +453,47 @@ require_once "../includes/navbar.php";
 
                 </div>
 
-                <a
-                    href="riwayat_kelahiran.php"
-                    class="btn btn-secondary btn-sm"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali
-                </a>
+                <div class="d-flex flex-wrap gap-2">
+
+                    <?php if (!$puskesmasBelumTerhubung): ?>
+
+                        <span
+                            class="badge badge-info
+                            d-inline-flex align-items-center px-3"
+                        >
+                            <i class="bi bi-hospital me-1"></i>
+                            <?= amanTambahKelahiran(
+                                $namaPuskesmasAktif
+                            ); ?>
+                        </span>
+
+                    <?php endif; ?>
+
+                    <a
+                        href="riwayat_kelahiran.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                </div>
 
             </div>
 
             <div class="card-body">
+
+                <?php if ($puskesmasBelumTerhubung): ?>
+
+                    <div class="alert alert-warning" role="alert">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Akun Petugas KIA belum terhubung dengan
+                        Puskesmas. Hubungkan akun ke Puskesmas
+                        terlebih dahulu sebelum menambah
+                        riwayat kelahiran.
+                    </div>
+
+                <?php endif; ?>
 
                 <?php if ($error !== ""): ?>
 
@@ -325,6 +507,26 @@ require_once "../includes/navbar.php";
                     </div>
 
                 <?php endif; ?>
+
+                <?php if (!$puskesmasBelumTerhubung): ?>
+
+                <div class="detail-item mb-4">
+                    <span class="detail-label">
+                        Puskesmas
+                    </span>
+
+                    <span class="detail-value">
+                        <i class="bi bi-hospital me-1"></i>
+                        <?= amanTambahKelahiran(
+                            $namaPuskesmasAktif
+                        ); ?>
+                    </span>
+
+                    <div class="form-text mt-1">
+                        Wilayah otomatis mengikuti akun
+                        Petugas KIA dan tidak dapat diubah.
+                    </div>
+                </div>
 
                 <form method="POST">
 
@@ -341,43 +543,63 @@ require_once "../includes/navbar.php";
                                 name="id_balita"
                                 class="form-select"
                                 required
+                                <?= !$adaBalitaTersedia
+                                    ? "disabled"
+                                    : ""; ?>
                             >
 
                                 <option value="">
                                     -- Pilih Balita --
                                 </option>
 
-                                <?php while (
-                                    $b = mysqli_fetch_assoc($balita)
-                                ): ?>
+                                <?php if ($adaBalitaTersedia): ?>
 
-                                    <option
-                                        value="<?= (int) $b["id_balita"]; ?>"
-                                        <?= (
-                                            (string) $old["id_balita"]
-                                            ===
-                                            (string) $b["id_balita"]
-                                        )
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= amanTambahKelahiran(
-                                            $b["nama_balita"]
-                                        ); ?>
+                                    <?php while (
+                                        $b = mysqli_fetch_assoc($balita)
+                                    ): ?>
 
-                                        (<?= amanTambahKelahiran(
-                                            $b["nik_balita"]
-                                        ); ?>)
-                                    </option>
+                                        <option
+                                            value="<?= (int) $b["id_balita"]; ?>"
+                                            <?= (
+                                                (string) $old["id_balita"]
+                                                ===
+                                                (string) $b["id_balita"]
+                                            )
+                                                ? "selected"
+                                                : ""; ?>
+                                        >
+                                            <?= amanTambahKelahiran(
+                                                $b["nama_balita"]
+                                            ); ?>
 
-                                <?php endwhile; ?>
+                                            (<?= amanTambahKelahiran(
+                                                $b["nik_balita"]
+                                            ); ?>)
+                                        </option>
+
+                                    <?php endwhile; ?>
+
+                                <?php endif; ?>
 
                             </select>
 
                             <div class="form-text">
-                                Pilih balita yang akan dilengkapi
-                                riwayat kelahirannya.
+                                Hanya balita dari Puskesmas akun
+                                yang belum memiliki riwayat kelahiran
+                                yang ditampilkan.
                             </div>
+
+                            <?php if (!$adaBalitaTersedia): ?>
+
+                                <div class="alert alert-info mt-3 mb-0">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Tidak ada balita yang dapat dipilih.
+                                    Semua balita pada Puskesmas ini
+                                    mungkin sudah memiliki riwayat
+                                    kelahiran atau belum ada data balita.
+                                </div>
+
+                            <?php endif; ?>
 
                         </div>
 
@@ -605,6 +827,9 @@ require_once "../includes/navbar.php";
                         <button
                             type="submit"
                             class="btn btn-primary"
+                            <?= !$adaBalitaTersedia
+                                ? "disabled"
+                                : ""; ?>
                         >
                             <i class="bi bi-check-circle"></i>
                             Simpan Riwayat
@@ -622,6 +847,8 @@ require_once "../includes/navbar.php";
 
                 </form>
 
+                <?php endif; ?>
+
             </div>
 
         </div>
@@ -630,4 +857,9 @@ require_once "../includes/navbar.php";
 
 </div>
 
-<?php require_once "../includes/footer.php"; ?>
+<?php
+if (isset($stmtDaftarBalita)) {
+    mysqli_stmt_close($stmtDaftarBalita);
+}
+require_once "../includes/footer.php";
+?>

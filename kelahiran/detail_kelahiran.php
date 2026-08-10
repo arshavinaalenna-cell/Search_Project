@@ -11,12 +11,98 @@ require_once "../config/koneksi.php";
 */
 
 cekRole([
-    "kader",
     "petugas_kia"
 ]);
 
 $judulHalaman =
     "Detail Riwayat Kelahiran | Sistem Deteksi Stunting";
+
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil Puskesmas Petugas KIA aktif
+|--------------------------------------------------------------------------
+|
+| Detail hanya boleh dibuka jika riwayat balita berasal dari
+| Puskesmas yang sama dengan akun Petugas KIA.
+|
+*/
+
+$stmtPuskesmasAkun = mysqli_prepare(
+    $conn,
+    "SELECT
+        u.id_puskesmas,
+        p.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS p
+        ON u.id_puskesmas = p.id_puskesmas
+     WHERE u.id_user = ?
+     AND u.role = 'petugas_kia'
+     LIMIT 1"
+);
+
+if (!$stmtPuskesmasAkun) {
+    die(
+        "Gagal memeriksa Puskesmas Petugas KIA: "
+        . mysqli_error($conn)
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtPuskesmasAkun,
+    "i",
+    $idUserAktif
+);
+
+mysqli_stmt_execute(
+    $stmtPuskesmasAkun
+);
+
+$hasilPuskesmasAkun =
+    mysqli_stmt_get_result(
+        $stmtPuskesmasAkun
+    );
+
+$dataPuskesmasAkun =
+    mysqli_fetch_assoc(
+        $hasilPuskesmasAkun
+    );
+
+mysqli_stmt_close(
+    $stmtPuskesmasAkun
+);
+
+if (
+    !$dataPuskesmasAkun
+    || empty(
+        $dataPuskesmasAkun["id_puskesmas"]
+    )
+) {
+    header(
+        "Location: riwayat_kelahiran.php?pesan=puskesmas_belum_terhubung"
+    );
+    exit;
+}
+
+$idPuskesmasAktif =
+    (int) $dataPuskesmasAkun[
+        "id_puskesmas"
+    ];
+
+$namaPuskesmasAktif =
+    trim(
+        (string) (
+            $dataPuskesmasAkun[
+                "nama_puskesmas"
+            ]
+            ?? ""
+        )
+    );
 
 /*
 |--------------------------------------------------------------------------
@@ -86,6 +172,7 @@ $sql = "
     LEFT JOIN puskesmas AS p
         ON b.id_puskesmas = p.id_puskesmas
     WHERE rk.`$kolomPrimaryKey` = ?
+    AND b.id_puskesmas = ?
     LIMIT 1
 ";
 
@@ -103,8 +190,9 @@ if (!$stmt) {
 
 mysqli_stmt_bind_param(
     $stmt,
-    "i",
-    $idRiwayat
+    "ii",
+    $idRiwayat,
+    $idPuskesmasAktif
 );
 
 mysqli_stmt_execute($stmt);
@@ -178,46 +266,29 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div class="page-header">
-
-            <div>
-
-                <h1 class="page-title">
-                    <i class="bi bi-file-earmark-medical me-2"></i>
-                    Detail Riwayat Kelahiran
-                </h1>
-
-                <p class="page-subtitle">
-                    Informasi lengkap riwayat kelahiran dan
-                    identitas balita.
-                </p>
-
-            </div>
-
-            <a
-                href="riwayat_kelahiran.php"
-                class="btn btn-secondary btn-sm"
-            >
-                <i class="bi bi-arrow-left"></i>
-                Kembali
-            </a>
-
-        </div>
-
         <div class="card content-card">
 
-            <div class="card-header">
+            <div
+                class="card-header
+                d-flex
+                flex-wrap
+                justify-content-between
+                align-items-center
+                gap-3"
+            >
 
                 <div>
 
                     <h4 class="mb-1">
-                        <?= amanDetailKelahiran(
-                            $data["nama_balita"]
-                        ); ?>
+                        <i class="bi bi-balloon-heart me-2"></i>
+                        Detail Riwayat Kelahiran
                     </h4>
 
                     <small class="text-muted">
-                        NIK:
+                        <?= amanDetailKelahiran(
+                            $data["nama_balita"]
+                        ); ?>
+                        · NIK
                         <?= amanDetailKelahiran(
                             $data["nik_balita"]
                         ); ?>
@@ -225,262 +296,303 @@ require_once "../includes/navbar.php";
 
                 </div>
 
-                <span class="badge badge-info">
-                    <i class="bi bi-balloon-heart"></i>
-                    Riwayat Kelahiran
-                </span>
+                <div class="d-flex flex-wrap gap-2">
+
+                    <span
+                        class="badge badge-info
+                        d-inline-flex
+                        align-items-center
+                        px-3"
+                    >
+                        <i class="bi bi-hospital me-1"></i>
+                        <?= amanDetailKelahiran(
+                            $data["nama_puskesmas"]
+                        ); ?>
+                    </span>
+
+                    <a
+                        href="edit_kelahiran.php?id=<?= $idRiwayat; ?>"
+                        class="btn btn-warning btn-sm"
+                    >
+                        <i class="bi bi-pencil-square"></i>
+                        Edit
+                    </a>
+
+                    <a
+                        href="riwayat_kelahiran.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                </div>
 
             </div>
 
             <div class="card-body">
 
-                <h5 class="mb-3">
-                    <i class="bi bi-person-vcard me-2"></i>
-                    Identitas Balita
-                </h5>
+                <div class="row g-4">
 
-                <div class="table-responsive mb-4">
+                    <div class="col-12 col-lg-6">
 
-                    <table class="table table-bordered align-middle mb-0">
+                        <div class="detail-item h-100">
 
-                        <tbody>
+                            <div class="mb-3">
 
-                            <tr>
-                                <th style="width: 28%;">
-                                    Nama Balita
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["nama_balita"]
-                                    ); ?>
-                                </td>
-                            </tr>
+                                <span class="badge badge-primary">
+                                    <i class="bi bi-person-vcard"></i>
+                                    Identitas Balita
+                                </span>
 
-                            <tr>
-                                <th>
-                                    NIK
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["nik_balita"]
-                                    ); ?>
-                                </td>
-                            </tr>
+                            </div>
 
-                            <tr>
-                                <th>
-                                    Jenis Kelamin
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["jenis_kelamin"]
-                                    ); ?>
-                                </td>
-                            </tr>
+                            <div class="detail-grid">
 
-                            <tr>
-                                <th>
-                                    Tanggal Lahir
-                                </th>
-                                <td>
-                                    <?= formatTanggalKelahiran(
-                                        $data["tanggal_lahir"]
-                                    ); ?>
-                                </td>
-                            </tr>
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Nama Balita
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["nama_balita"]
+                                        ); ?>
+                                    </span>
+                                </div>
 
-                            <tr>
-                                <th>
-                                    Nama Ibu
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["nama_ibu"]
-                                    ); ?>
-                                </td>
-                            </tr>
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        NIK
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["nik_balita"]
+                                        ); ?>
+                                    </span>
+                                </div>
 
-                            <tr>
-                                <th>
-                                    Posyandu
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["nama_posyandu"]
-                                    ); ?>
-                                </td>
-                            </tr>
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Jenis Kelamin
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["jenis_kelamin"]
+                                        ); ?>
+                                    </span>
+                                </div>
 
-                            <tr>
-                                <th>
-                                    Puskesmas
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["nama_puskesmas"]
-                                    ); ?>
-                                </td>
-                            </tr>
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Tanggal Lahir
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= formatTanggalKelahiran(
+                                            $data["tanggal_lahir"]
+                                        ); ?>
+                                    </span>
+                                </div>
 
-                            <tr>
-                                <th>
-                                    Alamat
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["alamat"]
-                                    ); ?>
-                                </td>
-                            </tr>
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Nama Ibu
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["nama_ibu"]
+                                        ); ?>
+                                    </span>
+                                </div>
 
-                        </tbody>
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Posyandu
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["nama_posyandu"]
+                                        ); ?>
+                                    </span>
+                                </div>
 
-                    </table>
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Puskesmas
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["nama_puskesmas"]
+                                        ); ?>
+                                    </span>
+                                </div>
 
-                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Alamat
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["alamat"]
+                                        ); ?>
+                                    </span>
+                                </div>
 
-                <h5 class="mb-3">
-                    <i class="bi bi-heart-pulse me-2"></i>
-                    Data Kelahiran
-                </h5>
+                            </div>
 
-                <div class="table-responsive">
+                        </div>
 
-                    <table class="table table-bordered align-middle mb-0">
+                    </div>
 
-                        <tbody>
+                    <div class="col-12 col-lg-6">
 
-                            <tr>
-                                <th style="width: 28%;">
-                                    Berat Lahir
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["berat_lahir"]
-                                        ?? null
-                                    ); ?>
-                                    <?= isset($data["berat_lahir"])
-                                        && $data["berat_lahir"] !== null
-                                        && $data["berat_lahir"] !== ""
-                                        ? " kg"
-                                        : ""; ?>
-                                </td>
-                            </tr>
+                        <div class="detail-item h-100">
 
-                            <tr>
-                                <th>
-                                    Panjang Lahir
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["panjang_lahir"]
-                                        ?? null
-                                    ); ?>
-                                    <?= isset($data["panjang_lahir"])
-                                        && $data["panjang_lahir"] !== null
-                                        && $data["panjang_lahir"] !== ""
-                                        ? " cm"
-                                        : ""; ?>
-                                </td>
-                            </tr>
+                            <div class="mb-3">
 
-                            <tr>
-                                <th>
-                                    Usia Kehamilan
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["usia_kehamilan"]
-                                        ?? null
-                                    ); ?>
-                                    <?= isset($data["usia_kehamilan"])
-                                        && $data["usia_kehamilan"] !== null
-                                        && $data["usia_kehamilan"] !== ""
-                                        ? " minggu"
-                                        : ""; ?>
-                                </td>
-                            </tr>
+                                <span class="badge badge-info">
+                                    <i class="bi bi-heart-pulse"></i>
+                                    Data Kelahiran
+                                </span>
 
-                            <tr>
-                                <th>
-                                    Jenis Persalinan
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["jenis_persalinan"]
-                                        ?? null
-                                    ); ?>
-                                </td>
-                            </tr>
+                            </div>
 
-                            <tr>
-                                <th>
-                                    Usia Ibu Saat Melahirkan
-                                </th>
-                                <td>
-                                    <?= amanDetailKelahiran(
-                                        $data["usia_ibu_melahirkan"]
-                                        ?? null
-                                    ); ?>
-                                    <?= isset($data["usia_ibu_melahirkan"])
-                                        && $data["usia_ibu_melahirkan"] !== null
-                                        && $data["usia_ibu_melahirkan"] !== ""
-                                        ? " tahun"
-                                        : ""; ?>
-                                </td>
-                            </tr>
+                            <div class="detail-grid">
 
-                            <tr>
-                                <th>
-                                    Riwayat Kehamilan
-                                </th>
-                                <td>
-                                    <?= nl2br(
-                                        amanDetailKelahiran(
-                                            $data["riwayat_kehamilan"]
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Berat Lahir
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["berat_lahir"]
                                             ?? null
+                                        ); ?>
+                                        <?= isset(
+                                            $data["berat_lahir"]
                                         )
-                                    ); ?>
-                                </td>
-                            </tr>
+                                            && $data["berat_lahir"] !== null
+                                            && $data["berat_lahir"] !== ""
+                                            ? " kg"
+                                            : ""; ?>
+                                    </span>
+                                </div>
 
-                            <tr>
-                                <th>
-                                    Komplikasi Kehamilan
-                                </th>
-                                <td>
-                                    <?= nl2br(
-                                        amanDetailKelahiran(
-                                            $data["komplikasi_kehamilan"]
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Panjang Lahir
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["panjang_lahir"]
                                             ?? null
+                                        ); ?>
+                                        <?= isset(
+                                            $data["panjang_lahir"]
                                         )
-                                    ); ?>
-                                </td>
-                            </tr>
+                                            && $data["panjang_lahir"] !== null
+                                            && $data["panjang_lahir"] !== ""
+                                            ? " cm"
+                                            : ""; ?>
+                                    </span>
+                                </div>
 
-                        </tbody>
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Usia Kehamilan
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["usia_kehamilan"]
+                                            ?? null
+                                        ); ?>
+                                        <?= isset(
+                                            $data["usia_kehamilan"]
+                                        )
+                                            && $data["usia_kehamilan"] !== null
+                                            && $data["usia_kehamilan"] !== ""
+                                            ? " minggu"
+                                            : ""; ?>
+                                    </span>
+                                </div>
 
-                    </table>
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Jenis Persalinan
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["jenis_persalinan"]
+                                            ?? null
+                                        ); ?>
+                                    </span>
+                                </div>
 
-                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">
+                                        Usia Ibu Saat Melahirkan
+                                    </span>
+                                    <span class="detail-value">
+                                        <?= amanDetailKelahiran(
+                                            $data["usia_ibu_melahirkan"]
+                                            ?? null
+                                        ); ?>
+                                        <?= isset(
+                                            $data["usia_ibu_melahirkan"]
+                                        )
+                                            && $data["usia_ibu_melahirkan"] !== null
+                                            && $data["usia_ibu_melahirkan"] !== ""
+                                            ? " tahun"
+                                            : ""; ?>
+                                    </span>
+                                </div>
 
-                <div class="form-actions mt-4">
+                            </div>
 
-                    <a
-                        href="edit_kelahiran.php?id=<?= $idRiwayat; ?>"
-                        class="btn btn-warning"
-                    >
-                        <i class="bi bi-pencil-square"></i>
-                        Edit Riwayat
-                    </a>
+                        </div>
 
-                    <a
-                        href="riwayat_kelahiran.php"
-                        class="btn btn-outline-secondary"
-                    >
-                        <i class="bi bi-arrow-left"></i>
-                        Kembali ke Daftar
-                    </a>
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Riwayat Kehamilan
+                            </span>
+
+                            <div class="detail-value mt-2">
+                                <?= nl2br(
+                                    amanDetailKelahiran(
+                                        $data["riwayat_kehamilan"]
+                                        ?? null
+                                    )
+                                ); ?>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Komplikasi Kehamilan
+                            </span>
+
+                            <div class="detail-value mt-2">
+                                <?= nl2br(
+                                    amanDetailKelahiran(
+                                        $data["komplikasi_kehamilan"]
+                                        ?? null
+                                    )
+                                ); ?>
+                            </div>
+
+                        </div>
+
+                    </div>
 
                 </div>
 

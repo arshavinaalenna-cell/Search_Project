@@ -631,6 +631,75 @@ require_once "../includes/navbar.php";
 
 ?>
 
+<style>
+    /* =========================================================
+       UI KHUSUS HALAMAN HASIL SKRINING
+       Tidak mengubah logic, query, role, atau relasi data.
+    ========================================================== */
+
+    .skrining-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 18px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid rgba(0, 0, 0, .06);
+    }
+
+    .skrining-toolbar-left {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .skrining-filter-box {
+        margin-bottom: 20px;
+        padding: 16px;
+        border: 1px solid rgba(0, 0, 0, .07);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, .55);
+    }
+
+    .skrining-filter-box .form-label {
+        font-weight: 600;
+    }
+
+    .skrining-table th {
+        white-space: nowrap;
+    }
+
+    .skrining-table td {
+        vertical-align: middle;
+    }
+
+    .skrining-table .nama-balita {
+        min-width: 150px;
+    }
+
+    .skrining-table .aksi-skrining {
+        min-width: 150px;
+    }
+
+    .skrining-modal-summary {
+        padding: 18px;
+        border-radius: 14px;
+        background: rgba(0, 0, 0, .025);
+    }
+
+    @media (max-width: 767.98px) {
+        .skrining-toolbar {
+            align-items: flex-start;
+        }
+
+        .skrining-filter-box {
+            padding: 14px;
+        }
+    }
+</style>
+
 <div class="layout-wrapper">
 
     <?php
@@ -797,34 +866,17 @@ require_once "../includes/navbar.php";
                      INFORMASI DAFTAR
                 ================================================== -->
 
-                <div
-                    class="d-flex
-                    flex-wrap
-                    justify-content-between
-                    align-items-center
-                    gap-2
-                    mb-4"
-                >
+                <div class="skrining-toolbar">
 
-                    <div>
+                    <div class="skrining-toolbar-left">
 
-                        <h5 class="mb-1">
-                            Daftar Skrining Balita
-                        </h5>
+                        <span class="badge badge-primary">
 
-                        <small class="text-muted">
+                            <i class="bi bi-clipboard2-data"></i>
 
-                            Total
-                            <strong>
-                                <?= $totalData; ?>
-                            </strong>
-                            data skrining.
+                            <?= $totalData; ?> data
 
-                        </small>
-
-                    </div>
-
-                    <div>
+                        </span>
 
                         <?php
                         if (
@@ -833,15 +885,9 @@ require_once "../includes/navbar.php";
                         ):
                         ?>
 
-                            <span
-                                class="badge
-                                badge-info"
-                            >
+                            <span class="badge badge-info">
 
-                                <i
-                                    class="bi
-                                    bi-pencil-square"
-                                ></i>
+                                <i class="bi bi-pencil-square"></i>
 
                                 Input Kader
 
@@ -854,15 +900,9 @@ require_once "../includes/navbar.php";
                         ):
                         ?>
 
-                            <span
-                                class="badge
-                                badge-info"
-                            >
+                            <span class="badge badge-info">
 
-                                <i
-                                    class="bi
-                                    bi-search-heart"
-                                ></i>
+                                <i class="bi bi-search-heart"></i>
 
                                 Analisis Gizi
 
@@ -872,15 +912,9 @@ require_once "../includes/navbar.php";
                         else:
                         ?>
 
-                            <span
-                                class="badge
-                                badge-info"
-                            >
+                            <span class="badge badge-info">
 
-                                <i
-                                    class="bi
-                                    bi-eye"
-                                ></i>
+                                <i class="bi bi-eye"></i>
 
                                 Monitoring
 
@@ -889,6 +923,10 @@ require_once "../includes/navbar.php";
                         <?php endif; ?>
 
                     </div>
+
+                    <small class="text-muted">
+                        Daftar skrining awal dan status terbaru balita.
+                    </small>
 
                 </div>
 
@@ -903,11 +941,12 @@ require_once "../includes/navbar.php";
                 ):
                 ?>
 
+                    <div class="skrining-filter-box">
+
                     <form
                         method="GET"
                         class="row
                         g-2
-                        mb-4
                         align-items-end"
                     >
 
@@ -984,6 +1023,7 @@ require_once "../includes/navbar.php";
                                 type="submit"
                                 class="btn
                                 btn-primary
+                                btn-sm
                                 w-100"
                             >
 
@@ -1007,6 +1047,7 @@ require_once "../includes/navbar.php";
                                 href="hasil_skrining.php"
                                 class="btn
                                 btn-light
+                                btn-sm
                                 w-100"
                             >
 
@@ -1023,6 +1064,8 @@ require_once "../includes/navbar.php";
 
                     </form>
 
+                    </div>
+
                 <?php endif; ?>
 
                 <!-- =================================================
@@ -1034,7 +1077,8 @@ require_once "../includes/navbar.php";
                     <table
                         class="table
                         table-hover
-                        align-middle"
+                        align-middle
+                        skrining-table"
                     >
 
                         <thead>
@@ -1168,7 +1212,7 @@ require_once "../includes/navbar.php";
                                     </td>
 
                                     <!-- BALITA -->
-                                    <td>
+                                    <td class="nama-balita">
 
                                         <div
                                             class="d-flex
@@ -1351,7 +1395,7 @@ require_once "../includes/navbar.php";
                                     ):
                                     ?>
 
-                                        <td>
+                                        <td class="aksi-skrining">
 
                                             <div
                                                 class="table-actions
@@ -1607,7 +1651,8 @@ require_once "../includes/navbar.php";
 
                     <div
                         class="text-center
-                        mb-4"
+                        mb-4
+                        skrining-modal-summary"
                     >
 
                         <div

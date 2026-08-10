@@ -4,8 +4,13 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+/*
+|--------------------------------------------------------------------------
+| Hak akses
+|--------------------------------------------------------------------------
+*/
+
 cekRole([
-    "kader",
     "petugas_kia"
 ]);
 
@@ -13,6 +18,12 @@ $judulHalaman =
     "Edit Riwayat Kelahiran | Sistem Deteksi Stunting";
 
 $error = "";
+
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
 
 /*
 |--------------------------------------------------------------------------
@@ -28,6 +39,83 @@ function amanEditKelahiran($nilai): string
         "UTF-8"
     );
 }
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil Puskesmas Petugas KIA aktif
+|--------------------------------------------------------------------------
+*/
+
+$stmtPuskesmasAkun = mysqli_prepare(
+    $conn,
+    "SELECT
+        u.id_puskesmas,
+        p.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS p
+        ON u.id_puskesmas = p.id_puskesmas
+     WHERE u.id_user = ?
+     AND u.role = 'petugas_kia'
+     LIMIT 1"
+);
+
+if (!$stmtPuskesmasAkun) {
+    die(
+        "Gagal memeriksa Puskesmas Petugas KIA: "
+        . mysqli_error($conn)
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtPuskesmasAkun,
+    "i",
+    $idUserAktif
+);
+
+mysqli_stmt_execute(
+    $stmtPuskesmasAkun
+);
+
+$hasilPuskesmasAkun =
+    mysqli_stmt_get_result(
+        $stmtPuskesmasAkun
+    );
+
+$dataPuskesmasAkun =
+    mysqli_fetch_assoc(
+        $hasilPuskesmasAkun
+    );
+
+mysqli_stmt_close(
+    $stmtPuskesmasAkun
+);
+
+if (
+    !$dataPuskesmasAkun
+    || empty(
+        $dataPuskesmasAkun["id_puskesmas"]
+    )
+) {
+    header(
+        "Location: riwayat_kelahiran.php"
+    );
+    exit;
+}
+
+$idPuskesmasAktif =
+    (int) $dataPuskesmasAkun[
+        "id_puskesmas"
+    ];
+
+$namaPuskesmasAktif =
+    trim(
+        (string) (
+            $dataPuskesmasAkun[
+                "nama_puskesmas"
+            ]
+            ?? ""
+        )
+    );
 
 /*
 |--------------------------------------------------------------------------
@@ -52,13 +140,27 @@ if (!$id || $id < 1) {
 |--------------------------------------------------------------------------
 | Ambil data lama
 |--------------------------------------------------------------------------
+|
+| Riwayat hanya dapat dibuka jika balita berasal dari Puskesmas
+| yang sama dengan akun Petugas KIA.
+|
 */
 
 $stmt = mysqli_prepare(
     $conn,
-    "SELECT *
-     FROM riwayat_kelahiran
-     WHERE id_kelahiran = ?
+    "SELECT
+        rk.*,
+        b.nama_balita,
+        b.nik_balita,
+        b.id_puskesmas,
+        p.nama_puskesmas
+     FROM riwayat_kelahiran AS rk
+     INNER JOIN balita AS b
+        ON rk.id_balita = b.id_balita
+     LEFT JOIN puskesmas AS p
+        ON b.id_puskesmas = p.id_puskesmas
+     WHERE rk.id_kelahiran = ?
+     AND b.id_puskesmas = ?
      LIMIT 1"
 );
 
@@ -71,8 +173,9 @@ if (!$stmt) {
 
 mysqli_stmt_bind_param(
     $stmt,
-    "i",
-    $id
+    "ii",
+    $id,
+    $idPuskesmasAktif
 );
 
 mysqli_stmt_execute($stmt);
@@ -94,13 +197,29 @@ if (!$data) {
 
 /*
 |--------------------------------------------------------------------------
+| Relasi balita dikunci
+|--------------------------------------------------------------------------
+|
+| Edit riwayat kelahiran tidak boleh memindahkan riwayat ke balita lain.
+|
+*/
+
+$idBalitaTetap =
+    (int) $data["id_balita"];
+
+$namaBalita =
+    (string) ($data["nama_balita"] ?? "");
+
+$nikBalita =
+    (string) ($data["nik_balita"] ?? "");
+
+/*
+|--------------------------------------------------------------------------
 | Data form
 |--------------------------------------------------------------------------
 */
 
 $form = [
-    "id_balita" =>
-        (string) ($data["id_balita"] ?? ""),
     "berat_lahir" =>
         (string) ($data["berat_lahir"] ?? ""),
     "panjang_lahir" =>
@@ -125,9 +244,6 @@ $form = [
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
-    $form["id_balita"] =
-        trim($_POST["id_balita"] ?? "");
-
     $form["berat_lahir"] =
         trim($_POST["berat_lahir"] ?? "");
 
@@ -148,11 +264,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $form["komplikasi_kehamilan"] =
         trim($_POST["komplikasi_kehamilan"] ?? "");
-
-    $idBalita = filter_var(
-        $form["id_balita"],
-        FILTER_VALIDATE_INT
-    );
 
     $beratLahir = filter_var(
         $form["berat_lahir"],
@@ -175,22 +286,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     );
 
     if (
-        $form["id_balita"] === ""
-        || $form["berat_lahir"] === ""
+        $form["berat_lahir"] === ""
         || $form["panjang_lahir"] === ""
         || $form["usia_kehamilan"] === ""
         || $form["jenis_persalinan"] === ""
         || $form["usia_ibu_melahirkan"] === ""
     ) {
         $error =
-            "Nama balita, berat lahir, panjang lahir, usia kehamilan, jenis persalinan, dan usia ibu saat melahirkan wajib diisi.";
-
-    } elseif (
-        $idBalita === false
-        || $idBalita < 1
-    ) {
-        $error =
-            "Data balita tidak valid.";
+            "Berat lahir, panjang lahir, usia kehamilan, jenis persalinan, dan usia ibu saat melahirkan wajib diisi.";
 
     } elseif (
         $beratLahir === false
@@ -228,7 +331,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $conn,
             "UPDATE riwayat_kelahiran
              SET
-                id_balita = ?,
                 berat_lahir = ?,
                 panjang_lahir = ?,
                 usia_kehamilan = ?,
@@ -236,7 +338,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 usia_ibu_melahirkan = ?,
                 riwayat_kehamilan = ?,
                 komplikasi_kehamilan = ?
-             WHERE id_kelahiran = ?"
+             WHERE id_kelahiran = ?
+             AND id_balita = ?"
         );
 
         if (!$update) {
@@ -248,8 +351,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         mysqli_stmt_bind_param(
             $update,
-            "iddisissi",
-            $idBalita,
+            "ddisissii",
             $beratLahir,
             $panjangLahir,
             $usiaKehamilan,
@@ -257,7 +359,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $usiaIbuMelahirkan,
             $form["riwayat_kehamilan"],
             $form["komplikasi_kehamilan"],
-            $id
+            $id,
+            $idBalitaTetap
         );
 
         if (
@@ -282,29 +385,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Data balita
-|--------------------------------------------------------------------------
-*/
-
-$balita = mysqli_query(
-    $conn,
-    "SELECT
-        id_balita,
-        nik_balita,
-        nama_balita
-     FROM balita
-     ORDER BY nama_balita ASC"
-);
-
-if (!$balita) {
-    die(
-        "Gagal mengambil data balita: "
-        . mysqli_error($conn)
-    );
-}
-
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
 
@@ -318,27 +398,52 @@ require_once "../includes/navbar.php";
 
         <div class="card content-card">
 
-            <div class="card-header">
+            <div
+                class="card-header
+                d-flex
+                flex-wrap
+                justify-content-between
+                align-items-center
+                gap-3"
+            >
 
                 <div>
 
                     <h4 class="mb-1">
+                        <i class="bi bi-pencil-square me-2"></i>
                         Edit Riwayat Kelahiran
                     </h4>
 
                     <small class="text-muted">
-                        Perbarui data riwayat kelahiran balita.
+                        Perbarui data kelahiran tanpa mengubah
+                        balita dan Puskesmas yang terhubung.
                     </small>
 
                 </div>
 
-                <a
-                    href="riwayat_kelahiran.php"
-                    class="btn btn-secondary btn-sm"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali
-                </a>
+                <div class="d-flex flex-wrap gap-2">
+
+                    <span
+                        class="badge badge-info
+                        d-inline-flex
+                        align-items-center
+                        px-3"
+                    >
+                        <i class="bi bi-hospital me-1"></i>
+                        <?= amanEditKelahiran(
+                            $namaPuskesmasAktif
+                        ); ?>
+                    </span>
+
+                    <a
+                        href="riwayat_kelahiran.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                </div>
 
             </div>
 
@@ -357,52 +462,64 @@ require_once "../includes/navbar.php";
 
                 <?php endif; ?>
 
+                <div class="row g-3 mb-4">
+
+                    <div class="col-12 col-md-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Balita
+                            </span>
+
+                            <div class="detail-value mt-1">
+                                <strong>
+                                    <?= amanEditKelahiran(
+                                        $namaBalita
+                                    ); ?>
+                                </strong>
+                            </div>
+
+                            <div class="form-text">
+                                NIK:
+                                <?= amanEditKelahiran(
+                                    $nikBalita
+                                ); ?>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-md-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Puskesmas
+                            </span>
+
+                            <div class="detail-value mt-1">
+                                <i class="bi bi-hospital me-1"></i>
+                                <?= amanEditKelahiran(
+                                    $namaPuskesmasAktif
+                                ); ?>
+                            </div>
+
+                            <div class="form-text">
+                                Balita dan Puskesmas dikunci agar
+                                riwayat tidak berpindah ke data lain.
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
                 <form method="POST">
 
                     <div class="row g-3">
-
-                        <div class="col-12">
-
-                            <label class="form-label">
-                                Nama Balita
-                                <span class="text-danger">*</span>
-                            </label>
-
-                            <select
-                                name="id_balita"
-                                class="form-select"
-                                required
-                            >
-
-                                <?php while (
-                                    $b = mysqli_fetch_assoc($balita)
-                                ): ?>
-
-                                    <option
-                                        value="<?= (int) $b["id_balita"]; ?>"
-                                        <?= (
-                                            (string) $form["id_balita"]
-                                            ===
-                                            (string) $b["id_balita"]
-                                        )
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= amanEditKelahiran(
-                                            $b["nama_balita"]
-                                        ); ?>
-
-                                        -
-                                        <?= amanEditKelahiran(
-                                            $b["nik_balita"]
-                                        ); ?>
-                                    </option>
-
-                                <?php endwhile; ?>
-
-                            </select>
-
-                        </div>
 
                         <div class="col-12 col-md-6">
 
