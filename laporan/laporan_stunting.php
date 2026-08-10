@@ -388,6 +388,19 @@ $totalRisikoRendah = 0;
 $totalRisikoSedang = 0;
 $totalRisikoTinggi = 0;
 
+/*
+|--------------------------------------------------------------------------
+| Data agregasi untuk grafik
+|--------------------------------------------------------------------------
+|
+| Grafik dihitung dari hasil laporan yang sudah terkena filter periode
+| dan Puskesmas. Tidak ada data tambahan yang disimpan ke database.
+|
+*/
+
+$grafikStatusGizi = [];
+$grafikTrenBulanan = [];
+
 while (
     $data = mysqli_fetch_assoc($resultLaporan)
 ) {
@@ -443,9 +456,145 @@ while (
     ) {
         $totalRisikoTinggi++;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rekap status gizi
+    |--------------------------------------------------------------------------
+    */
+
+    $statusGiziGrafik = trim(
+        (string) (
+            $data["status_gizi"] ?? ""
+        )
+    );
+
+    if ($statusGiziGrafik === "") {
+        $statusGiziGrafik = "Belum Diketahui";
+    }
+
+    if (!isset(
+        $grafikStatusGizi[$statusGiziGrafik]
+    )) {
+        $grafikStatusGizi[
+            $statusGiziGrafik
+        ] = 0;
+    }
+
+    $grafikStatusGizi[
+        $statusGiziGrafik
+    ]++;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rekap tren deteksi per bulan
+    |--------------------------------------------------------------------------
+    */
+
+    $tanggalDeteksiGrafik =
+        $data["tanggal_deteksi"] ?? "";
+
+    if (
+        $tanggalDeteksiGrafik !== ""
+        && $tanggalDeteksiGrafik !==
+            "0000-00-00"
+    ) {
+        $waktuGrafik = strtotime(
+            $tanggalDeteksiGrafik
+        );
+
+        if ($waktuGrafik !== false) {
+            $kunciBulan = date(
+                "Y-m",
+                $waktuGrafik
+            );
+
+            if (!isset(
+                $grafikTrenBulanan[
+                    $kunciBulan
+                ]
+            )) {
+                $grafikTrenBulanan[
+                    $kunciBulan
+                ] = 0;
+            }
+
+            $grafikTrenBulanan[
+                $kunciBulan
+            ]++;
+        }
+    }
 }
 
 mysqli_stmt_close($stmtLaporan);
+
+/*
+|--------------------------------------------------------------------------
+| Menyiapkan data grafik
+|--------------------------------------------------------------------------
+*/
+
+ksort($grafikStatusGizi);
+ksort($grafikTrenBulanan);
+
+$namaBulanIndonesia = [
+    1 => "Jan",
+    2 => "Feb",
+    3 => "Mar",
+    4 => "Apr",
+    5 => "Mei",
+    6 => "Jun",
+    7 => "Jul",
+    8 => "Agu",
+    9 => "Sep",
+    10 => "Okt",
+    11 => "Nov",
+    12 => "Des"
+];
+
+$labelTrenBulanan = [];
+$dataTrenBulanan = [];
+
+foreach (
+    $grafikTrenBulanan
+    as $bulan => $jumlah
+) {
+    [$tahunGrafik, $nomorBulan] =
+        array_map(
+            "intval",
+            explode("-", $bulan)
+        );
+
+    $labelTrenBulanan[] =
+        (
+            $namaBulanIndonesia[
+                $nomorBulan
+            ] ?? $nomorBulan
+        )
+        . " "
+        . $tahunGrafik;
+
+    $dataTrenBulanan[] =
+        (int) $jumlah;
+}
+
+$labelStatusGizi =
+    array_keys($grafikStatusGizi);
+
+$dataStatusGizi =
+    array_values($grafikStatusGizi);
+
+$labelRisiko = [
+    "Risiko Rendah",
+    "Risiko Sedang",
+    "Risiko Tinggi"
+];
+
+$dataRisiko = [
+    $totalRisikoRendah,
+    $totalRisikoSedang,
+    $totalRisikoTinggi
+];
 
 /*
 |--------------------------------------------------------------------------
@@ -787,6 +936,145 @@ require_once "../includes/navbar.php";
 
         </div>
 
+        <!-- Visualisasi laporan -->
+        <div class="card content-card">
+
+            <div class="card-header">
+
+                <div>
+
+                    <h4 class="mb-1">
+                        Grafik Laporan Stunting
+                    </h4>
+
+                    <small class="text-muted">
+                        Visualisasi otomatis berdasarkan periode
+                        dan Puskesmas yang sedang dipilih.
+                    </small>
+
+                </div>
+
+                <span class="badge badge-info">
+                    <i class="bi bi-bar-chart-line"></i>
+                    Visualisasi
+                </span>
+
+            </div>
+
+            <div class="card-body">
+
+                <?php if ($totalDeteksi > 0): ?>
+
+                    <div class="row g-4">
+
+                        <div class="col-12 col-xl-4">
+
+                            <div
+                                class="detail-item h-100"
+                                style="min-height: 360px;"
+                            >
+
+                                <span class="detail-label">
+                                    Komposisi Tingkat Risiko
+                                </span>
+
+                                <div
+                                    style="
+                                        position: relative;
+                                        height: 300px;
+                                    "
+                                >
+                                    <canvas
+                                        id="grafikRisiko"
+                                        aria-label="Grafik komposisi tingkat risiko"
+                                    ></canvas>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-xl-8">
+
+                            <div
+                                class="detail-item h-100"
+                                style="min-height: 360px;"
+                            >
+
+                                <span class="detail-label">
+                                    Tren Jumlah Deteksi per Bulan
+                                </span>
+
+                                <div
+                                    style="
+                                        position: relative;
+                                        height: 300px;
+                                    "
+                                >
+                                    <canvas
+                                        id="grafikTren"
+                                        aria-label="Grafik tren deteksi per bulan"
+                                    ></canvas>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="col-12">
+
+                            <div
+                                class="detail-item"
+                                style="min-height: 380px;"
+                            >
+
+                                <span class="detail-label">
+                                    Distribusi Status Gizi
+                                </span>
+
+                                <div
+                                    style="
+                                        position: relative;
+                                        height: 320px;
+                                    "
+                                >
+                                    <canvas
+                                        id="grafikStatusGizi"
+                                        aria-label="Grafik distribusi status gizi"
+                                    ></canvas>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                <?php else: ?>
+
+                    <div class="empty-state">
+
+                        <div class="empty-state-icon">
+                            <i class="bi bi-bar-chart"></i>
+                        </div>
+
+                        <h3>
+                            Grafik belum dapat ditampilkan
+                        </h3>
+
+                        <p>
+                            Belum ada hasil deteksi pada periode
+                            dan Puskesmas yang dipilih.
+                        </p>
+
+                    </div>
+
+                <?php endif; ?>
+
+            </div>
+
+        </div>
+
         <!-- Daftar hasil laporan -->
         <div class="card content-card">
 
@@ -1108,5 +1396,43 @@ require_once "../includes/navbar.php";
     </main>
 
 </div>
+
+<?php if ($totalDeteksi > 0): ?>
+
+    <script
+        type="application/json"
+        id="dataGrafikLaporan"
+    ><?= json_encode(
+        [
+            "risiko" => [
+                "labels" => $labelRisiko,
+                "data" => $dataRisiko
+            ],
+            "tren" => [
+                "labels" => $labelTrenBulanan,
+                "data" => $dataTrenBulanan
+            ],
+            "statusGizi" => [
+                "labels" => $labelStatusGizi,
+                "data" => $dataStatusGizi
+            ]
+        ],
+        JSON_UNESCAPED_UNICODE
+        | JSON_UNESCAPED_SLASHES
+        | JSON_HEX_TAG
+        | JSON_HEX_AMP
+        | JSON_HEX_APOS
+        | JSON_HEX_QUOT
+    ); ?></script>
+
+    <script
+        src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
+    ></script>
+
+    <script
+        src="../assets/js/laporan_stunting.js"
+    ></script>
+
+<?php endif; ?>
 
 <?php require_once "../includes/footer.php"; ?>

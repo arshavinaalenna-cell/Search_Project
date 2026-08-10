@@ -69,6 +69,7 @@ function kelasStatusDetail($status): string
             [
                 "risiko rendah",
                 "normal",
+                "normal/sehat",
                 "tidak stunting"
             ],
             true
@@ -82,6 +83,7 @@ function kelasStatusDetail($status): string
             $status,
             [
                 "risiko sedang",
+                "risiko stunting",
                 "pendek"
             ],
             true
@@ -94,10 +96,22 @@ function kelasStatusDetail($status): string
         in_array(
             $status,
             [
-                "risiko tinggi",
-                "stunting",
+                "stunting berat",
                 "sangat pendek",
                 "severely stunted"
+            ],
+            true
+        )
+    ) {
+        return "bg-dark text-white";
+    }
+
+    if (
+        in_array(
+            $status,
+            [
+                "risiko tinggi",
+                "stunting"
             ],
             true
         )
@@ -902,7 +916,7 @@ require_once "../includes/navbar.php";
                             </h4>
 
                             <small class="text-muted">
-                                Tindak lanjut berdasarkan faktor risiko
+                                Saran tindak lanjut berdasarkan faktor risiko
                             </small>
                         </div>
 

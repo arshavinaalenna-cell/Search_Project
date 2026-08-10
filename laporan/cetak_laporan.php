@@ -103,6 +103,7 @@ function kelasStatusCetak($status): string
             [
                 "risiko rendah",
                 "normal",
+                "normal/sehat",
                 "tidak stunting"
             ],
             true
@@ -116,6 +117,7 @@ function kelasStatusCetak($status): string
             $status,
             [
                 "risiko sedang",
+                "risiko stunting",
                 "pendek"
             ],
             true
@@ -130,6 +132,7 @@ function kelasStatusCetak($status): string
             [
                 "risiko tinggi",
                 "stunting",
+                "stunting berat",
                 "sangat pendek",
                 "severely stunted"
             ],
@@ -333,6 +336,15 @@ $totalRisikoRendah = 0;
 $totalRisikoSedang = 0;
 $totalRisikoTinggi = 0;
 
+/*
+|--------------------------------------------------------------------------
+| Data agregasi grafik
+|--------------------------------------------------------------------------
+*/
+
+$grafikStatusGizi = [];
+$grafikTrenBulanan = [];
+
 while (
     $data = mysqli_fetch_assoc($resultLaporan)
 ) {
@@ -353,6 +365,7 @@ while (
             [
                 "risiko rendah",
                 "normal",
+                "normal/sehat",
                 "tidak stunting"
             ],
             true
@@ -365,6 +378,7 @@ while (
             $status,
             [
                 "risiko sedang",
+                "risiko stunting",
                 "pendek"
             ],
             true
@@ -378,6 +392,7 @@ while (
             [
                 "risiko tinggi",
                 "stunting",
+                "stunting berat",
                 "sangat pendek",
                 "severely stunted"
             ],
@@ -386,9 +401,148 @@ while (
     ) {
         $totalRisikoTinggi++;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rekap status gizi
+    |--------------------------------------------------------------------------
+    */
+
+    $statusGiziGrafik = trim(
+        (string) (
+            $data["status_gizi"] ?? ""
+        )
+    );
+
+    if ($statusGiziGrafik === "") {
+        $statusGiziGrafik =
+            "Belum Diketahui";
+    }
+
+    if (!isset(
+        $grafikStatusGizi[
+            $statusGiziGrafik
+        ]
+    )) {
+        $grafikStatusGizi[
+            $statusGiziGrafik
+        ] = 0;
+    }
+
+    $grafikStatusGizi[
+        $statusGiziGrafik
+    ]++;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rekap tren deteksi per bulan
+    |--------------------------------------------------------------------------
+    */
+
+    $tanggalDeteksiGrafik =
+        $data["tanggal_deteksi"] ?? "";
+
+    if (
+        $tanggalDeteksiGrafik !== ""
+        && $tanggalDeteksiGrafik !==
+            "0000-00-00"
+    ) {
+        $waktuGrafik = strtotime(
+            $tanggalDeteksiGrafik
+        );
+
+        if ($waktuGrafik !== false) {
+            $kunciBulan = date(
+                "Y-m",
+                $waktuGrafik
+            );
+
+            if (!isset(
+                $grafikTrenBulanan[
+                    $kunciBulan
+                ]
+            )) {
+                $grafikTrenBulanan[
+                    $kunciBulan
+                ] = 0;
+            }
+
+            $grafikTrenBulanan[
+                $kunciBulan
+            ]++;
+        }
+    }
 }
 
 mysqli_stmt_close($stmtLaporan);
+
+/*
+|--------------------------------------------------------------------------
+| Menyiapkan data grafik untuk versi cetak
+|--------------------------------------------------------------------------
+*/
+
+ksort($grafikStatusGizi);
+ksort($grafikTrenBulanan);
+
+$namaBulanSingkat = [
+    1 => "Jan",
+    2 => "Feb",
+    3 => "Mar",
+    4 => "Apr",
+    5 => "Mei",
+    6 => "Jun",
+    7 => "Jul",
+    8 => "Agu",
+    9 => "Sep",
+    10 => "Okt",
+    11 => "Nov",
+    12 => "Des"
+];
+
+$labelTrenBulanan = [];
+$dataTrenBulanan = [];
+
+foreach (
+    $grafikTrenBulanan
+    as $bulan => $jumlah
+) {
+    [$tahunGrafik, $nomorBulan] =
+        array_map(
+            "intval",
+            explode("-", $bulan)
+        );
+
+    $labelTrenBulanan[] =
+        (
+            $namaBulanSingkat[
+                $nomorBulan
+            ] ?? $nomorBulan
+        )
+        . " "
+        . $tahunGrafik;
+
+    $dataTrenBulanan[] =
+        (int) $jumlah;
+}
+
+$labelStatusGizi =
+    array_keys($grafikStatusGizi);
+
+$dataStatusGizi =
+    array_values($grafikStatusGizi);
+
+$labelRisiko = [
+    "Risiko Rendah",
+    "Risiko Sedang",
+    "Risiko Tinggi"
+];
+
+$dataRisiko = [
+    $totalRisikoRendah,
+    $totalRisikoSedang,
+    $totalRisikoTinggi
+];
 
 $namaPencetak = $_SESSION["nama"] ?? "Pengguna";
 $rolePencetak = namaRole(
@@ -632,6 +786,67 @@ $parameterKembali = http_build_query([
             font-weight: 800;
         }
 
+        .chart-section {
+            margin: 22px 0 24px;
+        }
+
+        .chart-section-title {
+            margin: 0 0 10px;
+
+            font-size: 13px;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns:
+                repeat(2, minmax(0, 1fr));
+
+            gap: 14px;
+
+            margin-bottom: 14px;
+        }
+
+        .chart-card {
+            padding: 12px;
+
+            border: 1px solid #bcbcbc;
+            border-radius: 7px;
+
+            background: #ffffff;
+
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .chart-card-full {
+            grid-column: 1 / -1;
+        }
+
+        .chart-title {
+            display: block;
+
+            margin-bottom: 8px;
+
+            color: #444444;
+
+            font-size: 10px;
+            font-weight: 700;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .chart-box {
+            position: relative;
+
+            height: 240px;
+        }
+
+        .chart-card-full .chart-box {
+            height: 260px;
+        }
+
         .report-table {
             width: 100%;
 
@@ -780,6 +995,14 @@ $parameterKembali = http_build_query([
                 gap: 30px;
             }
 
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-card-full {
+                grid-column: auto;
+            }
+
         }
 
         @page {
@@ -832,8 +1055,28 @@ $parameterKembali = http_build_query([
             }
 
             .summary-item,
-            .signature-grid {
+            .signature-grid,
+            .chart-section,
+            .chart-card {
                 page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            .chart-grid {
+                grid-template-columns:
+                    repeat(2, minmax(0, 1fr));
+            }
+
+            .chart-card-full {
+                grid-column: 1 / -1;
+            }
+
+            .chart-box {
+                height: 210px;
+            }
+
+            .chart-card-full .chart-box {
+                height: 230px;
             }
 
         }
@@ -1006,6 +1249,76 @@ $parameterKembali = http_build_query([
             </div>
 
         </section>
+
+        <?php if ($totalDeteksi > 0): ?>
+
+            <section class="chart-section">
+
+                <h4 class="chart-section-title">
+                    Visualisasi Hasil Deteksi
+                </h4>
+
+                <div class="chart-grid">
+
+                    <div class="chart-card">
+
+                        <span class="chart-title">
+                            Komposisi Tingkat Risiko
+                        </span>
+
+                        <div class="chart-box">
+
+                            <canvas
+                                id="grafikRisiko"
+                                aria-label="Grafik komposisi tingkat risiko"
+                            ></canvas>
+
+                        </div>
+
+                    </div>
+
+                    <div class="chart-card">
+
+                        <span class="chart-title">
+                            Tren Jumlah Deteksi per Bulan
+                        </span>
+
+                        <div class="chart-box">
+
+                            <canvas
+                                id="grafikTren"
+                                aria-label="Grafik tren deteksi per bulan"
+                            ></canvas>
+
+                        </div>
+
+                    </div>
+
+                    <div
+                        class="chart-card
+                        chart-card-full"
+                    >
+
+                        <span class="chart-title">
+                            Distribusi Status Gizi
+                        </span>
+
+                        <div class="chart-box">
+
+                            <canvas
+                                id="grafikStatusGizi"
+                                aria-label="Grafik distribusi status gizi"
+                            ></canvas>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+        <?php endif; ?>
 
         <div class="table-wrapper">
 
@@ -1222,6 +1535,44 @@ $parameterKembali = http_build_query([
         </footer>
 
     </main>
+
+    <?php if ($totalDeteksi > 0): ?>
+
+        <script
+            type="application/json"
+            id="dataGrafikLaporan"
+        ><?= json_encode(
+            [
+                "risiko" => [
+                    "labels" => $labelRisiko,
+                    "data" => $dataRisiko
+                ],
+                "tren" => [
+                    "labels" => $labelTrenBulanan,
+                    "data" => $dataTrenBulanan
+                ],
+                "statusGizi" => [
+                    "labels" => $labelStatusGizi,
+                    "data" => $dataStatusGizi
+                ]
+            ],
+            JSON_UNESCAPED_UNICODE
+            | JSON_UNESCAPED_SLASHES
+            | JSON_HEX_TAG
+            | JSON_HEX_AMP
+            | JSON_HEX_APOS
+            | JSON_HEX_QUOT
+        ); ?></script>
+
+        <script
+            src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
+        ></script>
+
+        <script
+            src="../assets/js/laporan_stunting.js"
+        ></script>
+
+    <?php endif; ?>
 
 </body>
 
