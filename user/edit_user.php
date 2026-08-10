@@ -16,9 +16,27 @@ $idUser = filter_input(
 );
 
 if (!$idUser) {
-    header("Location: data_user.php");
+    header(
+        "Location: data_user.php?pesan=tidak_ditemukan"
+    );
     exit;
 }
+
+$roleDiizinkan = [
+    "kader",
+    "petugas_kia",
+    "petugas_gizi",
+    "orang_tua",
+    "kepala_puskesmas",
+    "dinkes"
+];
+
+$roleWajibPuskesmas = [
+    "kader",
+    "petugas_kia",
+    "petugas_gizi",
+    "kepala_puskesmas"
+];
 
 /*
 |--------------------------------------------------------------------------
@@ -28,14 +46,22 @@ if (!$idUser) {
 
 $stmtPengguna = mysqli_prepare(
     $conn,
-    "SELECT id_user, nama, username, role
+    "SELECT
+        id_user,
+        nama,
+        username,
+        role,
+        id_puskesmas
      FROM pengguna
      WHERE id_user = ?
      LIMIT 1"
 );
 
 if (!$stmtPengguna) {
-    die("Terjadi kesalahan saat mengambil data pengguna.");
+    die(
+        "Terjadi kesalahan saat mengambil data pengguna: "
+        . mysqli_error($conn)
+    );
 }
 
 mysqli_stmt_bind_param(
@@ -46,19 +72,67 @@ mysqli_stmt_bind_param(
 
 mysqli_stmt_execute($stmtPengguna);
 
-$hasilPengguna = mysqli_stmt_get_result($stmtPengguna);
-$dataPengguna = mysqli_fetch_assoc($hasilPengguna);
+$hasilPengguna =
+    mysqli_stmt_get_result(
+        $stmtPengguna
+    );
 
-mysqli_stmt_close($stmtPengguna);
+$dataPengguna =
+    mysqli_fetch_assoc(
+        $hasilPengguna
+    );
+
+mysqli_stmt_close(
+    $stmtPengguna
+);
 
 if (!$dataPengguna) {
-    header("Location: data_user.php");
+    header(
+        "Location: data_user.php?pesan=tidak_ditemukan"
+    );
     exit;
 }
 
-$nama = $dataPengguna["nama"];
-$username = $dataPengguna["username"];
-$role = $dataPengguna["role"];
+$nama =
+    $dataPengguna["nama"] ?? "";
+
+$username =
+    $dataPengguna["username"] ?? "";
+
+$role =
+    $dataPengguna["role"] ?? "";
+
+$roleAwal = $role;
+
+$idPuskesmas =
+    $dataPengguna["id_puskesmas"] !== null
+        ? (int) $dataPengguna["id_puskesmas"]
+        : null;
+
+$idPuskesmasAwal =
+    $idPuskesmas;
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil daftar Puskesmas
+|--------------------------------------------------------------------------
+*/
+
+$queryPuskesmas = mysqli_query(
+    $conn,
+    "SELECT
+        id_puskesmas,
+        nama_puskesmas
+     FROM puskesmas
+     ORDER BY nama_puskesmas ASC"
+);
+
+if (!$queryPuskesmas) {
+    die(
+        "Gagal mengambil data Puskesmas: "
+        . mysqli_error($conn)
+    );
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -67,21 +141,30 @@ $role = $dataPengguna["role"];
 */
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $nama = trim($_POST["nama"] ?? "");
-    $username = trim($_POST["username"] ?? "");
-    $role = $_POST["role"] ?? "";
 
-    $passwordBaru = $_POST["password_baru"] ?? "";
-    $konfirmasiPassword = $_POST["konfirmasi_password"] ?? "";
+    $nama = trim(
+        $_POST["nama"] ?? ""
+    );
 
-$roleDiizinkan = [
-    "kader",
-    "petugas_kia",
-    "petugas_gizi",
-    "orang_tua",
-    "kepala_puskesmas",
-    "dinkes"
-];
+    $username = trim(
+        $_POST["username"] ?? ""
+    );
+
+    $role =
+        $_POST["role"] ?? "";
+
+    $passwordBaru =
+        $_POST["password_baru"] ?? "";
+
+    $konfirmasiPassword =
+        $_POST["konfirmasi_password"] ?? "";
+
+    $idPuskesmasInput = filter_input(
+        INPUT_POST,
+        "id_puskesmas",
+        FILTER_VALIDATE_INT
+    );
+
     /*
     |--------------------------------------------------------------------------
     | Validasi data
@@ -93,25 +176,150 @@ $roleDiizinkan = [
         || $username === ""
         || $role === ""
     ) {
-        $pesanError = "Nama, username, dan role wajib diisi.";
-    } elseif (strlen($nama) < 3) {
-        $pesanError = "Nama minimal terdiri dari 3 karakter.";
-    } elseif (strlen($username) < 4) {
-        $pesanError = "Username minimal terdiri dari 4 karakter.";
-    } elseif (!preg_match("/^[a-zA-Z0-9._]+$/", $username)) {
-        $pesanError = "Username hanya boleh berisi huruf, angka, titik, dan garis bawah.";
-    } elseif (!in_array($role, $roleDiizinkan, true)) {
-        $pesanError = "Role pengguna tidak valid.";
+        $pesanError =
+            "Nama, username, dan role wajib diisi.";
+    } elseif (
+        strlen($nama) < 3
+    ) {
+        $pesanError =
+            "Nama minimal terdiri dari 3 karakter.";
+    } elseif (
+        strlen($username) < 4
+    ) {
+        $pesanError =
+            "Username minimal terdiri dari 4 karakter.";
+    } elseif (
+        !preg_match(
+            "/^[a-zA-Z0-9._]+$/",
+            $username
+        )
+    ) {
+        $pesanError =
+            "Username hanya boleh berisi huruf, angka, titik, dan garis bawah.";
+    } elseif (
+        !in_array(
+            $role,
+            $roleDiizinkan,
+            true
+        )
+    ) {
+        $pesanError =
+            "Role pengguna tidak valid.";
     } elseif (
         $passwordBaru !== ""
         && strlen($passwordBaru) < 6
     ) {
-        $pesanError = "Password baru minimal terdiri dari 6 karakter.";
+        $pesanError =
+            "Password baru minimal terdiri dari 6 karakter.";
     } elseif (
         $passwordBaru !== ""
-        && $passwordBaru !== $konfirmasiPassword
+        && $passwordBaru !==
+            $konfirmasiPassword
     ) {
-        $pesanError = "Konfirmasi password baru tidak sama.";
+        $pesanError =
+            "Konfirmasi password baru tidak sama.";
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cegah akun Dinkes aktif mengubah role dirinya sendiri
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        $pesanError === ""
+        && $idUser ===
+            (int) ($_SESSION["id_user"] ?? 0)
+        && $role !== $roleAwal
+    ) {
+        $pesanError =
+            "Role akun yang sedang digunakan tidak dapat diubah.";
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Menentukan kebutuhan Puskesmas berdasarkan role
+    |--------------------------------------------------------------------------
+    */
+
+    if ($pesanError === "") {
+
+        if (
+            in_array(
+                $role,
+                $roleWajibPuskesmas,
+                true
+            )
+        ) {
+            if (
+                !$idPuskesmasInput
+                || $idPuskesmasInput < 1
+            ) {
+                $pesanError =
+                    "Silakan pilih Puskesmas untuk role tersebut.";
+            } else {
+                $idPuskesmas =
+                    (int) $idPuskesmasInput;
+            }
+        } else {
+            /*
+            | Orang Tua dan Dinkes tidak diikat
+            | ke satu Puskesmas di tabel pengguna.
+            */
+            $idPuskesmas = null;
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Memastikan Puskesmas valid
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        $pesanError === ""
+        && $idPuskesmas !== null
+    ) {
+        $cekPuskesmas = mysqli_prepare(
+            $conn,
+            "SELECT id_puskesmas
+             FROM puskesmas
+             WHERE id_puskesmas = ?
+             LIMIT 1"
+        );
+
+        if (!$cekPuskesmas) {
+            $pesanError =
+                "Terjadi kesalahan saat memeriksa Puskesmas.";
+        } else {
+            mysqli_stmt_bind_param(
+                $cekPuskesmas,
+                "i",
+                $idPuskesmas
+            );
+
+            mysqli_stmt_execute(
+                $cekPuskesmas
+            );
+
+            $hasilPuskesmas =
+                mysqli_stmt_get_result(
+                    $cekPuskesmas
+                );
+
+            if (
+                mysqli_num_rows(
+                    $hasilPuskesmas
+                ) === 0
+            ) {
+                $pesanError =
+                    "Puskesmas yang dipilih tidak ditemukan.";
+            }
+
+            mysqli_stmt_close(
+                $cekPuskesmas
+            );
+        }
     }
 
     /*
@@ -121,6 +329,7 @@ $roleDiizinkan = [
     */
 
     if ($pesanError === "") {
+
         $cekUsername = mysqli_prepare(
             $conn,
             "SELECT id_user
@@ -131,7 +340,8 @@ $roleDiizinkan = [
         );
 
         if (!$cekUsername) {
-            $pesanError = "Terjadi kesalahan saat memeriksa username.";
+            $pesanError =
+                "Terjadi kesalahan saat memeriksa username.";
         } else {
             mysqli_stmt_bind_param(
                 $cekUsername,
@@ -140,15 +350,27 @@ $roleDiizinkan = [
                 $idUser
             );
 
-            mysqli_stmt_execute($cekUsername);
+            mysqli_stmt_execute(
+                $cekUsername
+            );
 
-            $hasilCek = mysqli_stmt_get_result($cekUsername);
+            $hasilCek =
+                mysqli_stmt_get_result(
+                    $cekUsername
+                );
 
-            if (mysqli_num_rows($hasilCek) > 0) {
-                $pesanError = "Username sudah digunakan oleh pengguna lain.";
+            if (
+                mysqli_num_rows(
+                    $hasilCek
+                ) > 0
+            ) {
+                $pesanError =
+                    "Username sudah digunakan oleh pengguna lain.";
             }
 
-            mysqli_stmt_close($cekUsername);
+            mysqli_stmt_close(
+                $cekUsername
+            );
         }
     }
 
@@ -159,7 +381,9 @@ $roleDiizinkan = [
     */
 
     if ($pesanError === "") {
+
         if ($passwordBaru !== "") {
+
             $passwordHash = password_hash(
                 $passwordBaru,
                 PASSWORD_DEFAULT
@@ -168,60 +392,92 @@ $roleDiizinkan = [
             $simpan = mysqli_prepare(
                 $conn,
                 "UPDATE pengguna
-                 SET nama = ?,
-                     username = ?,
-                     password = ?,
-                     role = ?
+                 SET
+                    nama = ?,
+                    username = ?,
+                    password = ?,
+                    role = ?,
+                    id_puskesmas = ?
                  WHERE id_user = ?"
             );
 
             if ($simpan) {
                 mysqli_stmt_bind_param(
                     $simpan,
-                    "ssssi",
+                    "ssssii",
                     $nama,
                     $username,
                     $passwordHash,
                     $role,
+                    $idPuskesmas,
                     $idUser
                 );
             }
+
         } else {
+
             $simpan = mysqli_prepare(
                 $conn,
                 "UPDATE pengguna
-                 SET nama = ?,
-                     username = ?,
-                     role = ?
+                 SET
+                    nama = ?,
+                    username = ?,
+                    role = ?,
+                    id_puskesmas = ?
                  WHERE id_user = ?"
             );
 
             if ($simpan) {
                 mysqli_stmt_bind_param(
                     $simpan,
-                    "sssi",
+                    "sssii",
                     $nama,
                     $username,
                     $role,
+                    $idPuskesmas,
                     $idUser
                 );
             }
         }
 
         if (!$simpan) {
-            $pesanError = "Terjadi kesalahan saat menyiapkan perubahan data.";
+
+            $pesanError =
+                "Terjadi kesalahan saat menyiapkan perubahan data: "
+                . mysqli_error($conn);
+
         } else {
-            if (mysqli_stmt_execute($simpan)) {
-                mysqli_stmt_close($simpan);
+
+            if (
+                mysqli_stmt_execute(
+                    $simpan
+                )
+            ) {
+                mysqli_stmt_close(
+                    $simpan
+                );
 
                 /*
-                 * Jika pengguna mengedit akun yang sedang dipakai,
-                 * data session ikut diperbarui.
-                 */
-                if ($idUser === (int) $_SESSION["id_user"]) {
-                    $_SESSION["nama"] = $nama;
-                    $_SESSION["username"] = $username;
-                    $_SESSION["role"] = $role;
+                |--------------------------------------------------------------------------
+                | Jika akun aktif diedit, perbarui session yang relevan
+                |--------------------------------------------------------------------------
+                */
+
+                if (
+                    $idUser ===
+                    (int) (
+                        $_SESSION["id_user"]
+                        ?? 0
+                    )
+                ) {
+                    $_SESSION["nama"] =
+                        $nama;
+
+                    $_SESSION["username"] =
+                        $username;
+
+                    $_SESSION["role"] =
+                        $role;
                 }
 
                 header(
@@ -230,10 +486,30 @@ $roleDiizinkan = [
                 exit;
             }
 
-            $pesanError = "Data pengguna gagal diperbarui.";
+            $pesanError =
+                "Data pengguna gagal diperbarui: "
+                . mysqli_stmt_error(
+                    $simpan
+                );
 
-            mysqli_stmt_close($simpan);
+            mysqli_stmt_close(
+                $simpan
+            );
         }
+    }
+
+    /*
+    | Jika validasi gagal dan role berubah menjadi role tanpa Puskesmas,
+    | nilai pilihan dikembalikan agar form tidak menampilkan data lama.
+    */
+    if (
+        !in_array(
+            $role,
+            $roleWajibPuskesmas,
+            true
+        )
+    ) {
+        $idPuskesmas = null;
     }
 }
 
@@ -247,177 +523,298 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-
-            <div>
-                <h2 class="mb-1">Edit Pengguna</h2>
-
-                <p class="text-muted mb-0">
-                    Perbarui informasi akun pengguna.
-                </p>
-            </div>
-
-            <a
-                href="data_user.php"
-                class="btn btn-outline-secondary"
-            >
-                Kembali
-            </a>
-
-        </div>
-
-        <?php if ($pesanError !== ""): ?>
-
-            <div
-                class="alert alert-danger alert-dismissible fade show"
-                role="alert"
-            >
-                <?= htmlspecialchars(
-                    $pesanError,
-                    ENT_QUOTES,
-                    "UTF-8"
-                ) ?>
-
-                <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Tutup"
-                ></button>
-            </div>
-
-        <?php endif; ?>
-
         <div class="card content-card">
 
-            <div class="card-body p-4">
+            <div class="card-header">
 
-                <form method="POST" autocomplete="off">
+                <div>
 
-                    <div class="mb-3">
-                        <label
-                            for="nama"
-                            class="form-label"
-                        >
-                            Nama lengkap
-                        </label>
+                    <h4 class="mb-1">
+                        Edit Pengguna
+                    </h4>
 
-                        <input
-                            type="text"
-                            id="nama"
-                            name="nama"
-                            class="form-control"
-                            value="<?= htmlspecialchars(
-                                $nama,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ) ?>"
-                            maxlength="100"
-                            required
-                        >
+                    <small class="text-muted">
+                        Perbarui akun, role, dan penempatan
+                        Puskesmas pengguna.
+                    </small>
+
+                </div>
+
+                <a
+                    href="data_user.php"
+                    class="btn btn-secondary btn-sm"
+                >
+                    <i class="bi bi-arrow-left"></i>
+                    Kembali
+                </a>
+
+            </div>
+
+            <div class="card-body">
+
+                <?php if ($pesanError !== ""): ?>
+
+                    <div
+                        class="alert alert-danger alert-dismissible fade show"
+                        role="alert"
+                    >
+                        <i class="bi bi-x-circle me-1"></i>
+
+                        <?= htmlspecialchars(
+                            $pesanError,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>
+
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="alert"
+                            aria-label="Tutup"
+                        ></button>
+
                     </div>
 
-                    <div class="mb-3">
-                        <label
-                            for="username"
-                            class="form-label"
+                <?php endif; ?>
+
+                <form
+                    method="POST"
+                    autocomplete="off"
+                >
+
+                    <div class="row g-3">
+
+                        <div class="col-12 col-lg-6">
+
+                            <label
+                                for="nama"
+                                class="form-label"
+                            >
+                                Nama Lengkap
+                            </label>
+
+                            <input
+                                type="text"
+                                id="nama"
+                                name="nama"
+                                class="form-control"
+                                value="<?= htmlspecialchars(
+                                    $nama,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                                maxlength="100"
+                                required
+                            >
+
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+
+                            <label
+                                for="username"
+                                class="form-label"
+                            >
+                                Username
+                            </label>
+
+                            <input
+                                type="text"
+                                id="username"
+                                name="username"
+                                class="form-control"
+                                value="<?= htmlspecialchars(
+                                    $username,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                                maxlength="50"
+                                required
+                            >
+
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+
+                            <label
+                                for="role"
+                                class="form-label"
+                            >
+                                Role
+                            </label>
+
+                            <select
+                                id="role"
+                                name="role"
+                                class="form-select"
+                                required
+                            >
+                                <option value="">
+                                    -- Pilih Role --
+                                </option>
+
+                                <option
+                                    value="kader"
+                                    <?= $role === "kader"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Kader
+                                </option>
+
+                                <option
+                                    value="petugas_kia"
+                                    <?= $role === "petugas_kia"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Petugas KIA
+                                </option>
+
+                                <option
+                                    value="petugas_gizi"
+                                    <?= $role === "petugas_gizi"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Petugas Gizi
+                                </option>
+
+                                <option
+                                    value="orang_tua"
+                                    <?= $role === "orang_tua"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Orang Tua
+                                </option>
+
+                                <option
+                                    value="kepala_puskesmas"
+                                    <?= $role === "kepala_puskesmas"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Kepala Puskesmas
+                                </option>
+
+                                <option
+                                    value="dinkes"
+                                    <?= $role === "dinkes"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Dinas Kesehatan
+                                </option>
+                            </select>
+
+                            <?php if (
+                                $idUser ===
+                                (int) (
+                                    $_SESSION["id_user"]
+                                    ?? 0
+                                )
+                            ): ?>
+
+                                <div class="form-text">
+                                    Role akun yang sedang digunakan
+                                    tidak dapat diubah.
+                                </div>
+
+                            <?php endif; ?>
+
+                        </div>
+
+                        <div
+                            class="col-12 col-lg-6"
+                            id="wrapperPuskesmas"
                         >
-                            Username
-                        </label>
 
-                        <input
-                            type="text"
-                            id="username"
-                            name="username"
-                            class="form-control"
-                            value="<?= htmlspecialchars(
-                                $username,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ) ?>"
-                            maxlength="50"
-                            required
-                        >
-                    </div>
+                            <label
+                                for="id_puskesmas"
+                                class="form-label"
+                            >
+                                Puskesmas
+                            </label>
 
-                    <div class="mb-3">
-                        <label
-                            for="role"
-                            class="form-label"
-                        >
-                            Role
-                        </label>
+                            <select
+                                id="id_puskesmas"
+                                name="id_puskesmas"
+                                class="form-select"
+                            >
+                                <option value="">
+                                    -- Pilih Puskesmas --
+                                </option>
 
-                        <select
-    id="role"
-    name="role"
-    class="form-select"
-    required
->
-    <option value="">
-        Pilih role
-    </option>
+                                <?php
+                                mysqli_data_seek(
+                                    $queryPuskesmas,
+                                    0
+                                );
+                                ?>
 
-    <option
-        value="kader"
-        <?= $role === "kader" ? "selected" : "" ?>
-    >
-        Kader
-    </option>
+                                <?php while (
+                                    $puskesmas =
+                                        mysqli_fetch_assoc(
+                                            $queryPuskesmas
+                                        )
+                                ): ?>
 
-    <option
-        value="petugas_kia"
-        <?= $role === "petugas_kia" ? "selected" : "" ?>
-    >
-        Petugas KIA
-    </option>
+                                    <option
+                                        value="<?= (int)
+                                            $puskesmas[
+                                                "id_puskesmas"
+                                            ]; ?>"
+                                        <?= $idPuskesmas !== null
+                                            && (int) $idPuskesmas ===
+                                                (int) $puskesmas[
+                                                    "id_puskesmas"
+                                                ]
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= htmlspecialchars(
+                                            $puskesmas[
+                                                "nama_puskesmas"
+                                            ],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </option>
 
-    <option
-        value="petugas_gizi"
-        <?= $role === "petugas_gizi" ? "selected" : "" ?>
-    >
-        Petugas Gizi
-    </option>
+                                <?php endwhile; ?>
 
-    <option
-        value="orang_tua"
-        <?= $role === "orang_tua" ? "selected" : "" ?>
-    >
-        Orang Tua
-    </option>
+                            </select>
 
-    <option
-        value="kepala_puskesmas"
-        <?= $role === "kepala_puskesmas" ? "selected" : "" ?>
-    >
-        Kepala Puskesmas
-    </option>
+                            <div class="form-text">
+                                Wajib untuk Kader, Petugas KIA,
+                                Petugas Gizi, dan Kepala Puskesmas.
+                            </div>
 
-    <option
-        value="dinkes"
-        <?= $role === "dinkes" ? "selected" : "" ?>
-    >
-        Dinas Kesehatan
-    </option>
-</select>
-                    </div>
+                        </div>
 
-                    <hr class="my-4">
+                        <div class="col-12">
 
-                    <h5>Ubah Password</h5>
+                            <hr>
 
-                    <p class="text-muted">
-                        Kosongkan bagian ini apabila password tidak ingin diubah.
-                    </p>
+                            <h6 class="mb-1">
+                                Ubah Password
+                            </h6>
 
-                    <div class="row">
+                            <small class="text-muted">
+                                Kosongkan bagian ini apabila
+                                password tidak ingin diubah.
+                            </small>
 
-                        <div class="col-12 col-md-6 mb-3">
+                        </div>
+
+                        <div class="col-12 col-md-6">
+
                             <label
                                 for="password_baru"
                                 class="form-label"
                             >
-                                Password baru
+                                Password Baru
                             </label>
 
                             <input
@@ -428,14 +825,16 @@ require_once "../includes/navbar.php";
                                 minlength="6"
                                 autocomplete="new-password"
                             >
+
                         </div>
 
-                        <div class="col-12 col-md-6 mb-3">
+                        <div class="col-12 col-md-6">
+
                             <label
                                 for="konfirmasi_password"
                                 class="form-label"
                             >
-                                Konfirmasi password baru
+                                Konfirmasi Password Baru
                             </label>
 
                             <input
@@ -446,16 +845,20 @@ require_once "../includes/navbar.php";
                                 minlength="6"
                                 autocomplete="new-password"
                             >
+
                         </div>
 
                     </div>
 
-                    <div class="d-flex flex-wrap gap-2 mt-2">
+                    <hr>
+
+                    <div class="form-actions">
 
                         <button
                             type="submit"
-                            class="btn btn-success"
+                            class="btn btn-primary"
                         >
+                            <i class="bi bi-check-circle"></i>
                             Simpan Perubahan
                         </button>
 
@@ -463,6 +866,7 @@ require_once "../includes/navbar.php";
                             href="data_user.php"
                             class="btn btn-outline-secondary"
                         >
+                            <i class="bi bi-x-circle"></i>
                             Batal
                         </a>
 
@@ -477,5 +881,63 @@ require_once "../includes/navbar.php";
     </main>
 
 </div>
+
+<script>
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+
+        const roleSelect =
+            document.getElementById("role");
+
+        const wrapperPuskesmas =
+            document.getElementById(
+                "wrapperPuskesmas"
+            );
+
+        const puskesmasSelect =
+            document.getElementById(
+                "id_puskesmas"
+            );
+
+        const roleWajibPuskesmas = [
+            "kader",
+            "petugas_kia",
+            "petugas_gizi",
+            "kepala_puskesmas"
+        ];
+
+        function aturPuskesmas() {
+
+            const role =
+                roleSelect.value;
+
+            const wajib =
+                roleWajibPuskesmas.includes(
+                    role
+                );
+
+            wrapperPuskesmas.style.display =
+                wajib
+                    ? ""
+                    : "none";
+
+            puskesmasSelect.required =
+                wajib;
+
+            if (!wajib) {
+                puskesmasSelect.value = "";
+            }
+        }
+
+        roleSelect.addEventListener(
+            "change",
+            aturPuskesmas
+        );
+
+        aturPuskesmas();
+    }
+);
+</script>
 
 <?php require_once "../includes/footer.php"; ?>

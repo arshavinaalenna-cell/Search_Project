@@ -107,25 +107,53 @@ $catatanKia =
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil daftar balita
+| Mengambil identitas balita pemilik riwayat
 |--------------------------------------------------------------------------
+|
+| Balita dikunci saat edit agar riwayat kesehatan tidak dapat dipindahkan
+| ke balita lain.
+|
 */
 
-$queryBalita = mysqli_query(
+$stmtBalita = mysqli_prepare(
     $conn,
     "SELECT
         id_balita,
         nik_balita,
         nama_balita
      FROM balita
-     ORDER BY nama_balita ASC"
+     WHERE id_balita = ?
+     LIMIT 1"
 );
 
-if (!$queryBalita) {
+if (!$stmtBalita) {
     die(
         "Gagal mengambil data balita: "
         . mysqli_error($conn)
     );
+}
+
+mysqli_stmt_bind_param(
+    $stmtBalita,
+    "i",
+    $idBalita
+);
+
+mysqli_stmt_execute($stmtBalita);
+
+$hasilBalita =
+    mysqli_stmt_get_result($stmtBalita);
+
+$dataBalita =
+    mysqli_fetch_assoc($hasilBalita);
+
+mysqli_stmt_close($stmtBalita);
+
+if (!$dataBalita) {
+    header(
+        "Location: riwayat_kesehatan.php?pesan=tidak_ditemukan"
+    );
+    exit;
 }
 
 /*
@@ -135,12 +163,6 @@ if (!$queryBalita) {
 */
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $idBalita = filter_input(
-        INPUT_POST,
-        "id_balita",
-        FILTER_VALIDATE_INT
-    );
-
     $riwayatPenyakit = trim(
         $_POST["riwayat_penyakit"] ?? ""
     );
@@ -174,8 +196,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     );
 
     if (
-        !$idBalita
-        || $riwayatPenyakit === ""
+        $riwayatPenyakit === ""
         || $riwayatImunisasi === ""
         || $riwayatPerawatan === ""
         || $penyakitPenyerta === ""
@@ -189,48 +210,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     /*
     |--------------------------------------------------------------------------
-    | Memastikan balita tersedia
-    |--------------------------------------------------------------------------
-    */
-
-    if ($pesanError === "") {
-        $cekBalita = mysqli_prepare(
-            $conn,
-            "SELECT id_balita
-             FROM balita
-             WHERE id_balita = ?
-             LIMIT 1"
-        );
-
-        if (!$cekBalita) {
-            $pesanError =
-                "Gagal memeriksa data balita.";
-        } else {
-            mysqli_stmt_bind_param(
-                $cekBalita,
-                "i",
-                $idBalita
-            );
-
-            mysqli_stmt_execute($cekBalita);
-
-            $hasilBalita = mysqli_stmt_get_result(
-                $cekBalita
-            );
-
-            if (
-                mysqli_num_rows($hasilBalita) === 0
-            ) {
-                $pesanError =
-                    "Data balita tidak ditemukan.";
-            }
-
-            mysqli_stmt_close($cekBalita);
-        }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
     | Memperbarui riwayat kesehatan
     |--------------------------------------------------------------------------
     */
@@ -240,7 +219,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $conn,
             "UPDATE riwayat_kesehatan
              SET
-                id_balita = ?,
                 riwayat_penyakit = ?,
                 riwayat_imunisasi = ?,
                 riwayat_perawatan = ?,
@@ -259,8 +237,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         } else {
             mysqli_stmt_bind_param(
                 $stmtUpdate,
-                "issssssssi",
-                $idBalita,
+                "ssssssssi",
                 $riwayatPenyakit,
                 $riwayatImunisasi,
                 $riwayatPerawatan,
@@ -360,54 +337,43 @@ require_once "../includes/navbar.php";
 
                         <div class="col-12">
 
-                            <label
-                                for="id_balita"
-                                class="form-label"
-                            >
+                            <label class="form-label">
                                 Nama Balita
                             </label>
 
-                            <select
-                                id="id_balita"
-                                name="id_balita"
-                                class="form-select"
-                                required
-                            >
-                                <option value="">
-                                    -- Pilih Balita --
-                                </option>
+                            <div class="detail-item">
 
-                                <?php while (
-                                    $balita =
-                                        mysqli_fetch_assoc(
-                                            $queryBalita
-                                        )
-                                ): ?>
+                                <span class="detail-label">
+                                    Balita Pemilik Riwayat
+                                </span>
 
-                                    <option
-                                        value="<?= (int)
-                                            $balita["id_balita"]; ?>"
-                                        <?= $idBalita ===
-                                            (int) $balita["id_balita"]
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
+                                <div class="detail-value">
+
+                                    <strong>
                                         <?= htmlspecialchars(
-                                            $balita["nama_balita"]
-                                            . " - "
-                                            . $balita["nik_balita"],
+                                            $dataBalita["nama_balita"],
                                             ENT_QUOTES,
                                             "UTF-8"
                                         ); ?>
-                                    </option>
+                                    </strong>
 
-                                <?php endwhile; ?>
+                                    <span class="text-muted">
+                                        —
+                                        <?= htmlspecialchars(
+                                            $dataBalita["nik_balita"],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </span>
 
-                            </select>
+                                </div>
+
+                            </div>
 
                             <div class="form-text">
-                                Pilih balita yang riwayat
-                                kesehatannya akan diperbarui.
+                                Balita tidak dapat diubah saat mengedit
+                                riwayat kesehatan agar data tidak berpindah
+                                ke balita lain.
                             </div>
 
                         </div>

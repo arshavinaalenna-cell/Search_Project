@@ -7,13 +7,77 @@ require_once "../config/koneksi.php";
 cekRole([
     "orang_tua",
     "petugas_gizi",
-    "kepala_puskesmas"
+    "kepala_puskesmas",
+    "dinkes"
 ]);
 
 $judulHalaman = "Data Konsultasi | Sistem Deteksi Stunting";
 
 $roleAktif = $_SESSION["role"] ?? "";
 $idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
+
+$idPuskesmasAktif = null;
+$puskesmasBelumTerhubung = false;
+
+/*
+|--------------------------------------------------------------------------
+| PUSKESMAS PENGGUNA AKTIF
+|--------------------------------------------------------------------------
+| Petugas Gizi dan Kepala Puskesmas hanya melihat konsultasi balita
+| yang berasal dari Puskesmas yang sama dengan akun mereka.
+*/
+if (
+    in_array(
+        $roleAktif,
+        ["petugas_gizi", "kepala_puskesmas"],
+        true
+    )
+) {
+    $stmtPuskesmas = mysqli_prepare(
+        $conn,
+        "SELECT id_puskesmas
+         FROM pengguna
+         WHERE id_user = ?
+         LIMIT 1"
+    );
+
+    if (!$stmtPuskesmas) {
+        die(
+            "Gagal memeriksa Puskesmas pengguna: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmas,
+        "i",
+        $idUserAktif
+    );
+
+    mysqli_stmt_execute($stmtPuskesmas);
+
+    $hasilPuskesmas =
+        mysqli_stmt_get_result(
+            $stmtPuskesmas
+        );
+
+    $dataPuskesmas =
+        mysqli_fetch_assoc(
+            $hasilPuskesmas
+        );
+
+    mysqli_stmt_close($stmtPuskesmas);
+
+    if (
+        !$dataPuskesmas
+        || empty($dataPuskesmas["id_puskesmas"])
+    ) {
+        $puskesmasBelumTerhubung = true;
+    } else {
+        $idPuskesmasAktif =
+            (int) $dataPuskesmas["id_puskesmas"];
+    }
+}
 
 $bolehTambah = in_array(
     $roleAktif,
@@ -22,7 +86,11 @@ $bolehTambah = in_array(
 );
 
 $bolehMengelola = $roleAktif === "petugas_gizi";
-$modeMonitoring = $roleAktif === "kepala_puskesmas";
+$modeMonitoring = in_array(
+    $roleAktif,
+    ["kepala_puskesmas", "dinkes"],
+    true
+);
 
 $cari = trim($_GET["cari"] ?? "");
 $kataKunci = "%" . $cari . "%";
@@ -49,29 +117,39 @@ function amanKonsultasi($nilai): string
 |--------------------------------------------------------------------------
 | DATA KONSULTASI
 |--------------------------------------------------------------------------
-| Orang tua hanya melihat konsultasi milik balitanya sendiri.
-| Petugas Gizi dan Kepala Puskesmas dapat melihat seluruh konsultasi.
+| Orang Tua       : hanya konsultasi anak miliknya.
+| Petugas Gizi    : hanya konsultasi balita di Puskesmas yang sama.
+| Kepala Puskesmas: hanya monitoring Puskesmas yang sama.
+| Dinkes          : seluruh konsultasi.
 */
+
+$selectKonsultasi = "
+    SELECT
+        k.id_konsultasi,
+        k.id_balita,
+        k.id_petugas,
+        k.tanggal,
+        k.keluhan,
+        k.hasil_konsultasi,
+        k.tindak_lanjut,
+        b.nama_balita,
+        b.nik_balita,
+        b.id_puskesmas,
+        p.nama AS nama_petugas
+    FROM konsultasi AS k
+    INNER JOIN balita AS b
+        ON k.id_balita = b.id_balita
+    LEFT JOIN pengguna AS p
+        ON k.id_petugas = p.id_user
+";
+
 if ($roleAktif === "orang_tua") {
+
     if ($cari !== "") {
+
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                k.id_konsultasi,
-                k.id_balita,
-                k.id_petugas,
-                k.tanggal,
-                k.keluhan,
-                k.hasil_konsultasi,
-                k.tindak_lanjut,
-                b.nama_balita,
-                b.nik_balita,
-                p.nama AS nama_petugas
-             FROM konsultasi AS k
-             INNER JOIN balita AS b
-                ON k.id_balita = b.id_balita
-             LEFT JOIN pengguna AS p
-                ON k.id_petugas = p.id_user
+            $selectKonsultasi . "
              WHERE b.id_user = ?
                AND (
                     b.nama_balita LIKE ?
@@ -102,25 +180,12 @@ if ($roleAktif === "orang_tua") {
             $kataKunci,
             $kataKunci
         );
+
     } else {
+
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                k.id_konsultasi,
-                k.id_balita,
-                k.id_petugas,
-                k.tanggal,
-                k.keluhan,
-                k.hasil_konsultasi,
-                k.tindak_lanjut,
-                b.nama_balita,
-                b.nik_balita,
-                p.nama AS nama_petugas
-             FROM konsultasi AS k
-             INNER JOIN balita AS b
-                ON k.id_balita = b.id_balita
-             LEFT JOIN pengguna AS p
-                ON k.id_petugas = p.id_user
+            $selectKonsultasi . "
              WHERE b.id_user = ?
              ORDER BY k.id_konsultasi DESC"
         );
@@ -138,26 +203,100 @@ if ($roleAktif === "orang_tua") {
             $idUserAktif
         );
     }
-} else {
-    if ($cari !== "") {
+
+} elseif (
+    in_array(
+        $roleAktif,
+        ["petugas_gizi", "kepala_puskesmas"],
+        true
+    )
+) {
+
+    if ($puskesmasBelumTerhubung) {
+
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                k.id_konsultasi,
-                k.id_balita,
-                k.id_petugas,
-                k.tanggal,
-                k.keluhan,
-                k.hasil_konsultasi,
-                k.tindak_lanjut,
-                b.nama_balita,
-                b.nik_balita,
-                p.nama AS nama_petugas
-             FROM konsultasi AS k
-             INNER JOIN balita AS b
-                ON k.id_balita = b.id_balita
-             LEFT JOIN pengguna AS p
-                ON k.id_petugas = p.id_user
+            $selectKonsultasi . "
+             WHERE 1 = 0
+             ORDER BY k.id_konsultasi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal menyiapkan data konsultasi: "
+                . mysqli_error($conn)
+            );
+        }
+
+    } elseif ($cari !== "") {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectKonsultasi . "
+             WHERE b.id_puskesmas = ?
+               AND (
+                    b.nama_balita LIKE ?
+                    OR b.nik_balita LIKE ?
+                    OR p.nama LIKE ?
+                    OR k.keluhan LIKE ?
+                    OR k.hasil_konsultasi LIKE ?
+                    OR k.tindak_lanjut LIKE ?
+               )
+             ORDER BY k.id_konsultasi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal menyiapkan pencarian konsultasi: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "issssss",
+            $idPuskesmasAktif,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci
+        );
+
+    } else {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectKonsultasi . "
+             WHERE b.id_puskesmas = ?
+             ORDER BY k.id_konsultasi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal mengambil data konsultasi: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "i",
+            $idPuskesmasAktif
+        );
+    }
+
+} else {
+
+    /*
+    | Dinkes dapat memonitor seluruh Puskesmas.
+    */
+    if ($cari !== "") {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectKonsultasi . "
              WHERE (
                     b.nama_balita LIKE ?
                     OR b.nik_balita LIKE ?
@@ -186,25 +325,12 @@ if ($roleAktif === "orang_tua") {
             $kataKunci,
             $kataKunci
         );
+
     } else {
+
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                k.id_konsultasi,
-                k.id_balita,
-                k.id_petugas,
-                k.tanggal,
-                k.keluhan,
-                k.hasil_konsultasi,
-                k.tindak_lanjut,
-                b.nama_balita,
-                b.nik_balita,
-                p.nama AS nama_petugas
-             FROM konsultasi AS k
-             INNER JOIN balita AS b
-                ON k.id_balita = b.id_balita
-             LEFT JOIN pengguna AS p
-                ON k.id_petugas = p.id_user
+            $selectKonsultasi . "
              ORDER BY k.id_konsultasi DESC"
         );
 
@@ -333,6 +459,17 @@ require_once "../includes/navbar.php";
             </div>
 
             <div class="card-body">
+
+                <?php if ($puskesmasBelumTerhubung): ?>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Akun ini belum terhubung dengan Puskesmas.
+                        Hubungkan akun ke Puskesmas melalui menu Data Pengguna
+                        sebelum mengakses data konsultasi wilayah.
+                    </div>
+
+                <?php endif; ?>
 
                 <?php if ($isiPesan !== ""): ?>
 

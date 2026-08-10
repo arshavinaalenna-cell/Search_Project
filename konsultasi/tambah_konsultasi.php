@@ -10,7 +10,7 @@ require_once "../config/koneksi.php";
 |--------------------------------------------------------------------------
 |
 | Orang Tua dapat mengajukan konsultasi untuk anak miliknya.
-| Petugas Gizi dapat mencatat konsultasi yang dilakukan di Puskesmas.
+| Petugas Gizi dapat mencatat konsultasi untuk balita di Puskesmasnya.
 |
 */
 
@@ -37,13 +37,71 @@ $keluhan = "";
 $hasilKonsultasi = "";
 $tindakLanjut = "";
 
+$idPuskesmasAktif = null;
+$puskesmasBelumTerhubung = false;
+
+/*
+|--------------------------------------------------------------------------
+| Puskesmas Petugas Gizi aktif
+|--------------------------------------------------------------------------
+*/
+
+if ($roleAktif === "petugas_gizi") {
+
+    $stmtPuskesmas = mysqli_prepare(
+        $conn,
+        "SELECT id_puskesmas
+         FROM pengguna
+         WHERE id_user = ?
+         AND role = 'petugas_gizi'
+         LIMIT 1"
+    );
+
+    if (!$stmtPuskesmas) {
+        die(
+            "Gagal memeriksa Puskesmas Petugas Gizi: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmas,
+        "i",
+        $idUserAktif
+    );
+
+    mysqli_stmt_execute($stmtPuskesmas);
+
+    $hasilPuskesmas =
+        mysqli_stmt_get_result(
+            $stmtPuskesmas
+        );
+
+    $dataPuskesmas =
+        mysqli_fetch_assoc(
+            $hasilPuskesmas
+        );
+
+    mysqli_stmt_close($stmtPuskesmas);
+
+    if (
+        !$dataPuskesmas
+        || empty($dataPuskesmas["id_puskesmas"])
+    ) {
+        $puskesmasBelumTerhubung = true;
+    } else {
+        $idPuskesmasAktif =
+            (int) $dataPuskesmas["id_puskesmas"];
+    }
+}
+
 /*
 |--------------------------------------------------------------------------
 | Mengambil daftar balita
 |--------------------------------------------------------------------------
 |
 | Orang Tua hanya dapat memilih anak miliknya.
-| Petugas Gizi dapat memilih balita yang akan dicatat konsultasinya.
+| Petugas Gizi hanya dapat memilih balita dari Puskesmas yang sama.
 |
 */
 
@@ -54,7 +112,8 @@ if ($roleAktif === "orang_tua") {
         "SELECT
             id_balita,
             nama_balita,
-            nik_balita
+            nik_balita,
+            id_puskesmas
          FROM balita
          WHERE id_user = ?
          ORDER BY nama_balita ASC"
@@ -84,21 +143,54 @@ if ($roleAktif === "orang_tua") {
 
 } else {
 
-    $queryBalita = mysqli_query(
-        $conn,
-        "SELECT
-            id_balita,
-            nama_balita,
-            nik_balita
-         FROM balita
-         ORDER BY nama_balita ASC"
-    );
+    if ($puskesmasBelumTerhubung) {
 
-    if (!$queryBalita) {
-        die(
-            "Gagal mengambil data balita: "
-            . mysqli_error($conn)
+        $queryBalita = mysqli_query(
+            $conn,
+            "SELECT
+                id_balita,
+                nama_balita,
+                nik_balita,
+                id_puskesmas
+             FROM balita
+             WHERE 1 = 0"
         );
+
+    } else {
+
+        $stmtBalita = mysqli_prepare(
+            $conn,
+            "SELECT
+                id_balita,
+                nama_balita,
+                nik_balita,
+                id_puskesmas
+             FROM balita
+             WHERE id_puskesmas = ?
+             ORDER BY nama_balita ASC"
+        );
+
+        if (!$stmtBalita) {
+            die(
+                "Gagal mengambil data balita: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmtBalita,
+            "i",
+            $idPuskesmasAktif
+        );
+
+        mysqli_stmt_execute(
+            $stmtBalita
+        );
+
+        $queryBalita =
+            mysqli_stmt_get_result(
+                $stmtBalita
+            );
     }
 }
 
@@ -107,8 +199,9 @@ if ($roleAktif === "orang_tua") {
 | Mengambil daftar Petugas Gizi
 |--------------------------------------------------------------------------
 |
-| Daftar ini digunakan ketika Orang Tua mengajukan konsultasi langsung
-| kepada Petugas Gizi Puskesmas.
+| Orang Tua akan memilih Petugas Gizi dari Puskesmas yang sama dengan
+| balita yang dipilih. Filtering tampilan dilakukan di browser dan tetap
+| divalidasi ulang di server saat penyimpanan.
 |
 */
 
@@ -117,9 +210,11 @@ $queryPetugas = mysqli_query(
     "SELECT
         id_user,
         nama,
-        username
+        username,
+        id_puskesmas
      FROM pengguna
      WHERE role = 'petugas_gizi'
+     AND id_puskesmas IS NOT NULL
      ORDER BY nama ASC"
 );
 
@@ -172,19 +267,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             FILTER_VALIDATE_INT
         );
 
-        /*
-        | Orang Tua hanya mengirim keluhan.
-        | Hasil konsultasi dan tindak lanjut diisi oleh Petugas Gizi.
-        */
         $hasilKonsultasi = "";
         $tindakLanjut = "";
 
     } else {
 
-        /*
-        | Jika konsultasi dicatat oleh Petugas Gizi,
-        | petugas aktif otomatis menjadi petugas yang menangani.
-        */
         $idPetugas =
             $idUserAktif;
 
@@ -266,6 +353,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (
         $pesanError === ""
         && $roleAktif === "petugas_gizi"
+        && $puskesmasBelumTerhubung
+    ) {
+        $pesanError =
+            "Akun Petugas Gizi belum terhubung dengan Puskesmas.";
+    }
+
+    if (
+        $pesanError === ""
+        && $roleAktif === "petugas_gizi"
         && (
             $hasilKonsultasi === ""
             || $tindakLanjut === ""
@@ -281,13 +377,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     |--------------------------------------------------------------------------
     */
 
+    $idPuskesmasBalita = null;
+
     if ($pesanError === "") {
 
         if ($roleAktif === "orang_tua") {
 
             $cekBalita = mysqli_prepare(
                 $conn,
-                "SELECT id_balita
+                "SELECT
+                    id_balita,
+                    id_puskesmas
                  FROM balita
                  WHERE id_balita = ?
                  AND id_user = ?
@@ -313,9 +413,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             $cekBalita = mysqli_prepare(
                 $conn,
-                "SELECT id_balita
+                "SELECT
+                    id_balita,
+                    id_puskesmas
                  FROM balita
                  WHERE id_balita = ?
+                 AND id_puskesmas = ?
                  LIMIT 1"
             );
 
@@ -328,8 +431,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 mysqli_stmt_bind_param(
                     $cekBalita,
-                    "i",
-                    $idBalita
+                    "ii",
+                    $idBalita,
+                    $idPuskesmasAktif
                 );
             }
         }
@@ -345,13 +449,36 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $cekBalita
                 );
 
-            if (
-                mysqli_num_rows(
+            $dataCekBalita =
+                mysqli_fetch_assoc(
                     $hasilCekBalita
-                ) === 0
-            ) {
+                );
+
+            if (!$dataCekBalita) {
+
                 $pesanError =
                     "Data balita tidak ditemukan atau tidak dapat diakses.";
+
+            } else {
+
+                $idPuskesmasBalita =
+                    !empty(
+                        $dataCekBalita[
+                            "id_puskesmas"
+                        ]
+                    )
+                        ? (int) $dataCekBalita[
+                            "id_puskesmas"
+                        ]
+                        : null;
+
+                if (
+                    $roleAktif === "orang_tua"
+                    && $idPuskesmasBalita === null
+                ) {
+                    $pesanError =
+                        "Balita belum terhubung dengan Puskesmas.";
+                }
             }
 
             mysqli_stmt_close(
@@ -362,33 +489,68 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     /*
     |--------------------------------------------------------------------------
-    | Memastikan Petugas Gizi valid
+    | Memastikan Petugas Gizi valid dan satu Puskesmas dengan balita
     |--------------------------------------------------------------------------
     */
 
     if ($pesanError === "") {
 
-        $cekPetugas = mysqli_prepare(
-            $conn,
-            "SELECT id_user
-             FROM pengguna
-             WHERE id_user = ?
-             AND role = 'petugas_gizi'
-             LIMIT 1"
-        );
+        if ($roleAktif === "orang_tua") {
 
-        if (!$cekPetugas) {
+            $cekPetugas = mysqli_prepare(
+                $conn,
+                "SELECT id_user
+                 FROM pengguna
+                 WHERE id_user = ?
+                 AND role = 'petugas_gizi'
+                 AND id_puskesmas = ?
+                 LIMIT 1"
+            );
 
-            $pesanError =
-                "Gagal memeriksa Petugas Gizi.";
+            if (!$cekPetugas) {
+
+                $pesanError =
+                    "Gagal memeriksa Petugas Gizi.";
+
+            } else {
+
+                mysqli_stmt_bind_param(
+                    $cekPetugas,
+                    "ii",
+                    $idPetugas,
+                    $idPuskesmasBalita
+                );
+            }
 
         } else {
 
-            mysqli_stmt_bind_param(
-                $cekPetugas,
-                "i",
-                $idPetugas
+            $cekPetugas = mysqli_prepare(
+                $conn,
+                "SELECT id_user
+                 FROM pengguna
+                 WHERE id_user = ?
+                 AND role = 'petugas_gizi'
+                 AND id_puskesmas = ?
+                 LIMIT 1"
             );
+
+            if (!$cekPetugas) {
+
+                $pesanError =
+                    "Gagal memeriksa Petugas Gizi.";
+
+            } else {
+
+                mysqli_stmt_bind_param(
+                    $cekPetugas,
+                    "ii",
+                    $idPetugas,
+                    $idPuskesmasAktif
+                );
+            }
+        }
+
+        if ($pesanError === "") {
 
             mysqli_stmt_execute(
                 $cekPetugas
@@ -405,7 +567,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 ) === 0
             ) {
                 $pesanError =
-                    "Petugas Gizi tidak ditemukan.";
+                    "Petugas Gizi tidak ditemukan atau tidak berasal dari Puskesmas yang sama.";
             }
 
             mysqli_stmt_close(
@@ -579,6 +741,25 @@ require_once "../includes/navbar.php";
             <div class="card-body">
 
                 <?php if (
+                    $puskesmasBelumTerhubung
+                ): ?>
+
+                    <div class="alert alert-warning">
+
+                        <i
+                            class="bi
+                            bi-exclamation-triangle me-1"
+                        ></i>
+
+                        Akun Petugas Gizi belum terhubung
+                        dengan Puskesmas. Hubungkan akun melalui
+                        menu Data Pengguna terlebih dahulu.
+
+                    </div>
+
+                <?php endif; ?>
+
+                <?php if (
                     $pesanError !== ""
                 ): ?>
 
@@ -633,7 +814,7 @@ require_once "../includes/navbar.php";
                         <?php else: ?>
 
                             Belum ada data balita
-                            yang dapat dipilih.
+                            di Puskesmas Anda yang dapat dipilih.
 
                         <?php endif; ?>
 
@@ -655,7 +836,7 @@ require_once "../includes/navbar.php";
                         ></i>
 
                         Belum ada akun Petugas Gizi
-                        yang tersedia untuk konsultasi.
+                        yang terhubung dengan Puskesmas.
 
                     </div>
 
@@ -710,6 +891,11 @@ require_once "../includes/navbar.php";
                                             $balita[
                                                 "id_balita"
                                             ]; ?>"
+                                        data-puskesmas="<?= (int) (
+                                            $balita[
+                                                "id_puskesmas"
+                                            ] ?? 0
+                                        ); ?>"
                                         <?= (int) $idBalita ===
                                             (int) $balita[
                                                 "id_balita"
@@ -747,8 +933,8 @@ require_once "../includes/navbar.php";
 
                                 <?php else: ?>
 
-                                    Pilih balita yang
-                                    berkonsultasi di Puskesmas.
+                                    Hanya balita dari Puskesmas
+                                    Anda yang dapat dipilih.
 
                                 <?php endif; ?>
 
@@ -784,6 +970,13 @@ require_once "../includes/navbar.php";
                                         -- Pilih Petugas Gizi --
                                     </option>
 
+                                    <?php
+                                    mysqli_data_seek(
+                                        $queryPetugas,
+                                        0
+                                    );
+                                    ?>
+
                                     <?php while (
                                         $petugas =
                                             mysqli_fetch_assoc(
@@ -796,6 +989,11 @@ require_once "../includes/navbar.php";
                                                 $petugas[
                                                     "id_user"
                                                 ]; ?>"
+                                            data-puskesmas="<?= (int) (
+                                                $petugas[
+                                                    "id_puskesmas"
+                                                ] ?? 0
+                                            ); ?>"
                                             <?= (int) $idPetugas ===
                                                 (int) $petugas[
                                                     "id_user"
@@ -822,8 +1020,17 @@ require_once "../includes/navbar.php";
                                 </select>
 
                                 <div class="form-text">
-                                    Pilih Petugas Gizi
-                                    yang akan menerima konsultasi.
+                                    Hanya Petugas Gizi dari
+                                    Puskesmas yang sama dengan
+                                    balita yang dapat dipilih.
+                                </div>
+
+                                <div
+                                    id="pesanPetugasKosong"
+                                    class="form-text text-warning d-none"
+                                >
+                                    Belum ada Petugas Gizi
+                                    pada Puskesmas balita ini.
                                 </div>
 
                             </div>
@@ -972,9 +1179,11 @@ require_once "../includes/navbar.php";
 
                         <button
                             type="submit"
+                            id="tombolSimpan"
                             class="btn btn-primary"
                             <?= (
                                 $totalBalita === 0
+                                || $puskesmasBelumTerhubung
                                 || (
                                     $roleAktif ===
                                     "orang_tua"
@@ -1013,6 +1222,128 @@ require_once "../includes/navbar.php";
     </main>
 
 </div>
+
+<?php if ($roleAktif === "orang_tua"): ?>
+
+<script>
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+
+        const balitaSelect =
+            document.getElementById(
+                "id_balita"
+            );
+
+        const petugasSelect =
+            document.getElementById(
+                "id_petugas"
+            );
+
+        const pesanPetugasKosong =
+            document.getElementById(
+                "pesanPetugasKosong"
+            );
+
+        const tombolSimpan =
+            document.getElementById(
+                "tombolSimpan"
+            );
+
+        function filterPetugas() {
+
+            const pilihanBalita =
+                balitaSelect.options[
+                    balitaSelect.selectedIndex
+                ];
+
+            const idPuskesmas =
+                pilihanBalita
+                    ? pilihanBalita.dataset.puskesmas
+                    : "";
+
+            let jumlahTersedia = 0;
+
+            Array.from(
+                petugasSelect.options
+            ).forEach(
+                function (option, index) {
+
+                    if (index === 0) {
+                        option.hidden = false;
+                        option.disabled = false;
+                        return;
+                    }
+
+                    const cocok =
+                        idPuskesmas !== ""
+                        && idPuskesmas !== "0"
+                        && option.dataset.puskesmas
+                            === idPuskesmas;
+
+                    option.hidden = !cocok;
+                    option.disabled = !cocok;
+
+                    if (cocok) {
+                        jumlahTersedia++;
+                    }
+                }
+            );
+
+            const selectedPetugas =
+                petugasSelect.options[
+                    petugasSelect.selectedIndex
+                ];
+
+            if (
+                selectedPetugas
+                && selectedPetugas.value !== ""
+                && (
+                    selectedPetugas.disabled
+                    || selectedPetugas.hidden
+                )
+            ) {
+                petugasSelect.value = "";
+            }
+
+            const balitaDipilih =
+                balitaSelect.value !== "";
+
+            const adaPuskesmas =
+                idPuskesmas !== ""
+                && idPuskesmas !== "0";
+
+            const kosong =
+                balitaDipilih
+                && adaPuskesmas
+                && jumlahTersedia === 0;
+
+            pesanPetugasKosong.classList.toggle(
+                "d-none",
+                !kosong
+            );
+
+            petugasSelect.disabled =
+                !balitaDipilih
+                || !adaPuskesmas;
+
+            tombolSimpan.disabled =
+                !balitaDipilih
+                || !adaPuskesmas
+                || jumlahTersedia === 0;
+        }
+
+        balitaSelect.addEventListener(
+            "change",
+            filterPetugas
+        );
+
+        filterPetugas();
+    }
+);
+</script>
+
+<?php endif; ?>
 
 <?php
 

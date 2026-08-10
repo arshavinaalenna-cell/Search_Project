@@ -7,7 +7,8 @@ require_once "../config/koneksi.php";
 cekRole([
     "orang_tua",
     "petugas_gizi",
-    "kepala_puskesmas"
+    "kepala_puskesmas",
+    "dinkes"
 ]);
 
 $judulHalaman = "Detail Konsultasi | Sistem Deteksi Stunting";
@@ -28,6 +29,73 @@ if (!$idKonsultasi) {
 $roleAktif = $_SESSION["role"] ?? "";
 $idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
 
+$idPuskesmasAktif = null;
+
+/*
+|--------------------------------------------------------------------------
+| Puskesmas pengguna aktif
+|--------------------------------------------------------------------------
+|
+| Petugas Gizi dan Kepala Puskesmas hanya boleh melihat konsultasi
+| balita dari Puskesmas yang sama dengan akun mereka.
+|
+*/
+
+if (
+    in_array(
+        $roleAktif,
+        ["petugas_gizi", "kepala_puskesmas"],
+        true
+    )
+) {
+    $stmtPuskesmas = mysqli_prepare(
+        $conn,
+        "SELECT id_puskesmas
+         FROM pengguna
+         WHERE id_user = ?
+         LIMIT 1"
+    );
+
+    if (!$stmtPuskesmas) {
+        die(
+            "Gagal memeriksa Puskesmas pengguna: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmas,
+        "i",
+        $idUserAktif
+    );
+
+    mysqli_stmt_execute($stmtPuskesmas);
+
+    $hasilPuskesmas =
+        mysqli_stmt_get_result(
+            $stmtPuskesmas
+        );
+
+    $dataPuskesmas =
+        mysqli_fetch_assoc(
+            $hasilPuskesmas
+        );
+
+    mysqli_stmt_close($stmtPuskesmas);
+
+    if (
+        $dataPuskesmas
+        && !empty(
+            $dataPuskesmas["id_puskesmas"]
+        )
+    ) {
+        $idPuskesmasAktif =
+            (int) $dataPuskesmas[
+                "id_puskesmas"
+            ];
+    }
+}
+
 $stmt = mysqli_prepare(
     $conn,
     "SELECT
@@ -42,6 +110,7 @@ $stmt = mysqli_prepare(
         b.nik_balita,
         b.nama_ibu,
         b.id_user AS id_orang_tua,
+        b.id_puskesmas,
         p.nama AS nama_petugas,
         p.username AS username_petugas
      FROM konsultasi k
@@ -99,6 +168,42 @@ if (
     ";
 
     exit;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Pembatasan wilayah Puskesmas
+|--------------------------------------------------------------------------
+*/
+
+if (
+    in_array(
+        $roleAktif,
+        ["petugas_gizi", "kepala_puskesmas"],
+        true
+    )
+) {
+    $idPuskesmasBalita =
+        !empty($data["id_puskesmas"])
+            ? (int) $data["id_puskesmas"]
+            : null;
+
+    if (
+        $idPuskesmasAktif === null
+        || $idPuskesmasBalita === null
+        || $idPuskesmasAktif !==
+            $idPuskesmasBalita
+    ) {
+        http_response_code(403);
+
+        echo "
+            <h2>Akses Ditolak</h2>
+            <p>Konsultasi ini bukan bagian dari Puskesmas akun Anda.</p>
+            <a href='data_konsultasi.php'>Kembali</a>
+        ";
+
+        exit;
+    }
 }
 
 /*

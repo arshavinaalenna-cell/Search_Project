@@ -845,6 +845,45 @@ require_once "../includes/navbar.php";
 
 </div>
 
+<script>
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+
+        const formHapus =
+            document.querySelectorAll(
+                ".form-hapus-kesehatan"
+            );
+
+        formHapus.forEach(
+            function (form) {
+
+                form.addEventListener(
+                    "submit",
+                    function (event) {
+
+                        const namaBalita =
+                            form.dataset.nama
+                            || "balita ini";
+
+                        const yakin =
+                            window.confirm(
+                                "Yakin ingin menghapus riwayat kesehatan "
+                                + namaBalita
+                                + "?\n\nData yang sudah dihapus tidak dapat dikembalikan."
+                            );
+
+                        if (!yakin) {
+                            event.preventDefault();
+                        }
+                    }
+                );
+            }
+        );
+    }
+);
+</script>
+
 <?php
 
 mysqli_stmt_close($stmt);

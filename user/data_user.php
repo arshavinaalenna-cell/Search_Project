@@ -10,9 +10,17 @@ $judulHalaman = "Data Pengguna | Sistem Deteksi Stunting";
 
 $queryPengguna = mysqli_query(
     $conn,
-    "SELECT id_user, nama, username, role
-     FROM pengguna
-     ORDER BY id_user DESC"
+    "SELECT
+        u.id_user,
+        u.nama,
+        u.username,
+        u.role,
+        u.id_puskesmas,
+        p.nama_puskesmas
+     FROM pengguna u
+     LEFT JOIN puskesmas p
+        ON u.id_puskesmas = p.id_puskesmas
+     ORDER BY u.id_user DESC"
 );
 
 if (!$queryPengguna) {
@@ -29,24 +37,43 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div class="card content-card">
 
-            <div>
-                <h2 class="mb-1">Data Pengguna</h2>
+            <div class="card-header">
 
-                <p class="text-muted mb-0">
-                    Kelola akun Dinkes, ahli gizi, dan orang tua.
-                </p>
+                <div>
+                    <h4 class="mb-1">
+                        Data Pengguna
+                    </h4>
+
+                    <small class="text-muted">
+                        Kelola akun pengguna dan penempatan Puskesmas.
+                    </small>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+
+                    <a
+                        href="../dashboard/dashboard.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                    <a
+                        href="tambah_user.php"
+                        class="btn btn-primary btn-sm"
+                    >
+                        <i class="bi bi-plus-circle"></i>
+                        Tambah Pengguna
+                    </a>
+
+                </div>
+
             </div>
 
-            <a
-                href="tambah_user.php"
-                class="btn btn-success"
-            >
-                Tambah Pengguna
-            </a>
-
-        </div>
+            <div class="card-body">
 
         <?php if (isset($_GET["pesan"])): ?>
 
@@ -132,20 +159,17 @@ require_once "../includes/navbar.php";
 
         <?php endif; ?>
 
-        <div class="card content-card">
-
-            <div class="card-body">
-
                 <div class="table-responsive">
 
                     <table class="table table-hover align-middle">
 
-                        <thead class="table-success">
+                        <thead>
                             <tr>
                                 <th width="70">No.</th>
                                 <th>Nama</th>
                                 <th>Username</th>
                                 <th>Role</th>
+                                <th>Puskesmas</th>
                                 <th width="180">Aksi</th>
                             </tr>
                         </thead>
@@ -180,6 +204,13 @@ require_once "../includes/navbar.php";
                                             $pengguna["role"]
                                         )
                                     );
+
+                                    $namaPuskesmas = trim(
+                                        (string) (
+                                            $pengguna["nama_puskesmas"]
+                                            ?? ""
+                                        )
+                                    );
                                     ?>
 
                                     <tr>
@@ -190,13 +221,34 @@ require_once "../includes/navbar.php";
                                         <td><?= $username ?></td>
 
                                         <td>
-                                            <span class="badge bg-success">
+                                            <span class="badge badge-info">
                                                 <?= htmlspecialchars(
                                                     $role,
                                                     ENT_QUOTES,
                                                     "UTF-8"
                                                 ) ?>
                                             </span>
+                                        </td>
+
+                                        <td>
+                                            <?php if ($namaPuskesmas !== ""): ?>
+
+                                                <span class="badge bg-light text-dark">
+                                                    <i class="bi bi-hospital me-1"></i>
+                                                    <?= htmlspecialchars(
+                                                        $namaPuskesmas,
+                                                        ENT_QUOTES,
+                                                        "UTF-8"
+                                                    ); ?>
+                                                </span>
+
+                                            <?php else: ?>
+
+                                                <span class="text-muted">
+                                                    Tidak terikat Puskesmas
+                                                </span>
+
+                                            <?php endif; ?>
                                         </td>
 
                                         <td>
@@ -256,7 +308,7 @@ require_once "../includes/navbar.php";
 
                                 <tr>
                                     <td
-                                        colspan="5"
+                                        colspan="6"
                                         class="text-center text-muted py-4"
                                     >
                                         Belum ada data pengguna.
