@@ -72,8 +72,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $old["tanggal_pengukuran"] =
         trim($_POST["tanggal_pengukuran"] ?? "");
 
-    $old["umur_bulan"] =
-        trim($_POST["umur_bulan"] ?? "");
+    /*
+    | Umur tidak diambil dari input manual.
+    | Nilainya akan dihitung otomatis dari tanggal lahir balita
+    | dan tanggal pengukuran setelah data balita divalidasi.
+    */
+    $old["umur_bulan"] = "";
 
     $old["berat_badan"] =
         trim($_POST["berat_badan"] ?? "");
@@ -106,10 +110,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $tanggalPengukuran =
         $old["tanggal_pengukuran"];
 
-    $umurBulan = filter_var(
-        $old["umur_bulan"],
-        FILTER_VALIDATE_INT
-    );
+    $umurBulan = null;
 
     $beratBadan = filter_var(
         $old["berat_badan"],
@@ -163,12 +164,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $old["id_puskesmas"] === ""
         || $old["id_balita"] === ""
         || $old["tanggal_pengukuran"] === ""
-        || $old["umur_bulan"] === ""
         || $old["berat_badan"] === ""
         || $old["tinggi_panjang_badan"] === ""
     ) {
         $error =
-            "Puskesmas, nama balita, tanggal, umur, berat badan, dan tinggi badan wajib diisi.";
+            "Puskesmas, nama balita, tanggal, berat badan, dan tinggi badan wajib diisi.";
 
     } elseif (
         $idPuskesmas === false
@@ -187,14 +187,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     } elseif (!$tanggalValid) {
         $error =
             "Tanggal pengukuran tidak valid.";
-
-    } elseif (
-        $umurBulan === false
-        || $umurBulan < 0
-        || $umurBulan > 59
-    ) {
-        $error =
-            "Umur balita harus berada antara 0 sampai 59 bulan.";
 
     } elseif (
         $beratBadan === false
@@ -245,7 +237,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $stmtCekBalita = mysqli_prepare(
             $conn,
-            "SELECT id_balita
+            "SELECT id_balita, tanggal_lahir
              FROM balita
              WHERE id_balita = ?
                AND id_puskesmas = ?
@@ -278,6 +270,62 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             if (!$dataBalita) {
                 $error =
                     "Balita tidak ditemukan pada Puskesmas yang dipilih.";
+            } else {
+
+                /*
+                |--------------------------------------------------------------------------
+                | Hitung umur otomatis dalam bulan
+                |--------------------------------------------------------------------------
+                |
+                | Sumber umur:
+                | tanggal_lahir balita -> tanggal_pengukuran -> umur_bulan
+                |
+                | Umur tidak memakai kolom balita.umur dan tidak mempercayai
+                | input umur dari browser.
+                |
+                */
+
+                $tanggalLahir = DateTime::createFromFormat(
+                    "Y-m-d",
+                    (string) $dataBalita["tanggal_lahir"]
+                );
+
+                $tanggalUkur = DateTime::createFromFormat(
+                    "Y-m-d",
+                    $tanggalPengukuran
+                );
+
+                if (
+                    !$tanggalLahir
+                    || !$tanggalUkur
+                ) {
+                    $error =
+                        "Tanggal lahir balita atau tanggal pengukuran tidak valid.";
+
+                } elseif ($tanggalUkur < $tanggalLahir) {
+                    $error =
+                        "Tanggal pengukuran tidak boleh lebih awal dari tanggal lahir balita.";
+
+                } else {
+
+                    $selisihUmur =
+                        $tanggalLahir->diff($tanggalUkur);
+
+                    $umurBulan =
+                        ($selisihUmur->y * 12)
+                        + $selisihUmur->m;
+
+                    $old["umur_bulan"] =
+                        (string) $umurBulan;
+
+                    if (
+                        $umurBulan < 0
+                        || $umurBulan > 59
+                    ) {
+                        $error =
+                            "Umur balita pada tanggal pengukuran harus berada antara 0 sampai 59 bulan.";
+                    }
+                }
             }
         }
     }
@@ -373,7 +421,8 @@ $queryBalita = mysqli_query(
     "SELECT
         id_balita,
         id_puskesmas,
-        nama_balita
+        nama_balita,
+        tanggal_lahir
      FROM balita
      ORDER BY nama_balita ASC"
 );
@@ -591,6 +640,9 @@ require_once "../includes/navbar.php";
                                     <option
                                         value="<?= (int) $balita["id_balita"]; ?>"
                                         data-puskesmas="<?= (int) $balita["id_puskesmas"]; ?>"
+                                        data-tanggal-lahir="<?= amanPengukuran(
+                                            $balita["tanggal_lahir"]
+                                        ); ?>"
                                         <?= (
                                             (string) $old["id_balita"]
                                             ===
@@ -660,7 +712,8 @@ require_once "../includes/navbar.php";
                                         ); ?>"
                                         min="0"
                                         max="59"
-                                        placeholder="Contoh: 24"
+                                        placeholder="Otomatis"
+                                        readonly
                                         required
                                     >
 
@@ -669,6 +722,10 @@ require_once "../includes/navbar.php";
                                     </span>
 
                                 </div>
+
+                                <small class="text-muted">
+                                    Umur dihitung otomatis dari tanggal lahir balita dan tanggal pengukuran.
+                                </small>
 
                             </div>
 
@@ -859,50 +916,170 @@ require_once "../includes/navbar.php";
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const puskesmasSelect = document.getElementById("id_puskesmas");
-    const balitaSelect = document.getElementById("id_balita");
+    const puskesmasSelect =
+        document.getElementById("id_puskesmas");
 
-    if (!puskesmasSelect || !balitaSelect) {
+    const balitaSelect =
+        document.getElementById("id_balita");
+
+    const tanggalPengukuran =
+        document.getElementById("tanggal_pengukuran");
+
+    const umurBulanInput =
+        document.getElementById("umur_bulan");
+
+    if (
+        !puskesmasSelect
+        || !balitaSelect
+        || !tanggalPengukuran
+        || !umurBulanInput
+    ) {
         return;
     }
 
     function filterBalita(resetPilihan = false) {
-        const idPuskesmas = puskesmasSelect.value;
-        const pilihanSekarang = balitaSelect.value;
+        const idPuskesmas =
+            puskesmasSelect.value;
+
+        const pilihanSekarang =
+            balitaSelect.value;
+
         let pilihanMasihValid = false;
 
-        Array.from(balitaSelect.options).forEach(function (option, index) {
+        Array.from(
+            balitaSelect.options
+        ).forEach(function (option, index) {
+
             if (index === 0) {
                 return;
             }
 
             const cocok =
                 idPuskesmas !== ""
-                && option.dataset.puskesmas === idPuskesmas;
+                && option.dataset.puskesmas
+                    === idPuskesmas;
 
             option.hidden = !cocok;
             option.disabled = !cocok;
 
-            if (cocok && option.value === pilihanSekarang) {
+            if (
+                cocok
+                && option.value === pilihanSekarang
+            ) {
                 pilihanMasihValid = true;
             }
         });
 
-        if (resetPilihan || !pilihanMasihValid) {
+        if (
+            resetPilihan
+            || !pilihanMasihValid
+        ) {
             balitaSelect.value = "";
+            umurBulanInput.value = "";
         }
 
-        balitaSelect.disabled = idPuskesmas === "";
-        balitaSelect.options[0].textContent = idPuskesmas === ""
-            ? "-- Pilih Puskesmas terlebih dahulu --"
-            : "-- Pilih Balita --";
+        balitaSelect.disabled =
+            idPuskesmas === "";
+
+        balitaSelect.options[0].textContent =
+            idPuskesmas === ""
+                ? "-- Pilih Puskesmas terlebih dahulu --"
+                : "-- Pilih Balita --";
     }
 
-    puskesmasSelect.addEventListener("change", function () {
-        filterBalita(true);
-    });
+    function parseTanggal(tanggal) {
+        if (!tanggal) {
+            return null;
+        }
+
+        const bagian =
+            tanggal.split("-").map(Number);
+
+        if (bagian.length !== 3) {
+            return null;
+        }
+
+        return {
+            tahun: bagian[0],
+            bulan: bagian[1],
+            hari: bagian[2]
+        };
+    }
+
+    function hitungUmurBulan() {
+        const optionBalita =
+            balitaSelect.options[
+                balitaSelect.selectedIndex
+            ];
+
+        if (
+            !optionBalita
+            || !optionBalita.value
+            || !tanggalPengukuran.value
+        ) {
+            umurBulanInput.value = "";
+            return;
+        }
+
+        const lahir =
+            parseTanggal(
+                optionBalita.dataset.tanggalLahir
+            );
+
+        const ukur =
+            parseTanggal(
+                tanggalPengukuran.value
+            );
+
+        if (!lahir || !ukur) {
+            umurBulanInput.value = "";
+            return;
+        }
+
+        let umurBulan =
+            (ukur.tahun - lahir.tahun) * 12
+            + (ukur.bulan - lahir.bulan);
+
+        /*
+        | Jika tanggal pada bulan pengukuran belum mencapai
+        | tanggal lahir, satu bulan belum genap.
+        */
+        if (ukur.hari < lahir.hari) {
+            umurBulan--;
+        }
+
+        if (
+            umurBulan < 0
+            || umurBulan > 59
+        ) {
+            umurBulanInput.value = "";
+            return;
+        }
+
+        umurBulanInput.value =
+            umurBulan;
+    }
+
+    puskesmasSelect.addEventListener(
+        "change",
+        function () {
+            filterBalita(true);
+            hitungUmurBulan();
+        }
+    );
+
+    balitaSelect.addEventListener(
+        "change",
+        hitungUmurBulan
+    );
+
+    tanggalPengukuran.addEventListener(
+        "change",
+        hitungUmurBulan
+    );
 
     filterBalita(false);
+    hitungUmurBulan();
 });
 </script>
 
