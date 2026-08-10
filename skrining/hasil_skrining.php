@@ -109,7 +109,6 @@ function kelasStatusStunting($status): string
 
     if (
         strpos($statusNormal, "berisiko") !== false
-        || strpos($statusNormal, "berisiko") !== false
         || strpos($statusNormal, "risiko") !== false
     ) {
         return "text-bg-warning";
@@ -254,41 +253,103 @@ $punyaAksiSkrining =
 
 /*
 |--------------------------------------------------------------------------
-| Filter Puskesmas khusus Kader
+| Scope Puskesmas berdasarkan akun
 |--------------------------------------------------------------------------
+|
+| Kader, Petugas Gizi, Petugas KIA, dan Kepala Puskesmas hanya boleh
+| melihat data dari Puskesmas akun masing-masing.
+|
+| Dinkes dapat melakukan monitoring seluruh Puskesmas.
+|
 */
 
-$filterPuskesmas =
-    $roleAktif === "kader"
-        ? max(
-            0,
-            (int) ($_GET["puskesmas"] ?? 0)
-        )
-        : 0;
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
 
-$daftarPuskesmas = [];
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
 
-if ($roleAktif === "kader") {
-
-    $queryPuskesmas = mysqli_query(
-        $conn,
-        "
-        SELECT
-            id_puskesmas,
-            nama_puskesmas
-        FROM puskesmas
-        ORDER BY nama_puskesmas ASC
-        "
+$roleBerbasisPuskesmas =
+    in_array(
+        $roleAktif,
+        [
+            "kader",
+            "petugas_gizi",
+            "petugas_kia",
+            "kepala_puskesmas"
+        ],
+        true
     );
 
-    if ($queryPuskesmas) {
+if ($roleBerbasisPuskesmas) {
 
-        while (
-            $puskesmas =
-                mysqli_fetch_assoc($queryPuskesmas)
-        ) {
-            $daftarPuskesmas[] = $puskesmas;
-        }
+    $stmtPuskesmas = mysqli_prepare(
+        $conn,
+        "SELECT
+            u.id_puskesmas,
+            p.nama_puskesmas
+         FROM pengguna AS u
+         LEFT JOIN puskesmas AS p
+            ON u.id_puskesmas = p.id_puskesmas
+         WHERE u.id_user = ?
+         LIMIT 1"
+    );
+
+    if (!$stmtPuskesmas) {
+        die(
+            "Gagal memeriksa Puskesmas pengguna: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmas,
+        "i",
+        $idUserAktif
+    );
+
+    mysqli_stmt_execute(
+        $stmtPuskesmas
+    );
+
+    $hasilPuskesmas =
+        mysqli_stmt_get_result(
+            $stmtPuskesmas
+        );
+
+    $dataPuskesmas =
+        mysqli_fetch_assoc(
+            $hasilPuskesmas
+        );
+
+    mysqli_stmt_close(
+        $stmtPuskesmas
+    );
+
+    if (
+        !$dataPuskesmas
+        || empty(
+            $dataPuskesmas["id_puskesmas"]
+        )
+    ) {
+        $puskesmasBelumTerhubung = true;
+    } else {
+
+        $idPuskesmasAktif =
+            (int) $dataPuskesmas[
+                "id_puskesmas"
+            ];
+
+        $namaPuskesmasAktif =
+            trim(
+                (string) (
+                    $dataPuskesmas[
+                        "nama_puskesmas"
+                    ]
+                    ?? ""
+                )
+            );
     }
 }
 
@@ -397,76 +458,93 @@ $sqlDasar = "
 |--------------------------------------------------------------------------
 */
 
-if (
-    $roleAktif === "kader"
-    && $filterPuskesmas > 0
-) {
+$stmtSkrining = null;
 
-    $sql = $sqlDasar . "
-        WHERE b.id_puskesmas = ?
-        ORDER BY s.id_skrining DESC
-    ";
+if ($roleBerbasisPuskesmas) {
 
-    $stmtSkrining =
-        mysqli_prepare(
+    if ($puskesmasBelumTerhubung) {
+
+        $sql = $sqlDasar . "
+            WHERE 1 = 0
+            ORDER BY s.id_skrining DESC
+        ";
+
+        $query = mysqli_query(
             $conn,
             $sql
         );
 
-    if (!$stmtSkrining) {
+        if (!$query) {
+            die(
+                "Gagal mengambil data skrining: "
+                . mysqli_error($conn)
+            );
+        }
 
-        die(
-            "Gagal menyiapkan data skrining: "
-            . mysqli_error($conn)
+    } else {
+
+        $sql = $sqlDasar . "
+            WHERE b.id_puskesmas = ?
+            ORDER BY s.id_skrining DESC
+        ";
+
+        $stmtSkrining =
+            mysqli_prepare(
+                $conn,
+                $sql
+            );
+
+        if (!$stmtSkrining) {
+            die(
+                "Gagal menyiapkan data skrining: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmtSkrining,
+            "i",
+            $idPuskesmasAktif
         );
-    }
 
-    mysqli_stmt_bind_param(
-        $stmtSkrining,
-        "i",
-        $filterPuskesmas
-    );
-
-    if (
-        !mysqli_stmt_execute(
+        mysqli_stmt_execute(
             $stmtSkrining
-        )
-    ) {
+        );
 
-        die(
-            "Gagal mengambil data skrining: "
-            . mysqli_stmt_error(
+        $query =
+            mysqli_stmt_get_result(
                 $stmtSkrining
-            )
-        );
-    }
+            );
 
-    $query =
-        mysqli_stmt_get_result(
-            $stmtSkrining
-        );
+        if (!$query) {
+            mysqli_stmt_close(
+                $stmtSkrining
+            );
 
-    if (!$query) {
-
-        die(
-            "Gagal membaca hasil skrining."
-        );
+            die(
+                "Gagal membaca hasil skrining."
+            );
+        }
     }
 
 } else {
 
+    /*
+    |--------------------------------------------------------------------------
+    | Dinkes: monitoring seluruh Puskesmas
+    |--------------------------------------------------------------------------
+    */
+
     $sql = $sqlDasar . "
         ORDER BY s.id_skrining DESC
     ";
 
-    $query =
-        mysqli_query(
-            $conn,
-            $sql
-        );
+    $query = mysqli_query(
+        $conn,
+        $sql
+    );
 
     if (!$query) {
-
         die(
             "Gagal mengambil data skrining: "
             . mysqli_error($conn)
@@ -618,6 +696,28 @@ switch ($pesan) {
             "Data skrining tidak ditemukan.";
 
         break;
+
+    case "belum_ada_skrining":
+
+        $jenisAlert = "warning";
+
+        $isiPesan =
+            "Balita belum memiliki data skrining awal. "
+            . "Skrining perlu dilengkapi oleh Kader sebelum Petugas Gizi melakukan analisis.";
+
+        break;
+}
+
+if (
+    $roleBerbasisPuskesmas
+    && $puskesmasBelumTerhubung
+    && $isiPesan === ""
+) {
+    $jenisAlert = "warning";
+
+    $isiPesan =
+        "Akun ini belum terhubung dengan Puskesmas. "
+        . "Data skrining wilayah tidak dapat ditampilkan.";
 }
 
 /*
@@ -680,7 +780,7 @@ require_once "../includes/navbar.php";
     }
 
     .skrining-table .aksi-skrining {
-        min-width: 150px;
+        min-width: 250px;
     }
 
     .skrining-modal-summary {
@@ -792,6 +892,40 @@ require_once "../includes/navbar.php";
                     gap-2"
                 >
 
+                    <?php if (
+                        $roleBerbasisPuskesmas
+                        && !$puskesmasBelumTerhubung
+                    ): ?>
+
+                        <span
+                            class="badge badge-info
+                            d-inline-flex
+                            align-items-center
+                            px-3"
+                        >
+                            <i class="bi bi-hospital me-1"></i>
+
+                            <?= amanSkrining(
+                                $namaPuskesmasAktif
+                            ); ?>
+                        </span>
+
+                    <?php elseif (
+                        $roleAktif === "dinkes"
+                    ): ?>
+
+                        <span
+                            class="badge badge-info
+                            d-inline-flex
+                            align-items-center
+                            px-3"
+                        >
+                            <i class="bi bi-buildings me-1"></i>
+                            Semua Puskesmas
+                        </span>
+
+                    <?php endif; ?>
+
                     <a
                         href="../dashboard/dashboard.php"
                         class="btn btn-secondary btn-sm"
@@ -809,6 +943,7 @@ require_once "../includes/navbar.php";
                     <?php
                     if (
                         $bolehTambahSkrining
+                        && !$puskesmasBelumTerhubung
                     ):
                     ?>
 
@@ -931,138 +1066,47 @@ require_once "../includes/navbar.php";
                 </div>
 
                 <!-- =================================================
-                     FILTER PUSKESMAS
+                     SCOPE WILAYAH
                 ================================================== -->
 
-                <?php
-                if (
-                    $roleAktif
-                    === "kader"
-                ):
-                ?>
+                <?php if (
+                    $roleBerbasisPuskesmas
+                    && !$puskesmasBelumTerhubung
+                ): ?>
 
                     <div class="skrining-filter-box">
 
-                    <form
-                        method="GET"
-                        class="row
-                        g-2
-                        align-items-end"
-                    >
-
                         <div
-                            class="col-12
-                            col-lg-8"
+                            class="d-flex
+                            flex-wrap
+                            justify-content-between
+                            align-items-center
+                            gap-2"
                         >
 
-                            <label
-                                for="filter_puskesmas"
-                                class="form-label
-                                small
-                                text-muted
-                                mb-1"
-                            >
-                                Filter berdasarkan
-                                Puskesmas
-                            </label>
+                            <div>
 
-                            <select
-                                id="filter_puskesmas"
-                                name="puskesmas"
-                                class="form-select"
-                            >
+                                <small
+                                    class="text-muted
+                                    d-block"
+                                >
+                                    Wilayah data
+                                </small>
 
-                                <option value="0">
-                                    Semua Puskesmas
-                                </option>
+                                <strong>
+                                    <?= amanSkrining(
+                                        $namaPuskesmasAktif
+                                    ); ?>
+                                </strong>
 
-                                <?php
-                                foreach (
-                                    $daftarPuskesmas
-                                    as $puskesmas
-                                ):
-                                ?>
+                            </div>
 
-                                    <option
-                                        value="<?= (int) $puskesmas[
-                                            "id_puskesmas"
-                                        ]; ?>"
-                                        <?= (
-                                            $filterPuskesmas
-                                            ===
-                                            (int) $puskesmas[
-                                                "id_puskesmas"
-                                            ]
-                                        )
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-
-                                        <?= htmlspecialchars(
-                                            $puskesmas[
-                                                "nama_puskesmas"
-                                            ],
-                                            ENT_QUOTES,
-                                            "UTF-8"
-                                        ); ?>
-
-                                    </option>
-
-                                <?php endforeach; ?>
-
-                            </select>
+                            <span class="badge badge-info">
+                                <i class="bi bi-lock"></i>
+                                Mengikuti akun
+                            </span>
 
                         </div>
-
-                        <div
-                            class="col-6
-                            col-lg-2"
-                        >
-
-                            <button
-                                type="submit"
-                                class="btn
-                                btn-primary
-                                btn-sm
-                                w-100"
-                            >
-
-                                <i
-                                    class="bi
-                                    bi-funnel"
-                                ></i>
-
-                                Filter
-
-                            </button>
-
-                        </div>
-
-                        <div
-                            class="col-6
-                            col-lg-2"
-                        >
-
-                            <a
-                                href="hasil_skrining.php"
-                                class="btn
-                                btn-light
-                                btn-sm
-                                w-100"
-                            >
-
-                                <i
-                                    class="bi
-                                    bi-x-circle"
-                                ></i>
-
-                                Reset
-
-                            </a>
-
-                        </div>
-
-                    </form>
 
                     </div>
 
@@ -1194,12 +1238,14 @@ require_once "../includes/navbar.php";
                                     );
 
                                 $statusVerifikasi =
-                                    teksStatusVerifikasi(
-                                        $data[
-                                            "status_verifikasi"
-                                        ]
-                                        ?? null
-                                    );
+                                    $idDeteksi > 0
+                                        ? teksStatusVerifikasi(
+                                            $data[
+                                                "status_verifikasi"
+                                            ]
+                                            ?? null
+                                        )
+                                        : "Belum ada hasil";
 
                             ?>
 
@@ -1372,12 +1418,14 @@ require_once "../includes/navbar.php";
                                         <span
                                             class="badge
                                             rounded-pill
-                                            <?= kelasStatusVerifikasi(
-                                                $data[
-                                                    "status_verifikasi"
-                                                ]
-                                                ?? null
-                                            ); ?>"
+                                            <?= $idDeteksi > 0
+                                                ? kelasStatusVerifikasi(
+                                                    $data[
+                                                        "status_verifikasi"
+                                                    ]
+                                                    ?? null
+                                                )
+                                                : "text-bg-secondary"; ?>"
                                         >
 
                                             <?= amanSkrining(
@@ -1436,24 +1484,67 @@ require_once "../includes/navbar.php";
                                                 ):
                                                 ?>
 
-                                                    <a
-                                                        href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
-                                                        class="btn
-                                                        btn-primary
-                                                        btn-sm"
-                                                        title="Analisis status stunting"
-                                                    >
+                                                    <?php if (
+                                                        $idDeteksi > 0
+                                                    ): ?>
 
-                                                        <i
-                                                            class="bi
-                                                            bi-search-heart"
-                                                        ></i>
+                                                        <a
+                                                            href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
+                                                            class="btn
+                                                            btn-primary
+                                                            btn-sm"
+                                                            title="Hitung ulang hasil deteksi"
+                                                            onclick="return confirm(
+                                                                'Analisis ulang akan menghitung kembali hasil deteksi dan mengubah status verifikasi menjadi Belum diverifikasi. Lanjutkan?'
+                                                            );"
+                                                        >
 
-                                                        <?= $idDeteksi > 0
-                                                            ? "Analisis Ulang"
-                                                            : "Analisis"; ?>
+                                                            <i
+                                                                class="bi
+                                                                bi-arrow-repeat"
+                                                            ></i>
 
-                                                    </a>
+                                                            Analisis Ulang
+
+                                                        </a>
+
+                                                        <a
+                                                            href="../deteksi/verifikasi_deteksi.php?id=<?= $idDeteksi; ?>"
+                                                            class="btn
+                                                            btn-success
+                                                            btn-sm"
+                                                            title="Verifikasi hasil deteksi"
+                                                        >
+
+                                                            <i
+                                                                class="bi
+                                                                bi-check2-circle"
+                                                            ></i>
+
+                                                            Verifikasi Hasil
+
+                                                        </a>
+
+                                                    <?php else: ?>
+
+                                                        <a
+                                                            href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
+                                                            class="btn
+                                                            btn-primary
+                                                            btn-sm"
+                                                            title="Lakukan analisis deteksi"
+                                                        >
+
+                                                            <i
+                                                                class="bi
+                                                                bi-search-heart"
+                                                            ></i>
+
+                                                            Analisis Deteksi
+
+                                                        </a>
+
+                                                    <?php endif; ?>
 
                                                 <?php endif; ?>
 
@@ -1533,6 +1624,7 @@ require_once "../includes/navbar.php";
                                         <?php
                                         if (
                                             $bolehTambahSkrining
+                                            && !$puskesmasBelumTerhubung
                                         ):
                                         ?>
 
@@ -1631,9 +1723,9 @@ require_once "../includes/navbar.php";
                         </h5>
 
                         <small class="text-muted">
-                            Ringkasan status balita
-                            setelah data skrining
-                            disimpan.
+                            Skrining awal berhasil disimpan.
+                            Hasil deteksi tetap dianalisis
+                            oleh Petugas Gizi.
                         </small>
 
                     </div>
@@ -1860,7 +1952,9 @@ require_once "../includes/navbar.php";
 
                             Status di atas merupakan
                             hasil deteksi terbaru yang
-                            tercatat untuk balita ini.
+                            sudah tercatat untuk balita ini,
+                            bukan hasil otomatis dari
+                            skrining yang baru disimpan.
 
                         </div>
 
@@ -2014,5 +2108,16 @@ require_once "../includes/navbar.php";
 <?php endif; ?>
 
 <?php
+
+if (
+    isset($stmtSkrining)
+    && $stmtSkrining instanceof mysqli_stmt
+) {
+    mysqli_stmt_close(
+        $stmtSkrining
+    );
+}
+
 require_once "../includes/footer.php";
+
 ?>

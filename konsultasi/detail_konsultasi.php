@@ -111,11 +111,14 @@ $stmt = mysqli_prepare(
         b.nama_ibu,
         b.id_user AS id_orang_tua,
         b.id_puskesmas,
+        ps.nama_puskesmas,
         p.nama AS nama_petugas,
         p.username AS username_petugas
      FROM konsultasi k
      INNER JOIN balita b
         ON k.id_balita = b.id_balita
+     LEFT JOIN puskesmas ps
+        ON b.id_puskesmas = ps.id_puskesmas
      LEFT JOIN pengguna p
         ON k.id_petugas = p.id_user
      WHERE k.id_konsultasi = ?
@@ -290,6 +293,26 @@ require_once "../includes/navbar.php";
 
                 <div class="d-flex flex-wrap gap-2">
 
+                    <?php if (
+                        !empty(
+                            $data["nama_puskesmas"]
+                        )
+                    ): ?>
+
+                        <span
+                            class="badge badge-info
+                            d-inline-flex align-items-center px-3"
+                        >
+                            <i class="bi bi-hospital me-1"></i>
+                            <?= htmlspecialchars(
+                                $data["nama_puskesmas"],
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ); ?>
+                        </span>
+
+                    <?php endif; ?>
+
                     <a
                         href="data_konsultasi.php"
                         class="btn btn-secondary btn-sm"
@@ -430,6 +453,28 @@ require_once "../includes/navbar.php";
                         <div class="detail-item h-100">
 
                             <span class="detail-label">
+                                Puskesmas
+                            </span>
+
+                            <div class="detail-value">
+                                <i class="bi bi-hospital me-1"></i>
+                                <?= htmlspecialchars(
+                                    $data["nama_puskesmas"]
+                                        ?? "-",
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
                                 Nama Ibu
                             </span>
 
@@ -517,7 +562,7 @@ require_once "../includes/navbar.php";
                         <div class="detail-item">
 
                             <span class="detail-label">
-                                Keluhan
+                                Keluhan Orang Tua
                             </span>
 
                             <div class="detail-value">
@@ -528,6 +573,11 @@ require_once "../includes/navbar.php";
                                         "UTF-8"
                                     )
                                 ); ?>
+                            </div>
+
+                            <div class="form-text mt-2">
+                                Keluhan merupakan pengajuan awal Orang Tua
+                                dan tidak dapat diubah setelah dikirim.
                             </div>
 
                         </div>

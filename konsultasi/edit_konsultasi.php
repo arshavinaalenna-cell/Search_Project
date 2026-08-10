@@ -11,6 +11,86 @@ $judulHalaman = "Edit Konsultasi | Sistem Deteksi Stunting";
 $idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
 $pesanError = "";
 
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil Puskesmas Petugas Gizi aktif
+|--------------------------------------------------------------------------
+*/
+
+$stmtPuskesmas = mysqli_prepare(
+    $conn,
+    "SELECT
+        u.id_puskesmas,
+        p.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS p
+        ON u.id_puskesmas = p.id_puskesmas
+     WHERE u.id_user = ?
+     AND u.role = 'petugas_gizi'
+     LIMIT 1"
+);
+
+if (!$stmtPuskesmas) {
+    die(
+        "Gagal memeriksa Puskesmas Petugas Gizi: "
+        . mysqli_error($conn)
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtPuskesmas,
+    "i",
+    $idUserAktif
+);
+
+mysqli_stmt_execute(
+    $stmtPuskesmas
+);
+
+$hasilPuskesmas =
+    mysqli_stmt_get_result(
+        $stmtPuskesmas
+    );
+
+$dataPuskesmas =
+    mysqli_fetch_assoc(
+        $hasilPuskesmas
+    );
+
+mysqli_stmt_close(
+    $stmtPuskesmas
+);
+
+if (
+    !$dataPuskesmas
+    || empty(
+        $dataPuskesmas["id_puskesmas"]
+    )
+) {
+    header(
+        "Location: data_konsultasi.php?pesan=tidak_ditemukan"
+    );
+    exit;
+}
+
+$idPuskesmasAktif =
+    (int) $dataPuskesmas[
+        "id_puskesmas"
+    ];
+
+$namaPuskesmasAktif =
+    trim(
+        (string) (
+            $dataPuskesmas[
+                "nama_puskesmas"
+            ]
+            ?? ""
+        )
+    );
+
 $idKonsultasi = filter_input(
     INPUT_GET,
     "id",
@@ -45,12 +125,17 @@ $stmtKonsultasi = mysqli_prepare(
         k.tindak_lanjut,
         b.nama_balita,
         b.nik_balita,
-        b.nama_ibu
+        b.nama_ibu,
+        b.id_puskesmas,
+        p.nama_puskesmas
      FROM konsultasi k
      INNER JOIN balita b
         ON k.id_balita = b.id_balita
+     LEFT JOIN puskesmas p
+        ON b.id_puskesmas = p.id_puskesmas
      WHERE k.id_konsultasi = ?
      AND k.id_petugas = ?
+     AND b.id_puskesmas = ?
      LIMIT 1"
 );
 
@@ -63,9 +148,10 @@ if (!$stmtKonsultasi) {
 
 mysqli_stmt_bind_param(
     $stmtKonsultasi,
-    "ii",
+    "iii",
     $idKonsultasi,
-    $idUserAktif
+    $idUserAktif,
+    $idPuskesmasAktif
 );
 
 mysqli_stmt_execute($stmtKonsultasi);
@@ -147,12 +233,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if ($pesanError === "") {
         $stmtUpdate = mysqli_prepare(
             $conn,
-            "UPDATE konsultasi
+            "UPDATE konsultasi AS k
+             INNER JOIN balita AS b
+                ON k.id_balita = b.id_balita
              SET
-                hasil_konsultasi = ?,
-                tindak_lanjut = ?
-             WHERE id_konsultasi = ?
-             AND id_petugas = ?"
+                k.hasil_konsultasi = ?,
+                k.tindak_lanjut = ?
+             WHERE k.id_konsultasi = ?
+             AND k.id_petugas = ?
+             AND b.id_puskesmas = ?"
         );
 
         if (!$stmtUpdate) {
@@ -162,11 +251,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         } else {
             mysqli_stmt_bind_param(
                 $stmtUpdate,
-                "ssii",
+                "ssiii",
                 $hasilKonsultasiForm,
                 $tindakLanjut,
                 $idKonsultasi,
-                $idUserAktif
+                $idUserAktif,
+                $idPuskesmasAktif
             );
 
             if (mysqli_stmt_execute($stmtUpdate)) {
@@ -245,13 +335,29 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        Tinjau keluhan orang tua lalu isi atau
-                        perbarui hasil konsultasi dan tindak lanjut.
+                        Keluhan Orang Tua bersifat tetap.
+                        Petugas Gizi hanya mengisi atau memperbarui
+                        hasil konsultasi dan tindak lanjut.
                     </small>
 
                 </div>
 
                 <div class="d-flex flex-wrap gap-2">
+
+                    <span
+                        class="badge badge-info
+                        d-inline-flex align-items-center px-3"
+                    >
+                        <i class="bi bi-hospital me-1"></i>
+                        <?= htmlspecialchars(
+                            $dataKonsultasi[
+                                "nama_puskesmas"
+                            ]
+                                ?? $namaPuskesmasAktif,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>
+                    </span>
 
                     <span
                         class="badge
@@ -405,7 +511,7 @@ require_once "../includes/navbar.php";
                         <div class="detail-item">
 
                             <span class="detail-label">
-                                Keluhan
+                                Keluhan Orang Tua
                             </span>
 
                             <div class="detail-value">
@@ -418,6 +524,11 @@ require_once "../includes/navbar.php";
                                         "UTF-8"
                                     )
                                 ); ?>
+                            </div>
+
+                            <div class="form-text mt-2">
+                                Keluhan ini dikirim oleh Orang Tua dan
+                                tidak dapat diedit oleh Petugas Gizi.
                             </div>
 
                         </div>

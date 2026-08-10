@@ -17,6 +17,7 @@ $roleAktif = $_SESSION["role"] ?? "";
 $idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
 
 $idPuskesmasAktif = null;
+$namaPuskesmasAktif = "";
 $puskesmasBelumTerhubung = false;
 
 /*
@@ -35,9 +36,13 @@ if (
 ) {
     $stmtPuskesmas = mysqli_prepare(
         $conn,
-        "SELECT id_puskesmas
-         FROM pengguna
-         WHERE id_user = ?
+        "SELECT
+            u.id_puskesmas,
+            p.nama_puskesmas
+         FROM pengguna AS u
+         LEFT JOIN puskesmas AS p
+            ON u.id_puskesmas = p.id_puskesmas
+         WHERE u.id_user = ?
          LIMIT 1"
     );
 
@@ -76,14 +81,29 @@ if (
     } else {
         $idPuskesmasAktif =
             (int) $dataPuskesmas["id_puskesmas"];
+
+        $namaPuskesmasAktif =
+            trim(
+                (string) (
+                    $dataPuskesmas["nama_puskesmas"]
+                    ?? ""
+                )
+            );
     }
 }
 
-$bolehTambah = in_array(
-    $roleAktif,
-    ["orang_tua", "petugas_gizi"],
-    true
-);
+/*
+|--------------------------------------------------------------------------
+| Konsultasi baru hanya diajukan oleh Orang Tua
+|--------------------------------------------------------------------------
+|
+| Petugas Gizi tidak membuat keluhan baru. Petugas Gizi hanya menanggapi
+| konsultasi yang sudah diajukan Orang Tua.
+|
+*/
+
+$bolehTambah =
+    $roleAktif === "orang_tua";
 
 $bolehMengelola = $roleAktif === "petugas_gizi";
 $modeMonitoring = in_array(
@@ -135,10 +155,13 @@ $selectKonsultasi = "
         b.nama_balita,
         b.nik_balita,
         b.id_puskesmas,
+        ps.nama_puskesmas,
         p.nama AS nama_petugas
     FROM konsultasi AS k
     INNER JOIN balita AS b
         ON k.id_balita = b.id_balita
+    LEFT JOIN puskesmas AS ps
+        ON b.id_puskesmas = ps.id_puskesmas
     LEFT JOIN pengguna AS p
         ON k.id_petugas = p.id_user
 ";
@@ -424,8 +447,10 @@ require_once "../includes/navbar.php";
                             Pantau riwayat konsultasi gizi dan tindak lanjut balita.
                         <?php elseif ($roleAktif === "orang_tua"): ?>
                             Lihat dan ajukan konsultasi gizi untuk balita Anda.
+                        <?php elseif ($roleAktif === "petugas_gizi"): ?>
+                            Tinjau keluhan Orang Tua dan berikan tanggapan gizi.
                         <?php else: ?>
-                            Kelola konsultasi gizi dan tindak lanjut balita.
+                            Pantau konsultasi gizi dan tindak lanjut balita.
                         <?php endif; ?>
 
                     </small>
@@ -433,6 +458,37 @@ require_once "../includes/navbar.php";
                 </div>
 
                 <div class="d-flex flex-wrap gap-2">
+
+                    <?php if (
+                        in_array(
+                            $roleAktif,
+                            ["petugas_gizi", "kepala_puskesmas"],
+                            true
+                        )
+                        && !$puskesmasBelumTerhubung
+                    ): ?>
+
+                        <span
+                            class="badge badge-info
+                            d-inline-flex align-items-center px-3"
+                        >
+                            <i class="bi bi-hospital me-1"></i>
+                            <?= amanKonsultasi(
+                                $namaPuskesmasAktif
+                            ); ?>
+                        </span>
+
+                    <?php elseif ($roleAktif === "dinkes"): ?>
+
+                        <span
+                            class="badge badge-info
+                            d-inline-flex align-items-center px-3"
+                        >
+                            <i class="bi bi-buildings me-1"></i>
+                            Semua Puskesmas
+                        </span>
+
+                    <?php endif; ?>
 
                     <a
                         href="../dashboard/dashboard.php"
@@ -449,7 +505,7 @@ require_once "../includes/navbar.php";
                             class="btn btn-primary btn-sm"
                         >
                             <i class="bi bi-plus-circle"></i>
-                            Tambah Konsultasi
+                            Ajukan Konsultasi
                         </a>
 
                     <?php endif; ?>
@@ -627,6 +683,10 @@ require_once "../includes/navbar.php";
                                 </th>
 
                                 <th>
+                                    Puskesmas
+                                </th>
+
+                                <th>
                                     Petugas Gizi
                                 </th>
 
@@ -787,6 +847,14 @@ require_once "../includes/navbar.php";
 
                                         </div>
 
+                                    </td>
+
+                                    <td>
+                                        <?= amanKonsultasi(
+                                            $data[
+                                                "nama_puskesmas"
+                                            ] ?? null
+                                        ); ?>
                                     </td>
 
                                     <td>
@@ -963,7 +1031,7 @@ require_once "../includes/navbar.php";
 
                                                     <?= $belumDitangani
                                                         ? "Tanggapi"
-                                                        : "Edit"; ?>
+                                                        : "Edit Hasil"; ?>
                                                 </a>
 
                                             <?php endif; ?>
@@ -980,7 +1048,7 @@ require_once "../includes/navbar.php";
 
                             <tr>
 
-                                <td colspan="8">
+                                <td colspan="9">
 
                                     <div class="empty-state">
 
@@ -1017,8 +1085,12 @@ require_once "../includes/navbar.php";
                                                 $modeMonitoring
                                             ): ?>
                                                 Data konsultasi belum tersedia untuk dimonitoring.
+                                            <?php elseif (
+                                                $roleAktif === "petugas_gizi"
+                                            ): ?>
+                                                Belum ada keluhan Orang Tua yang perlu ditanggapi.
                                             <?php else: ?>
-                                                Tambahkan atau tanggapi konsultasi gizi balita.
+                                                Data konsultasi belum tersedia.
                                             <?php endif; ?>
                                         </p>
 
