@@ -11,8 +11,15 @@ require_once "../config/koneksi.php";
 */
 
 cekRole([
-    "petugas_kia"
+    "petugas_kia",
+    "petugas_gizi"
 ]);
+
+$roleAktif =
+    $_SESSION["role"] ?? "";
+
+$bolehKelolaKelahiran =
+    $roleAktif === "petugas_kia";
 
 $judulHalaman =
     "Riwayat Kelahiran | Sistem Deteksi Stunting";
@@ -167,8 +174,14 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        Kelola data kelahiran, status BBLR,
-                        prematur, dan riwayat maternal balita.
+                        <?php if ($bolehKelolaKelahiran): ?>
+                            Kelola data kelahiran, status BBLR,
+                            prematur, dan riwayat maternal balita.
+                        <?php else: ?>
+                            Lihat data kelahiran, status BBLR,
+                            prematur, dan riwayat maternal sebagai
+                            pendukung asesmen gizi balita.
+                        <?php endif; ?>
                     </small>
 
                 </div>
@@ -183,13 +196,17 @@ require_once "../includes/navbar.php";
                         Kembali
                     </a>
 
-                    <a
-                        href="tambah_kelahiran.php"
-                        class="btn btn-primary btn-sm"
-                    >
-                        <i class="bi bi-plus-circle"></i>
-                        Tambah Riwayat
-                    </a>
+                    <?php if ($bolehKelolaKelahiran): ?>
+
+                        <a
+                            href="tambah_kelahiran.php"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-plus-circle"></i>
+                            Tambah Riwayat
+                        </a>
+
+                    <?php endif; ?>
 
                 </div>
 
@@ -239,10 +256,21 @@ require_once "../includes/navbar.php";
                         riwayat kelahiran
                     </span>
 
-                    <span class="badge badge-info">
-                        <i class="bi bi-heart-pulse"></i>
-                        Data KIA
-                    </span>
+                    <?php if ($bolehKelolaKelahiran): ?>
+
+                        <span class="badge badge-info">
+                            <i class="bi bi-heart-pulse"></i>
+                            Data KIA
+                        </span>
+
+                    <?php else: ?>
+
+                        <span class="badge badge-info">
+                            <i class="bi bi-eye"></i>
+                            Mode lihat
+                        </span>
+
+                    <?php endif; ?>
 
                 </div>
 
@@ -281,12 +309,16 @@ require_once "../includes/navbar.php";
                                     Persalinan
                                 </th>
 
-                                <th
-                                    class="text-center"
-                                    style="min-width: 170px;"
-                                >
-                                    Aksi
-                                </th>
+                                <?php if ($bolehKelolaKelahiran): ?>
+
+                                    <th
+                                        class="text-center"
+                                        style="min-width: 170px;"
+                                    >
+                                        Aksi
+                                    </th>
+
+                                <?php endif; ?>
                             </tr>
 
                         </thead>
@@ -519,53 +551,58 @@ require_once "../includes/navbar.php";
 
                                     </td>
 
-                                    <td>
+                                    <?php if ($bolehKelolaKelahiran): ?>
 
-                                        <div
-                                            class="table-actions
-                                            justify-content-center"
-                                        >
+                                        <td>
 
-                                            <a
-                                                href="edit_kelahiran.php?id=<?= $idRiwayat; ?>"
-                                                class="btn btn-warning btn-sm"
+                                            <div
+                                                class="table-actions
+                                                justify-content-center"
                                             >
-                                                <i
-                                                    class="bi
-                                                    bi-pencil-square"
-                                                ></i>
-                                                Edit
-                                            </a>
 
-                                            <form
-                                                action="hapus_kelahiran.php"
-                                                method="POST"
-                                                class="d-inline"
-                                                onsubmit="return confirm(
-                                                    'Yakin ingin menghapus riwayat kelahiran ini?'
-                                                );"
-                                            >
-                                                <input
-                                                    type="hidden"
-                                                    name="id"
-                                                    value="<?= $idRiwayat; ?>"
-                                                >
-
-                                                <button
-                                                    type="submit"
-                                                    class="btn btn-danger btn-sm"
+                                                <a
+                                                    href="edit_kelahiran.php?id=<?= $idRiwayat; ?>"
+                                                    class="btn btn-warning btn-sm"
                                                 >
                                                     <i
                                                         class="bi
-                                                        bi-trash3"
+                                                        bi-pencil-square"
                                                     ></i>
-                                                    Hapus
-                                                </button>
-                                            </form>
+                                                    Edit
+                                                </a>
 
-                                        </div>
+                                                <form
+                                                    action="hapus_kelahiran.php"
+                                                    method="POST"
+                                                    class="d-inline"
+                                                    onsubmit="return confirm(
+                                                        'Yakin ingin menghapus riwayat kelahiran ini?'
+                                                    );"
+                                                >
+                                                    <input
+                                                        type="hidden"
+                                                        name="id"
+                                                        value="<?= $idRiwayat; ?>"
+                                                    >
 
-                                    </td>
+                                                    <button
+                                                        type="submit"
+                                                        class="btn btn-danger btn-sm"
+                                                    >
+                                                        <i
+                                                            class="bi
+                                                            bi-trash3"
+                                                        ></i>
+                                                        Hapus
+                                                    </button>
+
+                                                </form>
+
+                                            </div>
+
+                                        </td>
+
+                                    <?php endif; ?>
 
                                 </tr>
 
@@ -575,7 +612,11 @@ require_once "../includes/navbar.php";
 
                             <tr>
 
-                                <td colspan="8">
+                                <td
+                                    colspan="<?= $bolehKelolaKelahiran
+                                        ? "8"
+                                        : "7"; ?>"
+                                >
 
                                     <div class="empty-state">
 
@@ -591,21 +632,30 @@ require_once "../includes/navbar.php";
                                         </h3>
 
                                         <p>
-                                            Tambahkan data kelahiran
-                                            balita untuk melengkapi
-                                            informasi awal pertumbuhan.
+                                            <?php if ($bolehKelolaKelahiran): ?>
+                                                Tambahkan data kelahiran
+                                                balita untuk melengkapi
+                                                informasi awal pertumbuhan.
+                                            <?php else: ?>
+                                                Data riwayat kelahiran balita
+                                                belum tersedia untuk ditinjau.
+                                            <?php endif; ?>
                                         </p>
 
-                                        <a
-                                            href="tambah_kelahiran.php"
-                                            class="btn btn-primary mt-3"
-                                        >
-                                            <i
-                                                class="bi
-                                                bi-plus-circle"
-                                            ></i>
-                                            Tambah Riwayat
-                                        </a>
+                                        <?php if ($bolehKelolaKelahiran): ?>
+
+                                            <a
+                                                href="tambah_kelahiran.php"
+                                                class="btn btn-primary mt-3"
+                                            >
+                                                <i
+                                                    class="bi
+                                                    bi-plus-circle"
+                                                ></i>
+                                                Tambah Riwayat
+                                            </a>
+
+                                        <?php endif; ?>
 
                                     </div>
 

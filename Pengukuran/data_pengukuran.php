@@ -389,9 +389,9 @@ require_once "../includes/navbar.php";
                         <?php if ($bolehKelolaPengukuran): ?>
                             Kelola hasil pengukuran fisik balita dari kegiatan Posyandu.
                         <?php elseif ($roleAktif === "orang_tua"): ?>
-                            Lihat riwayat pengukuran pertumbuhan anak yang terhubung dengan akun Anda.
+                            Lihat riwayat dan grafik pertumbuhan anak yang terhubung dengan akun Anda.
                         <?php else: ?>
-                            Lihat riwayat pengukuran pertumbuhan balita.
+                            Lihat riwayat dan grafik pertumbuhan balita.
                         <?php endif; ?>
                     </small>
 
@@ -556,13 +556,9 @@ require_once "../includes/navbar.php";
                                     LiLA
                                 </th>
 
-                                <?php if ($bolehKelolaPengukuran): ?>
-
-                                    <th class="text-center">
-                                        Aksi
-                                    </th>
-
-                                <?php endif; ?>
+                                <th class="text-center">
+                                    Aksi
+                                </th>
 
                             </tr>
 
@@ -659,16 +655,27 @@ require_once "../includes/navbar.php";
                                         ); ?>
                                     </td>
 
-                                    <?php if (
-                                        $bolehKelolaPengukuran
-                                    ): ?>
+                                    <td>
 
-                                        <td>
+                                        <div
+                                            class="table-actions
+                                            justify-content-center"
+                                        >
 
-                                            <div
-                                                class="table-actions
-                                                justify-content-center"
+                                            <a
+                                                href="grafik_pertumbuhan.php?id_balita=<?= (int) $data["id_balita"]; ?>"
+                                                class="btn btn-info btn-sm"
                                             >
+                                                <i
+                                                    class="bi
+                                                    bi-graph-up-arrow"
+                                                ></i>
+                                                Grafik
+                                            </a>
+
+                                            <?php if (
+                                                $bolehKelolaPengukuran
+                                            ): ?>
 
                                                 <a
                                                     href="edit_pengukuran.php?id=<?= $idPengukuran; ?>"
@@ -707,11 +714,11 @@ require_once "../includes/navbar.php";
                                                     </button>
                                                 </form>
 
-                                            </div>
+                                            <?php endif; ?>
 
-                                        </td>
+                                        </div>
 
-                                    <?php endif; ?>
+                                    </td>
 
                                 </tr>
 
@@ -722,9 +729,7 @@ require_once "../includes/navbar.php";
                             <tr>
 
                                 <td
-                                    colspan="<?= $bolehKelolaPengukuran
-                                        ? "9"
-                                        : "8"; ?>"
+                                    colspan="9"
                                 >
 
                                     <div class="empty-state">
