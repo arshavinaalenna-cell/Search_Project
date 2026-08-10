@@ -278,17 +278,55 @@ require_once "../includes/navbar.php";
 
                 </div>
 
-                <a
-                    href="hasil_deteksi.php"
-                    class="btn btn-secondary btn-sm"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali
-                </a>
+                <div class="d-flex flex-wrap gap-2">
+
+                    <a
+                        href="hasil_deteksi.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                    <?php if ($roleAktif === "petugas_gizi"): ?>
+
+                        <a
+                            href="verifikasi_deteksi.php?id=<?= $idDeteksi; ?>"
+                            class="btn btn-success btn-sm"
+                        >
+                            <i class="bi bi-check2-circle"></i>
+                            Verifikasi
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
 
             </div>
 
             <div class="card-body">
+
+                <?php if (
+                    ($_GET["pesan"] ?? "")
+                    === "verifikasi_berhasil"
+                ): ?>
+
+                    <div
+                        class="alert alert-success alert-dismissible fade show"
+                        role="alert"
+                    >
+                        <i class="bi bi-check-circle me-1"></i>
+                        Verifikasi hasil deteksi berhasil disimpan.
+
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="alert"
+                            aria-label="Tutup"
+                        ></button>
+                    </div>
+
+                <?php endif; ?>
 
                 <!-- =================================================
                      IDENTITAS BALITA
