@@ -95,27 +95,42 @@ $namaPosyandu = $dataBalita["nama_posyandu"] ?? "";
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil daftar akun orang tua
+| Mengambil daftar Profil Ibu
 |--------------------------------------------------------------------------
+|
+| Kader hanya dapat memilih akun Orang Tua yang sudah memiliki profil
+| pada tabel orang_tua. Nama ibu dan alamat tidak diinput ulang.
+|
 */
 
 $queryOrangTua = mysqli_query(
     $conn,
     "SELECT
-        id_user,
-        nama,
-        username
-     FROM pengguna
-     WHERE role = 'orang_tua'
-     ORDER BY nama ASC"
+        ot.id_orang_tua,
+        ot.id_user,
+        ot.nik_ibu,
+        ot.nama_ibu,
+        ot.no_hp,
+        ot.alamat,
+        ot.pendidikan_ibu,
+        ot.pekerjaan_ibu,
+        p.username
+     FROM orang_tua AS ot
+     INNER JOIN pengguna AS p
+        ON ot.id_user = p.id_user
+     WHERE p.role = 'orang_tua'
+     ORDER BY ot.nama_ibu ASC"
 );
 
 if (!$queryOrangTua) {
     die(
-        "Gagal mengambil data orang tua: "
+        "Gagal mengambil Profil Ibu: "
         . mysqli_error($conn)
     );
 }
+
+$jumlahOrangTua =
+    mysqli_num_rows($queryOrangTua);
 
 /*
 |--------------------------------------------------------------------------
@@ -165,9 +180,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $namaBalita = trim($_POST["nama_balita"] ?? "");
     $jenisKelamin = $_POST["jenis_kelamin"] ?? "";
     $tanggalLahir = $_POST["tanggal_lahir"] ?? "";
-    $namaIbu = trim($_POST["nama_ibu"] ?? "");
-    $alamat = trim($_POST["alamat"] ?? "");
     $namaPosyandu = trim($_POST["nama_posyandu"] ?? "");
+
+    /*
+    |--------------------------------------------------------------------------
+    | Nama ibu dan alamat selalu diambil dari Profil Ibu
+    |--------------------------------------------------------------------------
+    */
+
+    $namaIbu = "";
+    $alamat = "";
 
     $jenisKelaminDiizinkan = [
         "Laki-laki",
@@ -181,17 +203,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     */
 
     if (
-        !$idUser
+        $jumlahOrangTua === 0
+        || !$idUser
         || !$idPuskesmas
         || $nikBalita === ""
         || $namaBalita === ""
         || $jenisKelamin === ""
         || $tanggalLahir === ""
-        || $namaIbu === ""
-        || $alamat === ""
         || $namaPosyandu === ""
     ) {
-        $pesanError = "Semua data wajib diisi.";
+        $pesanError =
+            $jumlahOrangTua === 0
+                ? "Belum ada Profil Ibu yang dapat dipilih."
+                : "Semua data wajib diisi.";
     } elseif (!preg_match("/^[0-9]{16}$/", $nikBalita)) {
         $pesanError = "NIK balita harus terdiri dari 16 angka.";
     } elseif (
@@ -211,7 +235,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     /*
     |--------------------------------------------------------------------------
-    | Memastikan akun yang dipilih adalah Orang Tua
+    | Memastikan Profil Ibu valid dan mengambil data otomatis
     |--------------------------------------------------------------------------
     */
 
@@ -219,17 +243,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $cekOrangTua = mysqli_prepare(
             $conn,
-            "SELECT id_user
-             FROM pengguna
-             WHERE id_user = ?
-             AND role = 'orang_tua'
+            "SELECT
+                ot.id_user,
+                ot.nama_ibu,
+                ot.alamat
+             FROM orang_tua AS ot
+             INNER JOIN pengguna AS p
+                ON ot.id_user = p.id_user
+             WHERE ot.id_user = ?
+             AND p.role = 'orang_tua'
              LIMIT 1"
         );
 
         if (!$cekOrangTua) {
 
             $pesanError =
-                "Terjadi kesalahan saat memeriksa akun orang tua.";
+                "Terjadi kesalahan saat memeriksa Profil Ibu.";
 
         } else {
 
@@ -239,18 +268,53 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $idUser
             );
 
-            mysqli_stmt_execute($cekOrangTua);
-
-            $hasilOrangTua = mysqli_stmt_get_result(
+            mysqli_stmt_execute(
                 $cekOrangTua
             );
 
-            if (mysqli_num_rows($hasilOrangTua) === 0) {
+            $hasilOrangTua =
+                mysqli_stmt_get_result(
+                    $cekOrangTua
+                );
+
+            $profilIbu =
+                mysqli_fetch_assoc(
+                    $hasilOrangTua
+                );
+
+            if (!$profilIbu) {
+
                 $pesanError =
-                    "Akun orang tua tidak ditemukan.";
+                    "Profil Ibu tidak ditemukan atau belum lengkap.";
+
+            } else {
+
+                $namaIbu =
+                    trim(
+                        (string) $profilIbu[
+                            "nama_ibu"
+                        ]
+                    );
+
+                $alamat =
+                    trim(
+                        (string) $profilIbu[
+                            "alamat"
+                        ]
+                    );
+
+                if (
+                    $namaIbu === ""
+                    || $alamat === ""
+                ) {
+                    $pesanError =
+                        "Profil Ibu belum lengkap. Lengkapi nama dan alamat terlebih dahulu.";
+                }
             }
 
-            mysqli_stmt_close($cekOrangTua);
+            mysqli_stmt_close(
+                $cekOrangTua
+            );
         }
     }
 
@@ -474,8 +538,8 @@ require_once "../includes/navbar.php";
 
                 <p class="page-subtitle">
 
-                    Perbarui profil balita, Posyandu, Puskesmas
-                    pembina, dan akun orang tua yang terhubung.
+                    Perbarui data balita dan pilih Profil Ibu
+                    yang terhubung tanpa menginput ulang data ibu.
 
                 </p>
 
@@ -539,6 +603,24 @@ require_once "../includes/navbar.php";
 
         <?php endif; ?>
 
+        <?php if ($jumlahOrangTua === 0): ?>
+
+            <div
+                class="alert alert-warning"
+                role="alert"
+            >
+
+                <i class="bi bi-person-exclamation me-1"></i>
+
+                Belum ada Profil Ibu yang dapat dipilih.
+                Orang Tua harus melengkapi
+                <strong>Profil Ibu</strong>
+                terlebih dahulu.
+
+            </div>
+
+        <?php endif; ?>
+
         <div class="card content-card">
 
             <div class="card-header">
@@ -577,38 +659,60 @@ require_once "../includes/navbar.php";
                                 for="id_user"
                                 class="form-label"
                             >
-                                Orang Tua
+                                Profil Ibu / Orang Tua
                             </label>
 
                             <select
                                 id="id_user"
                                 name="id_user"
                                 class="form-select"
-                                required
+                                <?= $jumlahOrangTua === 0
+                                    ? "disabled"
+                                    : "required"; ?>
                             >
 
                                 <option value="">
-                                    Pilih akun orang tua
+                                    Pilih Profil Ibu
                                 </option>
 
+                                <?php
+                                mysqli_data_seek(
+                                    $queryOrangTua,
+                                    0
+                                );
+                                ?>
+
                                 <?php while (
-                                    $orangTua = mysqli_fetch_assoc(
-                                        $queryOrangTua
-                                    )
+                                    $orangTua =
+                                        mysqli_fetch_assoc(
+                                            $queryOrangTua
+                                        )
                                 ): ?>
 
                                     <option
                                         value="<?= (int)
-                                            $orangTua["id_user"]; ?>"
+                                            $orangTua[
+                                                "id_user"
+                                            ]; ?>"
                                         <?= (int) $idUser ===
-                                            (int) $orangTua["id_user"]
+                                            (int) $orangTua[
+                                                "id_user"
+                                            ]
                                             ? "selected"
                                             : ""; ?>
                                     >
                                         <?= htmlspecialchars(
-                                            $orangTua["nama"]
+                                            $orangTua[
+                                                "nama_ibu"
+                                            ]
+                                            . " — NIK "
+                                            . $orangTua[
+                                                "nik_ibu"
+                                            ]
                                             . " ("
-                                            . $orangTua["username"]
+                                            . $orangTua[
+                                                "username"
+                                            ]
                                             . ")",
                                             ENT_QUOTES,
                                             "UTF-8"
@@ -620,7 +724,8 @@ require_once "../includes/navbar.php";
                             </select>
 
                             <div class="form-text">
-                                Akun harus memiliki role Orang Tua.
+                                Nama Ibu dan alamat akan mengikuti
+                                Profil Ibu yang dipilih.
                             </div>
 
                         </div>
@@ -805,26 +910,17 @@ require_once "../includes/navbar.php";
 
                         <div class="col-12 col-lg-6">
 
-                            <label
-                                for="nama_ibu"
-                                class="form-label"
-                            >
-                                Nama Ibu
-                            </label>
+                            <div class="alert alert-info h-100 mb-0">
 
-                            <input
-                                type="text"
-                                id="nama_ibu"
-                                name="nama_ibu"
-                                class="form-control"
-                                value="<?= htmlspecialchars(
-                                    $namaIbu,
-                                    ENT_QUOTES,
-                                    "UTF-8"
-                                ); ?>"
-                                maxlength="100"
-                                required
-                            >
+                                <i class="bi bi-info-circle me-1"></i>
+
+                                <strong>Data Ibu otomatis.</strong>
+
+                                Nama Ibu dan alamat tidak diedit
+                                dari halaman balita. Perubahan data
+                                dilakukan melalui Profil Ibu.
+
+                            </div>
 
                         </div>
 
@@ -860,24 +956,34 @@ require_once "../includes/navbar.php";
 
                         <div class="col-12">
 
-                            <label
-                                for="alamat"
-                                class="form-label"
-                            >
-                                Alamat
-                            </label>
+                            <div class="detail-item">
 
-                            <textarea
-                                id="alamat"
-                                name="alamat"
-                                class="form-control"
-                                rows="3"
-                                required
-                            ><?= htmlspecialchars(
-                                $alamat,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ); ?></textarea>
+                                <span class="detail-label">
+                                    Data Ibu Saat Ini
+                                </span>
+
+                                <div class="detail-value">
+                                    <?= htmlspecialchars(
+                                        $namaIbu !== ""
+                                            ? $namaIbu
+                                            : "-",
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
+                                </div>
+
+                                <small class="text-muted">
+                                    Alamat:
+                                    <?= htmlspecialchars(
+                                        $alamat !== ""
+                                            ? $alamat
+                                            : "-",
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
+                                </small>
+
+                            </div>
 
                         </div>
 
@@ -888,7 +994,10 @@ require_once "../includes/navbar.php";
                                 <button
                                     type="submit"
                                     class="btn btn-primary"
-                                    <?= $jumlahPuskesmas === 0
+                                    <?= (
+                                        $jumlahPuskesmas === 0
+                                        || $jumlahOrangTua === 0
+                                    )
                                         ? "disabled"
                                         : ""; ?>
                                 >

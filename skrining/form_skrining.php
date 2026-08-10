@@ -4,7 +4,7 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
-cekRole(["petugas_gizi", "kader"]);
+cekRole(["kader"]);
 
 $roleAktif = $_SESSION["role"] ?? "";
 $idPuskesmasDipilih = $roleAktif === "kader"
@@ -19,39 +19,6 @@ $idPuskesmasDipilih = $roleAktif === "kader"
 
 $judulHalaman =
     "Tambah Skrining Awal | Sistem Deteksi Stunting";
-
-/*
-|--------------------------------------------------------------------------
-| Flash hasil analisis
-|--------------------------------------------------------------------------
-|
-| Setelah skrining disimpan, analisis_deteksi.php akan menghitung
-| hasil menggunakan rumus yang sudah ada, lalu mengembalikan hasil
-| ke halaman form ini melalui session.
-|
-| Data popup hanya ditampilkan satu kali.
-|
-*/
-
-$hasilAnalisisPopup =
-    $_SESSION["hasil_analisis_form"] ?? null;
-
-if ($hasilAnalisisPopup !== null) {
-    unset($_SESSION["hasil_analisis_form"]);
-}
-
-/*
-|--------------------------------------------------------------------------
-| Flash data skrining baru
-|--------------------------------------------------------------------------
-*/
-
-$skriningBaru =
-    $_SESSION["skrining_baru"] ?? null;
-
-if ($hasilAnalisisPopup !== null && $skriningBaru !== null) {
-    unset($_SESSION["skrining_baru"]);
-}
 
 /*
 |--------------------------------------------------------------------------
@@ -79,8 +46,6 @@ $error = "";
 $old = [
     "id_balita"          => "",
     "tinggi_badan_ibu"   => "",
-    "pendidikan_ibu"     => "",
-    "pekerjaan_ibu"      => "",
     "lama_asi_eksklusif" => "",
     "mpasi"              => "",
     "frekuensi_makan"    => "",
@@ -95,24 +60,6 @@ $old = [
 | Pilihan yang diizinkan
 |--------------------------------------------------------------------------
 */
-
-$daftarPendidikan = [
-    "SD",
-    "SMP",
-    "SMA",
-    "Diploma",
-    "Sarjana"
-];
-
-$daftarPekerjaan = [
-    "Ibu Rumah Tangga",
-    "Petani",
-    "Pedagang",
-    "Karyawan Swasta",
-    "PNS",
-    "Wiraswasta",
-    "Lainnya"
-];
 
 $daftarFrekuensi = [
     "Kurang dari 3 kali",
@@ -250,30 +197,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     if (
         $error === ""
-        && !in_array(
-            $old["pendidikan_ibu"],
-            $daftarPendidikan,
-            true
-        )
-    ) {
-        $error =
-            "Pilihan pendidikan ibu tidak valid.";
-    }
-
-    if (
-        $error === ""
-        && !in_array(
-            $old["pekerjaan_ibu"],
-            $daftarPekerjaan,
-            true
-        )
-    ) {
-        $error =
-            "Pilihan pekerjaan ibu tidak valid.";
-    }
-
-    if (
-        $error === ""
         && (
             $lamaAsiEksklusif === false
             || $lamaAsiEksklusif < 0
@@ -368,21 +291,31 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $stmtCekBalita = mysqli_prepare(
                 $conn,
                 "SELECT
-                    id_balita,
-                    nama_balita
-                 FROM balita
-                 WHERE id_balita = ?
-                   AND id_puskesmas = ?
+                    b.id_balita,
+                    b.nama_balita,
+                    ot.nama_ibu,
+                    ot.pendidikan_ibu,
+                    ot.pekerjaan_ibu
+                 FROM balita AS b
+                 INNER JOIN orang_tua AS ot
+                    ON b.id_user = ot.id_user
+                 WHERE b.id_balita = ?
+                   AND b.id_puskesmas = ?
                  LIMIT 1"
             );
         } else {
             $stmtCekBalita = mysqli_prepare(
                 $conn,
                 "SELECT
-                    id_balita,
-                    nama_balita
-                 FROM balita
-                 WHERE id_balita = ?
+                    b.id_balita,
+                    b.nama_balita,
+                    ot.nama_ibu,
+                    ot.pendidikan_ibu,
+                    ot.pekerjaan_ibu
+                 FROM balita AS b
+                 INNER JOIN orang_tua AS ot
+                    ON b.id_user = ot.id_user
+                 WHERE b.id_balita = ?
                  LIMIT 1"
             );
         }
@@ -422,8 +355,42 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             if (!$dataBalita) {
                 $error = $roleAktif === "kader"
-                    ? "Balita tidak ditemukan pada Puskesmas yang dipilih."
-                    : "Data balita tidak ditemukan.";
+                    ? "Balita tidak ditemukan pada Puskesmas yang dipilih atau belum terhubung dengan Profil Ibu."
+                    : "Data balita tidak ditemukan atau belum terhubung dengan Profil Ibu.";
+            } else {
+
+                $namaIbuProfil =
+                    trim(
+                        (string) (
+                            $dataBalita["nama_ibu"]
+                            ?? ""
+                        )
+                    );
+
+                $pendidikanIbuProfil =
+                    trim(
+                        (string) (
+                            $dataBalita["pendidikan_ibu"]
+                            ?? ""
+                        )
+                    );
+
+                $pekerjaanIbuProfil =
+                    trim(
+                        (string) (
+                            $dataBalita["pekerjaan_ibu"]
+                            ?? ""
+                        )
+                    );
+
+                if (
+                    $namaIbuProfil === ""
+                    || $pendidikanIbuProfil === ""
+                    || $pekerjaanIbuProfil === ""
+                ) {
+                    $error =
+                        "Profil Ibu balita belum lengkap. Lengkapi Profil Ibu terlebih dahulu.";
+                }
             }
         }
     }
@@ -436,11 +403,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     if ($error === "") {
 
+        /*
+        |--------------------------------------------------------------------------
+        | Snapshot Profil Ibu
+        |--------------------------------------------------------------------------
+        |
+        | Pendidikan dan pekerjaan tidak diinput ulang oleh Kader.
+        | Nilai diambil langsung dari tabel orang_tua lalu disimpan ke
+        | skrining_awal agar histori skrining tetap utuh.
+        |
+        */
+
         $pendidikanIbu =
-            $old["pendidikan_ibu"];
+            $pendidikanIbuProfil;
 
         $pekerjaanIbu =
-            $old["pekerjaan_ibu"];
+            $pekerjaanIbuProfil;
 
         $mpasi =
             $old["mpasi"];
@@ -541,20 +519,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 /*
                 |--------------------------------------------------------------------------
-                | Jalankan analisis lalu kembali ke form
+                | Kader selesai pada tahap skrining
                 |--------------------------------------------------------------------------
                 |
-                | Parameter sumber=form_skrining dipakai agar
-                | analisis_deteksi.php tahu bahwa hasil harus
-                | dikembalikan ke halaman ini untuk popup.
+                | Analisis/deteksi selanjutnya dilakukan Petugas Gizi.
+                | Kader tidak diarahkan ke analisis_deteksi.php karena
+                | halaman analisis memang memiliki hak akses Petugas Gizi.
                 |
                 */
 
                 header(
-                    "Location: ../deteksi/analisis_deteksi.php"
-                    . "?id_balita="
-                    . (int) $idBalita
-                    . "&sumber=form_skrining"
+                    "Location: hasil_skrining.php"
+                    . "?pesan=tambah_berhasil"
                 );
 
                 exit;
@@ -577,11 +553,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 $queryBalita = mysqli_query(
     $conn,
     "SELECT
-        id_balita,
-        id_puskesmas,
-        nama_balita
-     FROM balita
-     ORDER BY nama_balita ASC"
+        b.id_balita,
+        b.id_puskesmas,
+        b.nama_balita,
+        ot.nama_ibu,
+        ot.pendidikan_ibu,
+        ot.pekerjaan_ibu
+     FROM balita AS b
+     INNER JOIN orang_tua AS ot
+        ON b.id_user = ot.id_user
+     ORDER BY b.nama_balita ASC"
 );
 
 if (!$queryBalita) {
@@ -622,8 +603,8 @@ require_once "../includes/navbar.php";
                 </h1>
 
                 <p class="page-subtitle">
-                    Lengkapi informasi keluarga, pola pemberian makan,
-                    sanitasi, dan faktor risiko awal balita.
+                    Pilih balita yang sudah terhubung dengan Profil Ibu,
+                    lalu lengkapi variabel skrining yang diperlukan.
                 </p>
 
             </div>
@@ -676,8 +657,9 @@ require_once "../includes/navbar.php";
                         </h3>
 
                         <p>
-                            Tambahkan data balita terlebih dahulu
-                            sebelum mengisi skrining awal.
+                            Belum ada balita yang sudah terhubung
+                            dengan Profil Ibu. Lengkapi Profil Ibu dan
+                            hubungkan balita terlebih dahulu.
                         </p>
 
                         <a
@@ -707,7 +689,7 @@ require_once "../includes/navbar.php";
                         </h4>
 
                         <small class="text-muted">
-                            Semua kolom pada formulir wajib diisi.
+                            Data identitas Ibu diambil otomatis dari Profil Ibu.
                         </small>
 
                     </div>
@@ -807,6 +789,15 @@ require_once "../includes/navbar.php";
                                     <option
                                         value="<?= (int) $balita["id_balita"]; ?>"
                                         data-puskesmas="<?= (int) $balita["id_puskesmas"]; ?>"
+                                        data-nama-ibu="<?= amanFormSkrining(
+                                            $balita["nama_ibu"]
+                                        ); ?>"
+                                        data-pendidikan-ibu="<?= amanFormSkrining(
+                                            $balita["pendidikan_ibu"]
+                                        ); ?>"
+                                        data-pekerjaan-ibu="<?= amanFormSkrining(
+                                            $balita["pekerjaan_ibu"]
+                                        ); ?>"
                                         <?= (
                                             (string) $old["id_balita"]
                                             ===
@@ -833,90 +824,69 @@ require_once "../includes/navbar.php";
                             Informasi Ibu
                         </h5>
 
-                        <div class="form-row">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Nama, pendidikan, dan pekerjaan Ibu berasal
+                            dari <strong>Profil Ibu</strong> dan tidak
+                            perlu diinput ulang saat skrining.
+                        </div>
 
-                            <div class="form-group">
+                        <div class="row g-3 mb-3">
 
-                                <label
-                                    for="tinggi_badan_ibu"
-                                    class="form-label"
-                                >
-                                    Tinggi Badan Ibu
-                                    <span class="text-danger">*</span>
-                                </label>
+                            <div class="col-12 col-lg-4">
 
-                                <div class="input-group">
+                                <div class="detail-item h-100">
 
-                                    <input
-                                        type="number"
-                                        name="tinggi_badan_ibu"
-                                        id="tinggi_badan_ibu"
-                                        class="form-control"
-                                        value="<?= amanFormSkrining(
-                                            $old["tinggi_badan_ibu"]
-                                        ); ?>"
-                                        min="100"
-                                        max="220"
-                                        step="0.01"
-                                        placeholder="Contoh: 155"
-                                        required
-                                    >
-
-                                    <span class="input-group-text">
-                                        cm
+                                    <span class="detail-label">
+                                        Nama Ibu
                                     </span>
+
+                                    <div
+                                        class="detail-value"
+                                        id="profil_nama_ibu"
+                                    >
+                                        Pilih balita terlebih dahulu
+                                    </div>
 
                                 </div>
 
                             </div>
 
-                            <div class="form-group">
+                            <div class="col-12 col-lg-4">
 
-                                <label
-                                    for="pendidikan_ibu"
-                                    class="form-label"
-                                >
-                                    Pendidikan Ibu
-                                    <span class="text-danger">*</span>
-                                </label>
+                                <div class="detail-item h-100">
 
-                                <select
-                                    name="pendidikan_ibu"
-                                    id="pendidikan_ibu"
-                                    class="form-select"
-                                    required
-                                >
+                                    <span class="detail-label">
+                                        Pendidikan Ibu
+                                    </span>
 
-                                    <option value="">
-                                        -- Pilih Pendidikan --
-                                    </option>
+                                    <div
+                                        class="detail-value"
+                                        id="profil_pendidikan_ibu"
+                                    >
+                                        -
+                                    </div>
 
-                                    <?php
-                                    foreach (
-                                        $daftarPendidikan
-                                        as $pendidikan
-                                    ):
-                                    ?>
+                                </div>
 
-                                        <option
-                                            value="<?= amanFormSkrining(
-                                                $pendidikan
-                                            ); ?>"
-                                            <?= (
-                                                $old["pendidikan_ibu"]
-                                                === $pendidikan
-                                            )
-                                                ? "selected"
-                                                : ""; ?>
-                                        >
-                                            <?= amanFormSkrining(
-                                                $pendidikan
-                                            ); ?>
-                                        </option>
+                            </div>
 
-                                    <?php endforeach; ?>
+                            <div class="col-12 col-lg-4">
 
-                                </select>
+                                <div class="detail-item h-100">
+
+                                    <span class="detail-label">
+                                        Pekerjaan Ibu
+                                    </span>
+
+                                    <div
+                                        class="detail-value"
+                                        id="profil_pekerjaan_ibu"
+                                    >
+                                        -
+                                    </div>
+
+                                </div>
 
                             </div>
 
@@ -925,50 +895,41 @@ require_once "../includes/navbar.php";
                         <div class="form-group">
 
                             <label
-                                for="pekerjaan_ibu"
+                                for="tinggi_badan_ibu"
                                 class="form-label"
                             >
-                                Pekerjaan Ibu
+                                Tinggi Badan Ibu
                                 <span class="text-danger">*</span>
                             </label>
 
-                            <select
-                                name="pekerjaan_ibu"
-                                id="pekerjaan_ibu"
-                                class="form-select"
-                                required
-                            >
+                            <div class="input-group">
 
-                                <option value="">
-                                    -- Pilih Pekerjaan --
-                                </option>
+                                <input
+                                    type="number"
+                                    name="tinggi_badan_ibu"
+                                    id="tinggi_badan_ibu"
+                                    class="form-control"
+                                    value="<?= amanFormSkrining(
+                                        $old["tinggi_badan_ibu"]
+                                    ); ?>"
+                                    min="100"
+                                    max="220"
+                                    step="0.01"
+                                    placeholder="Contoh: 155"
+                                    required
+                                >
 
-                                <?php
-                                foreach (
-                                    $daftarPekerjaan
-                                    as $pekerjaan
-                                ):
-                                ?>
+                                <span class="input-group-text">
+                                    cm
+                                </span>
 
-                                    <option
-                                        value="<?= amanFormSkrining(
-                                            $pekerjaan
-                                        ); ?>"
-                                        <?= (
-                                            $old["pekerjaan_ibu"]
-                                            === $pekerjaan
-                                        )
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= amanFormSkrining(
-                                            $pekerjaan
-                                        ); ?>
-                                    </option>
+                            </div>
 
-                                <?php endforeach; ?>
-
-                            </select>
+                            <small class="text-muted">
+                                Tinggi badan Ibu tetap diisi pada skrining
+                                karena merupakan variabel faktor risiko,
+                                bukan data profil akun.
+                            </small>
 
                         </div>
 
@@ -1377,456 +1338,136 @@ require_once "../includes/navbar.php";
 
 </div>
 
-<?php if (is_array($hasilAnalisisPopup)): ?>
-
-    <?php
-    $popupNamaBalita =
-        amanFormSkrining(
-            $hasilAnalisisPopup["nama_balita"]
-            ?? "Balita"
-        );
-
-    $popupIdBalita =
-        (int) (
-            $hasilAnalisisPopup["id_balita"]
-            ?? 0
-        );
-
-    $popupZScoreTbu =
-        $hasilAnalisisPopup["z_score_tbu"]
-        ?? null;
-
-    $popupZScoreBbu =
-        $hasilAnalisisPopup["z_score_bbu"]
-        ?? null;
-
-    $statusStuntingRaw =
-        trim(
-            (string) (
-                $hasilAnalisisPopup["status_stunting"]
-                ?? ""
-            )
-        );
-
-    $popupStatusStunting =
-        amanFormSkrining(
-            $statusStuntingRaw !== ""
-                ? $statusStuntingRaw
-                : "-"
-        );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Tingkat risiko stunting untuk tampilan popup
-    |--------------------------------------------------------------------------
-    |
-    | Ini hanya ringkasan UI berdasarkan status hasil analisis yang
-    | sudah dihitung. Tidak mengubah rumus WHO maupun hasil deteksi.
-    |
-    */
-
-    switch ($statusStuntingRaw) {
-
-        case "Normal":
-            $tingkatRisikoStunting = "Normal";
-            $kelasRisikoStunting = "badge-success";
-            $ikonRisikoStunting = "bi-shield-check";
-            break;
-
-        case "Risiko Stunting":
-            $tingkatRisikoStunting = "Sedang";
-            $kelasRisikoStunting = "badge-warning";
-            $ikonRisikoStunting = "bi-exclamation-triangle";
-            break;
-
-        case "Stunting":
-        case "Stunting Berat":
-            $tingkatRisikoStunting = "Tinggi";
-            $kelasRisikoStunting = "badge-danger";
-            $ikonRisikoStunting = "bi-exclamation-octagon";
-            break;
-
-        default:
-            $tingkatRisikoStunting =
-                "Belum Dapat Dinilai";
-            $kelasRisikoStunting =
-                "badge-secondary";
-            $ikonRisikoStunting =
-                "bi-question-circle";
-            break;
-    }
-
-    $popupStatusGizi =
-        amanFormSkrining(
-            $hasilAnalisisPopup["status_gizi"]
-            ?? "-"
-        );
-
-    $kelasStunting =
-        amanFormSkrining(
-            $hasilAnalisisPopup["kelas_status_stunting"]
-            ?? "badge-secondary"
-        );
-
-    $kelasGizi =
-        amanFormSkrining(
-            $hasilAnalisisPopup["kelas_status_gizi"]
-            ?? "badge-secondary"
-        );
-
-    $keteranganStunting =
-        amanFormSkrining(
-            $hasilAnalisisPopup["keterangan_stunting"]
-            ?? ""
-        );
-
-    $keteranganGizi =
-        amanFormSkrining(
-            $hasilAnalisisPopup["keterangan_gizi"]
-            ?? ""
-        );
-    ?>
-
-    <div
-        class="modal fade"
-        id="modalHasilSkrining"
-        tabindex="-1"
-        aria-labelledby="modalHasilSkriningLabel"
-        aria-hidden="true"
-        data-bs-backdrop="static"
-    >
-        <div
-            class="modal-dialog
-            modal-dialog-centered
-            modal-lg"
-        >
-
-            <div class="modal-content">
-
-                <div class="modal-header">
-
-                    <div>
-
-                        <h5
-                            class="modal-title"
-                            id="modalHasilSkriningLabel"
-                        >
-                            <i class="bi bi-clipboard2-pulse me-2"></i>
-                            Hasil Analisis
-                        </h5>
-
-                        <small class="text-muted">
-                            Skrining berhasil disimpan dan
-                            analisis pertumbuhan telah selesai.
-                        </small>
-
-                    </div>
-
-                    <button
-                        type="button"
-                        class="btn-close"
-                        data-bs-dismiss="modal"
-                        aria-label="Tutup"
-                    ></button>
-
-                </div>
-
-                <div class="modal-body">
-
-                    <div class="text-center mb-4">
-
-                        <div
-                            class="empty-state-icon
-                            mx-auto mb-2"
-                            style="
-                                width: 64px;
-                                height: 64px;
-                            "
-                        >
-                            <i class="bi bi-person-heart"></i>
-                        </div>
-
-                        <h4 class="mb-1">
-                            <?= $popupNamaBalita; ?>
-                        </h4>
-
-                        <p class="text-muted mb-0">
-                            Hasil berdasarkan data antropometri
-                            terbaru balita.
-                        </p>
-
-                    </div>
-
-                    <div
-                        class="card border-0 bg-light mb-3"
-                    >
-                        <div
-                            class="card-body
-                            d-flex flex-column
-                            flex-md-row
-                            justify-content-between
-                            align-items-md-center
-                            gap-3"
-                        >
-
-                            <div>
-
-                                <small class="text-muted">
-                                    Tingkat Risiko Stunting
-                                </small>
-
-                                <h4 class="mb-1">
-                                    <?= amanFormSkrining(
-                                        $tingkatRisikoStunting
-                                    ); ?>
-                                </h4>
-
-                                <small class="text-muted">
-                                    Ringkasan berdasarkan status
-                                    analisis TB/U.
-                                </small>
-
-                            </div>
-
-                            <span
-                                class="badge
-                                <?= amanFormSkrining(
-                                    $kelasRisikoStunting
-                                ); ?>"
-                                style="
-                                    font-size: 0.95rem;
-                                    padding: 0.75rem 1rem;
-                                "
-                            >
-                                <i
-                                    class="bi
-                                    <?= amanFormSkrining(
-                                        $ikonRisikoStunting
-                                    ); ?>
-                                    me-1"
-                                ></i>
-
-                                <?= amanFormSkrining(
-                                    $tingkatRisikoStunting
-                                ); ?>
-                            </span>
-
-                        </div>
-                    </div>
-
-                    <div class="row g-3">
-
-                        <div class="col-12 col-md-6">
-
-                            <div
-                                class="card h-100
-                                border-0 bg-light"
-                            >
-                                <div class="card-body">
-
-                                    <small class="text-muted">
-                                        Z-Score TB/U
-                                    </small>
-
-                                    <h2 class="mb-2">
-                                        <?= $popupZScoreTbu !== null
-                                            ? amanFormSkrining(
-                                                number_format(
-                                                    (float) $popupZScoreTbu,
-                                                    2,
-                                                    ".",
-                                                    ""
-                                                )
-                                            )
-                                            : "-"; ?>
-                                    </h2>
-
-                                    <span
-                                        class="badge
-                                        <?= $kelasStunting; ?>"
-                                    >
-                                        <?= $popupStatusStunting; ?>
-                                    </span>
-
-                                    <?php if (
-                                        $keteranganStunting !== ""
-                                    ): ?>
-
-                                        <p
-                                            class="small
-                                            text-muted mt-3 mb-0"
-                                        >
-                                            <?= $keteranganStunting; ?>
-                                        </p>
-
-                                    <?php endif; ?>
-
-                                </div>
-                            </div>
-
-                        </div>
-
-                        <div class="col-12 col-md-6">
-
-                            <div
-                                class="card h-100
-                                border-0 bg-light"
-                            >
-                                <div class="card-body">
-
-                                    <small class="text-muted">
-                                        Z-Score BB/U
-                                    </small>
-
-                                    <h2 class="mb-2">
-                                        <?= $popupZScoreBbu !== null
-                                            ? amanFormSkrining(
-                                                number_format(
-                                                    (float) $popupZScoreBbu,
-                                                    2,
-                                                    ".",
-                                                    ""
-                                                )
-                                            )
-                                            : "-"; ?>
-                                    </h2>
-
-                                    <span
-                                        class="badge
-                                        <?= $kelasGizi; ?>"
-                                    >
-                                        <?= $popupStatusGizi; ?>
-                                    </span>
-
-                                    <?php if (
-                                        $keteranganGizi !== ""
-                                    ): ?>
-
-                                        <p
-                                            class="small
-                                            text-muted mt-3 mb-0"
-                                        >
-                                            <?= $keteranganGizi; ?>
-                                        </p>
-
-                                    <?php endif; ?>
-
-                                </div>
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                    <div
-                        class="alert alert-info
-                        mt-3 mb-0"
-                    >
-                        <i class="bi bi-info-circle me-1"></i>
-                        Hasil ini berasal dari proses analisis
-                        antropometri yang digunakan sistem.
-                    </div>
-
-                </div>
-
-                <div class="modal-footer">
-
-                    <a
-                        href="hasil_skrining.php"
-                        class="btn btn-light"
-                    >
-                        <i class="bi bi-table"></i>
-                        Lihat Daftar Skrining
-                    </a>
-
-                    <a
-                        href="../deteksi/hasil_deteksi.php"
-                        class="btn btn-primary"
-                    >
-                        <i class="bi bi-clipboard2-data"></i>
-                        Lihat Hasil Deteksi
-                    </a>
-
-                </div>
-
-            </div>
-
-        </div>
-    </div>
-
-    <script>
-        window.addEventListener(
-            "load",
-            function () {
-                const elemenModal =
-                    document.getElementById(
-                        "modalHasilSkrining"
-                    );
-
-                if (
-                    elemenModal
-                    && typeof bootstrap !== "undefined"
-                ) {
-                    const modalHasil =
-                        new bootstrap.Modal(
-                            elemenModal
-                        );
-
-                    modalHasil.show();
-                }
-            }
-        );
-    </script>
-
-<?php endif; ?>
-
 <?php if ($roleAktif === "kader"): ?>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const puskesmasSelect = document.getElementById("id_puskesmas");
-    const balitaSelect = document.getElementById("id_balita");
+    const puskesmasSelect =
+        document.getElementById("id_puskesmas");
+
+    const balitaSelect =
+        document.getElementById("id_balita");
+
+    const namaIbu =
+        document.getElementById("profil_nama_ibu");
+
+    const pendidikanIbu =
+        document.getElementById("profil_pendidikan_ibu");
+
+    const pekerjaanIbu =
+        document.getElementById("profil_pekerjaan_ibu");
 
     if (!puskesmasSelect || !balitaSelect) {
         return;
     }
 
+    function tampilkanProfilIbu() {
+        const option =
+            balitaSelect.options[
+                balitaSelect.selectedIndex
+            ];
+
+        if (
+            !option
+            || option.value === ""
+        ) {
+            if (namaIbu) {
+                namaIbu.textContent =
+                    "Pilih balita terlebih dahulu";
+            }
+
+            if (pendidikanIbu) {
+                pendidikanIbu.textContent = "-";
+            }
+
+            if (pekerjaanIbu) {
+                pekerjaanIbu.textContent = "-";
+            }
+
+            return;
+        }
+
+        if (namaIbu) {
+            namaIbu.textContent =
+                option.dataset.namaIbu || "-";
+        }
+
+        if (pendidikanIbu) {
+            pendidikanIbu.textContent =
+                option.dataset.pendidikanIbu || "-";
+        }
+
+        if (pekerjaanIbu) {
+            pekerjaanIbu.textContent =
+                option.dataset.pekerjaanIbu || "-";
+        }
+    }
+
     function filterBalita(resetPilihan = false) {
-        const idPuskesmas = puskesmasSelect.value;
-        const pilihanSekarang = balitaSelect.value;
+        const idPuskesmas =
+            puskesmasSelect.value;
+
+        const pilihanSekarang =
+            balitaSelect.value;
+
         let pilihanMasihValid = false;
 
-        Array.from(balitaSelect.options).forEach(function (option, index) {
+        Array.from(
+            balitaSelect.options
+        ).forEach(function (option, index) {
+
             if (index === 0) {
                 return;
             }
 
             const cocok =
                 idPuskesmas !== ""
-                && option.dataset.puskesmas === idPuskesmas;
+                && option.dataset.puskesmas
+                    === idPuskesmas;
 
             option.hidden = !cocok;
             option.disabled = !cocok;
 
-            if (cocok && option.value === pilihanSekarang) {
+            if (
+                cocok
+                && option.value
+                    === pilihanSekarang
+            ) {
                 pilihanMasihValid = true;
             }
         });
 
-        if (resetPilihan || !pilihanMasihValid) {
+        if (
+            resetPilihan
+            || !pilihanMasihValid
+        ) {
             balitaSelect.value = "";
         }
 
-        balitaSelect.disabled = idPuskesmas === "";
-        balitaSelect.options[0].textContent = idPuskesmas === ""
-            ? "-- Pilih Puskesmas terlebih dahulu --"
-            : "-- Pilih Balita --";
+        balitaSelect.disabled =
+            idPuskesmas === "";
+
+        balitaSelect.options[0].textContent =
+            idPuskesmas === ""
+                ? "-- Pilih Puskesmas terlebih dahulu --"
+                : "-- Pilih Balita --";
+
+        tampilkanProfilIbu();
     }
 
-    puskesmasSelect.addEventListener("change", function () {
-        filterBalita(true);
-    });
+    puskesmasSelect.addEventListener(
+        "change",
+        function () {
+            filterBalita(true);
+        }
+    );
+
+    balitaSelect.addEventListener(
+        "change",
+        tampilkanProfilIbu
+    );
 
     filterBalita(false);
+    tampilkanProfilIbu();
 });
 </script>
 <?php endif; ?>
