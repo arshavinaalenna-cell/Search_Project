@@ -1,8 +1,23 @@
 <?php
 
-session_start();
-
+require_once "../auth/session.php";
+require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
+
+cekRole([
+    "kader",
+    "petugas_kia",
+    "petugas_gizi",
+    "orang_tua",
+    "kepala_puskesmas",
+    "dinkes"
+]);
+
+$roleAktif = $_SESSION["role"] ?? "";
+$idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
+
+$bolehKelolaPengukuran =
+    $roleAktif === "kader";
 
 /*
 |--------------------------------------------------------------------------
@@ -17,34 +32,99 @@ $judulHalaman =
 |--------------------------------------------------------------------------
 | Mengambil data pengukuran beserta nama balita
 |--------------------------------------------------------------------------
+|
+| Orang Tua hanya dapat melihat data pengukuran anak yang terhubung
+| dengan akun miliknya melalui balita.id_user.
+|
+| Role lain tetap dapat melihat seluruh data sesuai kebutuhan
+| monitoring/pelayanan.
+|
 */
 
-$sql = "
-    SELECT
-        p.id_pengukuran,
-        p.id_balita,
-        p.tanggal_pengukuran,
-        p.umur_bulan,
-        p.berat_badan,
-        p.tinggi_panjang_badan,
-        p.lingkar_kepala,
-        p.lila,
-        b.nama_balita
-    FROM pengukuran_antropometri AS p
-    INNER JOIN balita AS b
-        ON p.id_balita = b.id_balita
-    ORDER BY
-        p.tanggal_pengukuran DESC,
-        p.id_pengukuran DESC
-";
+$stmtPengukuran = null;
 
-$query = mysqli_query($conn, $sql);
+if ($roleAktif === "orang_tua") {
 
-if (!$query) {
-    die(
-        "Gagal mengambil data pengukuran: "
-        . mysqli_error($conn)
+    $sql = "
+        SELECT
+            p.id_pengukuran,
+            p.id_balita,
+            p.tanggal_pengukuran,
+            p.umur_bulan,
+            p.berat_badan,
+            p.tinggi_panjang_badan,
+            p.lingkar_kepala,
+            p.lila,
+            b.nama_balita
+        FROM pengukuran_antropometri AS p
+        INNER JOIN balita AS b
+            ON p.id_balita = b.id_balita
+        WHERE b.id_user = ?
+        ORDER BY
+            p.tanggal_pengukuran DESC,
+            p.id_pengukuran DESC
+    ";
+
+    $stmtPengukuran = mysqli_prepare(
+        $conn,
+        $sql
     );
+
+    if (!$stmtPengukuran) {
+        die(
+            "Gagal menyiapkan data pengukuran: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPengukuran,
+        "i",
+        $idUserAktif
+    );
+
+    if (!mysqli_stmt_execute($stmtPengukuran)) {
+        die(
+            "Gagal mengambil data pengukuran: "
+            . mysqli_stmt_error($stmtPengukuran)
+        );
+    }
+
+    $query =
+        mysqli_stmt_get_result($stmtPengukuran);
+
+} else {
+
+    $sql = "
+        SELECT
+            p.id_pengukuran,
+            p.id_balita,
+            p.tanggal_pengukuran,
+            p.umur_bulan,
+            p.berat_badan,
+            p.tinggi_panjang_badan,
+            p.lingkar_kepala,
+            p.lila,
+            b.nama_balita
+        FROM pengukuran_antropometri AS p
+        INNER JOIN balita AS b
+            ON p.id_balita = b.id_balita
+        ORDER BY
+            p.tanggal_pengukuran DESC,
+            p.id_pengukuran DESC
+    ";
+
+    $query = mysqli_query(
+        $conn,
+        $sql
+    );
+
+    if (!$query) {
+        die(
+            "Gagal mengambil data pengukuran: "
+            . mysqli_error($conn)
+        );
+    }
 }
 
 /*
@@ -111,11 +191,9 @@ function formatTanggal($tanggal): string
 |
 | Hanya Kader yang melihat fitur tambah, edit, dan hapus.
 | Role lain melihat data pengukuran dalam mode read-only.
+| Orang Tua hanya melihat data anak yang terhubung dengan akunnya.
 |
 */
-
-$roleAktif = $_SESSION["role"] ?? "";
-$bolehKelolaPengukuran = $roleAktif === "kader";
 
 /*
 |--------------------------------------------------------------------------
@@ -232,9 +310,13 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        <?= $bolehKelolaPengukuran
-                            ? "Kelola hasil pengukuran fisik balita dari kegiatan Posyandu."
-                            : "Lihat riwayat pengukuran pertumbuhan balita."; ?>
+                        <?php if ($bolehKelolaPengukuran): ?>
+                            Kelola hasil pengukuran fisik balita dari kegiatan Posyandu.
+                        <?php elseif ($roleAktif === "orang_tua"): ?>
+                            Lihat riwayat pengukuran pertumbuhan anak yang terhubung dengan akun Anda.
+                        <?php else: ?>
+                            Lihat riwayat pengukuran pertumbuhan balita.
+                        <?php endif; ?>
                     </small>
 
                 </div>
@@ -516,9 +598,13 @@ require_once "../includes/navbar.php";
                                         </h3>
 
                                         <p>
-                                            <?= $bolehKelolaPengukuran
-                                                ? "Tambahkan pengukuran pertama untuk mulai memantau pertumbuhan balita."
-                                                : "Data pengukuran pertumbuhan balita belum tersedia."; ?>
+                                            <?php if ($bolehKelolaPengukuran): ?>
+                                                Tambahkan pengukuran pertama untuk mulai memantau pertumbuhan balita.
+                                            <?php elseif ($roleAktif === "orang_tua"): ?>
+                                                Belum ada data pengukuran untuk anak yang terhubung dengan akun Anda.
+                                            <?php else: ?>
+                                                Data pengukuran pertumbuhan balita belum tersedia.
+                                            <?php endif; ?>
                                         </p>
 
                                         <?php if (
@@ -560,4 +646,12 @@ require_once "../includes/navbar.php";
 
 </div>
 
-<?php require_once "../includes/footer.php"; ?>
+<?php
+
+if ($stmtPengukuran instanceof mysqli_stmt) {
+    mysqli_stmt_close($stmtPengukuran);
+}
+
+require_once "../includes/footer.php";
+
+?>

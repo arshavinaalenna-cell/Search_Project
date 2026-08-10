@@ -1277,11 +1277,61 @@ require_once "../includes/navbar.php";
         $hasilAnalisisPopup["z_score_bbu"]
         ?? null;
 
+    $statusStuntingRaw =
+        trim(
+            (string) (
+                $hasilAnalisisPopup["status_stunting"]
+                ?? ""
+            )
+        );
+
     $popupStatusStunting =
         amanFormSkrining(
-            $hasilAnalisisPopup["status_stunting"]
-            ?? "-"
+            $statusStuntingRaw !== ""
+                ? $statusStuntingRaw
+                : "-"
         );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tingkat risiko stunting untuk tampilan popup
+    |--------------------------------------------------------------------------
+    |
+    | Ini hanya ringkasan UI berdasarkan status hasil analisis yang
+    | sudah dihitung. Tidak mengubah rumus WHO maupun hasil deteksi.
+    |
+    */
+
+    switch ($statusStuntingRaw) {
+
+        case "Normal":
+            $tingkatRisikoStunting = "Normal";
+            $kelasRisikoStunting = "badge-success";
+            $ikonRisikoStunting = "bi-shield-check";
+            break;
+
+        case "Risiko Stunting":
+            $tingkatRisikoStunting = "Sedang";
+            $kelasRisikoStunting = "badge-warning";
+            $ikonRisikoStunting = "bi-exclamation-triangle";
+            break;
+
+        case "Stunting":
+        case "Stunting Berat":
+            $tingkatRisikoStunting = "Tinggi";
+            $kelasRisikoStunting = "badge-danger";
+            $ikonRisikoStunting = "bi-exclamation-octagon";
+            break;
+
+        default:
+            $tingkatRisikoStunting =
+                "Belum Dapat Dinilai";
+            $kelasRisikoStunting =
+                "badge-secondary";
+            $ikonRisikoStunting =
+                "bi-question-circle";
+            break;
+    }
 
     $popupStatusGizi =
         amanFormSkrining(
@@ -1382,6 +1432,63 @@ require_once "../includes/navbar.php";
                             terbaru balita.
                         </p>
 
+                    </div>
+
+                    <div
+                        class="card border-0 bg-light mb-3"
+                    >
+                        <div
+                            class="card-body
+                            d-flex flex-column
+                            flex-md-row
+                            justify-content-between
+                            align-items-md-center
+                            gap-3"
+                        >
+
+                            <div>
+
+                                <small class="text-muted">
+                                    Tingkat Risiko Stunting
+                                </small>
+
+                                <h4 class="mb-1">
+                                    <?= amanFormSkrining(
+                                        $tingkatRisikoStunting
+                                    ); ?>
+                                </h4>
+
+                                <small class="text-muted">
+                                    Ringkasan berdasarkan status
+                                    analisis TB/U.
+                                </small>
+
+                            </div>
+
+                            <span
+                                class="badge
+                                <?= amanFormSkrining(
+                                    $kelasRisikoStunting
+                                ); ?>"
+                                style="
+                                    font-size: 0.95rem;
+                                    padding: 0.75rem 1rem;
+                                "
+                            >
+                                <i
+                                    class="bi
+                                    <?= amanFormSkrining(
+                                        $ikonRisikoStunting
+                                    ); ?>
+                                    me-1"
+                                ></i>
+
+                                <?= amanFormSkrining(
+                                    $tingkatRisikoStunting
+                                ); ?>
+                            </span>
+
+                        </div>
                     </div>
 
                     <div class="row g-3">
