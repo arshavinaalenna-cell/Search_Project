@@ -78,6 +78,19 @@ $namaPuskesmasAktif =
         )
     );
 
+$queryKolomRedFlagLama = mysqli_query(
+    $conn,
+    "SHOW COLUMNS
+     FROM riwayat_kesehatan
+     LIKE 'red_flag'"
+);
+
+$kolomRedFlagLamaAda =
+    $queryKolomRedFlagLama
+    && mysqli_num_rows(
+        $queryKolomRedFlagLama
+    ) > 0;
+
 $idRiwayat = filter_input(
     INPUT_GET,
     "id",
@@ -106,18 +119,24 @@ $stmtRiwayat = mysqli_prepare(
         rk.riwayat_imunisasi,
         rk.riwayat_perawatan,
         rk.penyakit_penyerta,
-        rk.red_flag,
+        rk.status_red_flag,
+        rk.catatan_red_flag,
+        rk.penilai_red_flag,
+        rk.tanggal_penilaian,
         rk.status_rujukan,
         rk.rekomendasi_rujukan,
         rk.catatan_kia,
         b.nik_balita,
         b.nama_balita,
-        p.nama_puskesmas
+        p.nama_puskesmas,
+        penilai.nama AS nama_penilai_red_flag
      FROM riwayat_kesehatan AS rk
      INNER JOIN balita AS b
         ON rk.id_balita = b.id_balita
      LEFT JOIN puskesmas AS p
         ON b.id_puskesmas = p.id_puskesmas
+     LEFT JOIN pengguna AS penilai
+        ON rk.penilai_red_flag = penilai.id_user
      WHERE rk.id_riwayat = ?
      AND b.id_puskesmas = ?
      LIMIT 1"
@@ -171,8 +190,39 @@ $riwayatPerawatan =
 $penyakitPenyerta =
     $dataRiwayat["penyakit_penyerta"] ?? "";
 
-$redFlag =
-    $dataRiwayat["red_flag"] ?? "";
+$statusRedFlagLama =
+    trim(
+        (string) (
+            $dataRiwayat["status_red_flag"]
+            ?? "Belum dinilai"
+        )
+    );
+
+$catatanRedFlagLama =
+    trim(
+        (string) (
+            $dataRiwayat["catatan_red_flag"]
+            ?? ""
+        )
+    );
+
+$statusRedFlag =
+    $statusRedFlagLama === "Belum dinilai"
+        ? ""
+        : $statusRedFlagLama;
+
+$catatanRedFlag =
+    $catatanRedFlagLama;
+
+$penilaiRedFlagLama =
+    $dataRiwayat["penilai_red_flag"]
+        !== null
+        ? (int) $dataRiwayat["penilai_red_flag"]
+        : null;
+
+$tanggalPenilaianLama =
+    $dataRiwayat["tanggal_penilaian"]
+        ?? null;
 
 $statusRujukan =
     $dataRiwayat["status_rujukan"] ?? "";
@@ -212,40 +262,6 @@ $namaPuskesmasRiwayat =
 
 /*
 |--------------------------------------------------------------------------
-| Menentukan state Red Flag lama
-|--------------------------------------------------------------------------
-*/
-
-$redFlagNormal =
-    in_array(
-        strtolower(
-            trim(
-                (string) $redFlag
-            )
-        ),
-        [
-            "",
-            "tidak",
-            "tidak ada",
-            "normal"
-        ],
-        true
-    );
-
-$redFlagPilihan =
-    $redFlagNormal
-        ? "Tidak Ada"
-        : "Ada";
-
-$redFlagDetail =
-    $redFlagNormal
-        ? ""
-        : trim(
-            (string) $redFlag
-        );
-
-/*
-|--------------------------------------------------------------------------
 | Memproses perubahan data
 |--------------------------------------------------------------------------
 */
@@ -267,21 +283,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $_POST["penyakit_penyerta"] ?? ""
     );
 
-    $redFlagPilihan = trim(
-        $_POST["red_flag_pilihan"] ?? ""
+    $statusRedFlag = trim(
+        $_POST["status_red_flag"] ?? ""
     );
 
-    $redFlagDetail = trim(
-        $_POST["red_flag_detail"] ?? ""
+    $catatanRedFlag = trim(
+        $_POST["catatan_red_flag"] ?? ""
     );
-
-    $redFlag = "";
-
-    if ($redFlagPilihan === "Tidak Ada") {
-        $redFlag = "Tidak ada";
-    } elseif ($redFlagPilihan === "Ada") {
-        $redFlag = $redFlagDetail;
-    }
 
     $statusRujukan = trim(
         $_POST["status_rujukan"] ?? ""
@@ -300,7 +308,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         || $riwayatImunisasi === ""
         || $riwayatPerawatan === ""
         || $penyakitPenyerta === ""
-        || $redFlagPilihan === ""
+        || $statusRedFlag === ""
         || $statusRujukan === ""
         || $rekomendasiRujukan === ""
         || $catatanKia === ""
@@ -308,22 +316,28 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $pesanError = "Semua data wajib diisi.";
     } elseif (
         !in_array(
-            $redFlagPilihan,
+            $statusRedFlag,
             [
-                "Tidak Ada",
+                "Tidak ada",
                 "Ada"
             ],
             true
         )
     ) {
         $pesanError =
-            "Pilihan red flag tidak valid.";
+            "Status red flag tidak valid.";
     } elseif (
-        $redFlagPilihan === "Ada"
-        && $redFlagDetail === ""
+        $statusRedFlag === "Ada"
+        && $catatanRedFlag === ""
     ) {
         $pesanError =
-            "Jelaskan red flag yang ditemukan.";
+            "Jelaskan temuan red flag yang ditemukan.";
+    }
+
+    if (
+        $statusRedFlag !== "Ada"
+    ) {
+        $catatanRedFlag = "";
     }
 
     /*
@@ -333,44 +347,150 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     */
 
     if ($pesanError === "") {
+
+        $redFlagBerubah =
+            $statusRedFlag !== $statusRedFlagLama
+            || $catatanRedFlag !== $catatanRedFlagLama;
+
+        $penilaiRedFlag =
+            $penilaiRedFlagLama;
+
+        $tanggalPenilaian =
+            $tanggalPenilaianLama;
+
+        if ($redFlagBerubah) {
+
+            $penilaiRedFlag =
+                $idUserAktif;
+
+            $hasilWaktu = mysqli_query(
+                $conn,
+                "SELECT NOW() AS waktu_penilaian"
+            );
+
+            $dataWaktu =
+                $hasilWaktu
+                    ? mysqli_fetch_assoc(
+                        $hasilWaktu
+                    )
+                    : null;
+
+            $tanggalPenilaian =
+                $dataWaktu[
+                    "waktu_penilaian"
+                ] ?? null;
+        }
+
+        $redFlagLama =
+            $statusRedFlag === "Ada"
+                ? $catatanRedFlag
+                : "Tidak ada";
+
+        if ($kolomRedFlagLamaAda) {
+
+            $sqlUpdate = "
+                UPDATE riwayat_kesehatan
+                SET
+                    riwayat_penyakit = ?,
+                    riwayat_imunisasi = ?,
+                    riwayat_perawatan = ?,
+                    penyakit_penyerta = ?,
+                    status_red_flag = ?,
+                    catatan_red_flag = NULLIF(?, ''),
+                    penilai_red_flag = ?,
+                    tanggal_penilaian = ?,
+                    red_flag = ?,
+                    status_rujukan = ?,
+                    rekomendasi_rujukan = ?,
+                    catatan_kia = ?
+                WHERE id_riwayat = ?
+                AND id_balita = ?
+            ";
+
+        } else {
+
+            $sqlUpdate = "
+                UPDATE riwayat_kesehatan
+                SET
+                    riwayat_penyakit = ?,
+                    riwayat_imunisasi = ?,
+                    riwayat_perawatan = ?,
+                    penyakit_penyerta = ?,
+                    status_red_flag = ?,
+                    catatan_red_flag = NULLIF(?, ''),
+                    penilai_red_flag = ?,
+                    tanggal_penilaian = ?,
+                    status_rujukan = ?,
+                    rekomendasi_rujukan = ?,
+                    catatan_kia = ?
+                WHERE id_riwayat = ?
+                AND id_balita = ?
+            ";
+        }
+
         $stmtUpdate = mysqli_prepare(
             $conn,
-            "UPDATE riwayat_kesehatan
-             SET
-                riwayat_penyakit = ?,
-                riwayat_imunisasi = ?,
-                riwayat_perawatan = ?,
-                penyakit_penyerta = ?,
-                red_flag = ?,
-                status_rujukan = ?,
-                rekomendasi_rujukan = ?,
-                catatan_kia = ?
-             WHERE id_riwayat = ?
-             AND id_balita = ?"
+            $sqlUpdate
         );
 
         if (!$stmtUpdate) {
+
             $pesanError =
                 "Gagal menyiapkan perubahan data: "
                 . mysqli_error($conn);
-        } else {
-            mysqli_stmt_bind_param(
-                $stmtUpdate,
-                "ssssssssii",
-                $riwayatPenyakit,
-                $riwayatImunisasi,
-                $riwayatPerawatan,
-                $penyakitPenyerta,
-                $redFlag,
-                $statusRujukan,
-                $rekomendasiRujukan,
-                $catatanKia,
-                $idRiwayat,
-                $idBalita
-            );
 
-            if (mysqli_stmt_execute($stmtUpdate)) {
-                mysqli_stmt_close($stmtUpdate);
+        } else {
+
+            if ($kolomRedFlagLamaAda) {
+
+                mysqli_stmt_bind_param(
+                    $stmtUpdate,
+                    "ssssssisssssii",
+                    $riwayatPenyakit,
+                    $riwayatImunisasi,
+                    $riwayatPerawatan,
+                    $penyakitPenyerta,
+                    $statusRedFlag,
+                    $catatanRedFlag,
+                    $penilaiRedFlag,
+                    $tanggalPenilaian,
+                    $redFlagLama,
+                    $statusRujukan,
+                    $rekomendasiRujukan,
+                    $catatanKia,
+                    $idRiwayat,
+                    $idBalita
+                );
+
+            } else {
+
+                mysqli_stmt_bind_param(
+                    $stmtUpdate,
+                    "ssssssissssii",
+                    $riwayatPenyakit,
+                    $riwayatImunisasi,
+                    $riwayatPerawatan,
+                    $penyakitPenyerta,
+                    $statusRedFlag,
+                    $catatanRedFlag,
+                    $penilaiRedFlag,
+                    $tanggalPenilaian,
+                    $statusRujukan,
+                    $rekomendasiRujukan,
+                    $catatanKia,
+                    $idRiwayat,
+                    $idBalita
+                );
+            }
+
+            if (
+                mysqli_stmt_execute(
+                    $stmtUpdate
+                )
+            ) {
+                mysqli_stmt_close(
+                    $stmtUpdate
+                );
 
                 header(
                     "Location: riwayat_kesehatan.php?pesan=edit_berhasil"
@@ -380,9 +500,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             $pesanError =
                 "Data gagal diperbarui: "
-                . mysqli_stmt_error($stmtUpdate);
+                . mysqli_stmt_error(
+                    $stmtUpdate
+                );
 
-            mysqli_stmt_close($stmtUpdate);
+            mysqli_stmt_close(
+                $stmtUpdate
+            );
         }
     }
 }
@@ -668,70 +792,83 @@ require_once "../includes/navbar.php";
                         <div class="col-12 col-lg-6">
 
                             <label
-                                for="red_flag_pilihan"
+                                for="status_red_flag"
                                 class="form-label"
                             >
-                                Red Flag Kesehatan
+                                Status Red Flag
                             </label>
 
+                            <?php if (
+                                $statusRedFlagLama === "Belum dinilai"
+                            ): ?>
+
+                                <div class="alert alert-warning py-2">
+                                    <i
+                                        class="bi bi-exclamation-triangle me-1"
+                                    ></i>
+                                    Red flag pada riwayat ini belum dinilai.
+                                    Pilih hasil penilaian sebelum menyimpan.
+                                </div>
+
+                            <?php endif; ?>
+
                             <select
-                                id="red_flag_pilihan"
-                                name="red_flag_pilihan"
+                                id="status_red_flag"
+                                name="status_red_flag"
                                 class="form-select"
                                 required
                             >
                                 <option value="">
-                                    -- Pilih Hasil Evaluasi --
+                                    -- Pilih Hasil Penilaian --
                                 </option>
 
                                 <option
-                                    value="Tidak Ada"
-                                    <?= $redFlagPilihan === "Tidak Ada"
+                                    value="Tidak ada"
+                                    <?= $statusRedFlag === "Tidak ada"
                                         ? "selected"
                                         : ""; ?>
                                 >
-                                    Tidak Ada
+                                    Tidak ada
                                 </option>
 
                                 <option
                                     value="Ada"
-                                    <?= $redFlagPilihan === "Ada"
+                                    <?= $statusRedFlag === "Ada"
                                         ? "selected"
                                         : ""; ?>
                                 >
-                                    Ada Red Flag
+                                    Ada
                                 </option>
                             </select>
 
                             <div class="form-text">
-                                Penetapan red flag dilakukan oleh
-                                Petugas KIA berdasarkan hasil
-                                pemeriksaan.
+                                Status ditetapkan oleh Petugas KIA
+                                berdasarkan hasil penilaian klinis.
                             </div>
 
                             <div
-                                id="bagian_detail_red_flag"
+                                id="bagian_catatan_red_flag"
                                 class="mt-3"
-                                <?= $redFlagPilihan === "Ada"
+                                <?= $statusRedFlag === "Ada"
                                     ? ""
                                     : "hidden"; ?>
                             >
 
                                 <label
-                                    for="red_flag_detail"
+                                    for="catatan_red_flag"
                                     class="form-label"
                                 >
-                                    Temuan Red Flag
+                                    Catatan / Temuan Red Flag
                                 </label>
 
                                 <textarea
-                                    id="red_flag_detail"
-                                    name="red_flag_detail"
+                                    id="catatan_red_flag"
+                                    name="catatan_red_flag"
                                     class="form-control"
                                     rows="3"
-                                    placeholder="Jelaskan red flag yang ditemukan"
+                                    placeholder="Jelaskan tanda atau kondisi yang ditemukan"
                                 ><?= htmlspecialchars(
-                                    $redFlagDetail,
+                                    $catatanRedFlag,
                                     ENT_QUOTES,
                                     "UTF-8"
                                 ); ?></textarea>
@@ -882,47 +1019,47 @@ document.addEventListener(
     "DOMContentLoaded",
     function () {
 
-        const pilihan =
+        const status =
             document.getElementById(
-                "red_flag_pilihan"
+                "status_red_flag"
             );
 
-        const bagianDetail =
+        const bagianCatatan =
             document.getElementById(
-                "bagian_detail_red_flag"
+                "bagian_catatan_red_flag"
             );
 
-        const detail =
+        const catatan =
             document.getElementById(
-                "red_flag_detail"
+                "catatan_red_flag"
             );
 
         function aturRedFlag() {
 
             if (
-                !pilihan
-                || !bagianDetail
-                || !detail
+                !status
+                || !bagianCatatan
+                || !catatan
             ) {
                 return;
             }
 
             const adaRedFlag =
-                pilihan.value === "Ada";
+                status.value === "Ada";
 
-            bagianDetail.hidden =
+            bagianCatatan.hidden =
                 !adaRedFlag;
 
-            detail.required =
+            catatan.required =
                 adaRedFlag;
 
             if (!adaRedFlag) {
-                detail.value = "";
+                catatan.value = "";
             }
         }
 
-        if (pilihan) {
-            pilihan.addEventListener(
+        if (status) {
+            status.addEventListener(
                 "change",
                 aturRedFlag
             );

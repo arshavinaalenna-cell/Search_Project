@@ -133,7 +133,8 @@ $selectRiwayat = "
         rk.riwayat_imunisasi,
         rk.riwayat_perawatan,
         rk.penyakit_penyerta,
-        rk.red_flag,
+        rk.status_red_flag,
+        rk.catatan_red_flag,
         rk.status_rujukan,
         rk.rekomendasi_rujukan,
         rk.catatan_kia,
@@ -161,7 +162,8 @@ $filterPencarian = "
         OR rk.riwayat_imunisasi LIKE ?
         OR rk.riwayat_perawatan LIKE ?
         OR rk.penyakit_penyerta LIKE ?
-        OR rk.red_flag LIKE ?
+        OR rk.status_red_flag LIKE ?
+        OR rk.catatan_red_flag LIKE ?
         OR rk.status_rujukan LIKE ?
         OR rk.rekomendasi_rujukan LIKE ?
         OR rk.catatan_kia LIKE ?
@@ -194,8 +196,9 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "issssssssss",
+            "isssssssssss",
             $idUserAktif,
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -265,8 +268,9 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "issssssssss",
+            "isssssssssss",
             $idPuskesmasAktif,
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -326,7 +330,8 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "ssssssssss",
+            "sssssssssss",
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -696,24 +701,46 @@ require_once "../includes/navbar.php";
 
                                         <?php
 
-                                        $redFlag =
+                                        $statusRedFlag =
                                             trim(
                                                 (string) (
-                                                    $d["red_flag"] ?? ""
+                                                    $d[
+                                                        "status_red_flag"
+                                                    ]
+                                                    ?? "Belum dinilai"
                                                 )
                                             );
 
-                                        $redFlagNormal =
-                                            in_array(
-                                                strtolower($redFlag),
-                                                [
-                                                    "",
-                                                    "tidak ada",
-                                                    "tidak",
-                                                    "normal"
-                                                ],
-                                                true
+                                        $catatanRedFlag =
+                                            trim(
+                                                (string) (
+                                                    $d[
+                                                        "catatan_red_flag"
+                                                    ]
+                                                    ?? ""
+                                                )
                                             );
+
+                                        if (
+                                            $statusRedFlag === "Ada"
+                                        ) {
+                                            $kelasRedFlag =
+                                                "bg-danger";
+                                            $ikonRedFlag =
+                                                "bi-exclamation-octagon";
+                                        } elseif (
+                                            $statusRedFlag === "Tidak ada"
+                                        ) {
+                                            $kelasRedFlag =
+                                                "bg-success";
+                                            $ikonRedFlag =
+                                                "bi-check-circle";
+                                        } else {
+                                            $kelasRedFlag =
+                                                "bg-warning text-dark";
+                                            $ikonRedFlag =
+                                                "bi-clock-history";
+                                        }
 
                                         $statusRujukan =
                                             trim(
@@ -901,40 +928,31 @@ require_once "../includes/navbar.php";
 
                                         <td class="text-center">
 
-                                            <?php if (
-                                                $redFlagNormal
-                                            ): ?>
-
-                                                <span
-                                                    class="badge
-                                                    bg-success"
-                                                >
-                                                    <i
-                                                        class="bi
-                                                        bi-check-circle"
-                                                    ></i>
-                                                    Tidak Ada
-                                                </span>
-
-                                            <?php else: ?>
-
-                                                <span
-                                                    class="badge
-                                                    bg-danger"
+                                            <span
+                                                class="badge
+                                                <?= $kelasRedFlag; ?>"
+                                                <?php if (
+                                                    $statusRedFlag === "Ada"
+                                                    && $catatanRedFlag !== ""
+                                                ): ?>
                                                     title="<?= htmlspecialchars(
-                                                        $redFlag,
+                                                        $catatanRedFlag,
                                                         ENT_QUOTES,
                                                         "UTF-8"
                                                     ); ?>"
-                                                >
-                                                    <i
-                                                        class="bi
-                                                        bi-exclamation-octagon"
-                                                    ></i>
-                                                    Ada Red Flag
-                                                </span>
+                                                <?php endif; ?>
+                                            >
+                                                <i
+                                                    class="bi
+                                                    <?= $ikonRedFlag; ?>"
+                                                ></i>
 
-                                            <?php endif; ?>
+                                                <?= htmlspecialchars(
+                                                    $statusRedFlag,
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                ); ?>
+                                            </span>
 
                                         </td>
 

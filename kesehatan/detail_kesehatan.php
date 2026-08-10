@@ -169,7 +169,10 @@ $stmt = mysqli_prepare(
         rk.riwayat_imunisasi,
         rk.riwayat_perawatan,
         rk.penyakit_penyerta,
-        rk.red_flag,
+        rk.status_red_flag,
+        rk.catatan_red_flag,
+        rk.penilai_red_flag,
+        rk.tanggal_penilaian,
         rk.status_rujukan,
         rk.rekomendasi_rujukan,
         rk.catatan_kia,
@@ -178,12 +181,15 @@ $stmt = mysqli_prepare(
         b.nama_ibu,
         b.id_user,
         b.id_puskesmas,
-        p.nama_puskesmas
+        p.nama_puskesmas,
+        penilai.nama AS nama_penilai_red_flag
      FROM riwayat_kesehatan rk
      INNER JOIN balita b
         ON rk.id_balita = b.id_balita
      LEFT JOIN puskesmas p
         ON b.id_puskesmas = p.id_puskesmas
+     LEFT JOIN pengguna penilai
+        ON rk.penilai_red_flag = penilai.id_user
      WHERE rk.id_riwayat = ?
      "
      . $whereTambahan
@@ -232,22 +238,38 @@ if (!$data) {
 
 $bolehEdit = $roleAktif === "petugas_kia";
 
-$redFlag = trim(
-    (string) (
-        $data["red_flag"] ?? ""
-    )
-);
+$statusRedFlag =
+    trim(
+        (string) (
+            $data["status_red_flag"]
+            ?? "Belum dinilai"
+        )
+    );
 
-$redFlagNormal = in_array(
-    strtolower($redFlag),
-    [
-        "",
-        "tidak ada",
-        "tidak",
-        "normal"
-    ],
-    true
-);
+$catatanRedFlag =
+    trim(
+        (string) (
+            $data["catatan_red_flag"]
+            ?? ""
+        )
+    );
+
+if ($statusRedFlag === "Ada") {
+    $kelasRedFlag =
+        "bg-danger";
+    $ikonRedFlag =
+        "bi-exclamation-octagon";
+} elseif ($statusRedFlag === "Tidak ada") {
+    $kelasRedFlag =
+        "bg-success";
+    $ikonRedFlag =
+        "bi-check-circle";
+} else {
+    $kelasRedFlag =
+        "bg-warning text-dark";
+    $ikonRedFlag =
+        "bi-clock-history";
+}
 
 $statusRujukan = trim(
     (string) (
@@ -601,35 +623,35 @@ require_once "../includes/navbar.php";
                         <div class="detail-item h-100">
 
                             <span class="detail-label">
-                                Red Flag Kesehatan
+                                Status Red Flag
                             </span>
 
                             <div class="detail-value">
 
-                                <?php if ($redFlagNormal): ?>
+                                <span
+                                    class="badge
+                                    <?= $kelasRedFlag; ?>"
+                                >
+                                    <i
+                                        class="bi
+                                        <?= $ikonRedFlag; ?>"
+                                    ></i>
+                                    <?= htmlspecialchars(
+                                        $statusRedFlag,
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
+                                </span>
 
-                                    <span class="badge bg-success">
-                                        <i
-                                            class="bi
-                                            bi-check-circle"
-                                        ></i>
-                                        Tidak Ada
-                                    </span>
-
-                                <?php else: ?>
-
-                                    <span class="badge bg-danger">
-                                        <i
-                                            class="bi
-                                            bi-exclamation-octagon"
-                                        ></i>
-                                        Ada Red Flag
-                                    </span>
+                                <?php if (
+                                    $statusRedFlag === "Ada"
+                                    && $catatanRedFlag !== ""
+                                ): ?>
 
                                     <div class="mt-2">
                                         <?= nl2br(
                                             htmlspecialchars(
-                                                $redFlag,
+                                                $catatanRedFlag,
                                                 ENT_QUOTES,
                                                 "UTF-8"
                                             )
@@ -637,6 +659,48 @@ require_once "../includes/navbar.php";
                                     </div>
 
                                 <?php endif; ?>
+
+                                <div class="mt-3 small text-muted">
+
+                                    <div>
+                                        Penilai:
+                                        <strong>
+                                            <?= htmlspecialchars(
+                                                $data[
+                                                    "nama_penilai_red_flag"
+                                                ]
+                                                    ?? "-",
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ); ?>
+                                        </strong>
+                                    </div>
+
+                                    <div>
+                                        Tanggal penilaian:
+                                        <strong>
+                                            <?= !empty(
+                                                $data[
+                                                    "tanggal_penilaian"
+                                                ]
+                                            )
+                                                ? htmlspecialchars(
+                                                    date(
+                                                        "d-m-Y H:i",
+                                                        strtotime(
+                                                            $data[
+                                                                "tanggal_penilaian"
+                                                            ]
+                                                        )
+                                                    ),
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                )
+                                                : "-"; ?>
+                                        </strong>
+                                    </div>
+
+                                </div>
 
                             </div>
 
