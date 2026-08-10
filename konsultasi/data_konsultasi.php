@@ -61,6 +61,7 @@ if ($roleAktif === "orang_tua") {
                 k.id_balita,
                 k.id_petugas,
                 k.tanggal,
+                k.keluhan,
                 k.hasil_konsultasi,
                 k.tindak_lanjut,
                 b.nama_balita,
@@ -76,6 +77,7 @@ if ($roleAktif === "orang_tua") {
                     b.nama_balita LIKE ?
                     OR b.nik_balita LIKE ?
                     OR p.nama LIKE ?
+                    OR k.keluhan LIKE ?
                     OR k.hasil_konsultasi LIKE ?
                     OR k.tindak_lanjut LIKE ?
                )
@@ -91,8 +93,9 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "isssss",
+            "issssss",
             $idUserAktif,
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -107,6 +110,7 @@ if ($roleAktif === "orang_tua") {
                 k.id_balita,
                 k.id_petugas,
                 k.tanggal,
+                k.keluhan,
                 k.hasil_konsultasi,
                 k.tindak_lanjut,
                 b.nama_balita,
@@ -143,6 +147,7 @@ if ($roleAktif === "orang_tua") {
                 k.id_balita,
                 k.id_petugas,
                 k.tanggal,
+                k.keluhan,
                 k.hasil_konsultasi,
                 k.tindak_lanjut,
                 b.nama_balita,
@@ -157,6 +162,7 @@ if ($roleAktif === "orang_tua") {
                     b.nama_balita LIKE ?
                     OR b.nik_balita LIKE ?
                     OR p.nama LIKE ?
+                    OR k.keluhan LIKE ?
                     OR k.hasil_konsultasi LIKE ?
                     OR k.tindak_lanjut LIKE ?
              )
@@ -172,7 +178,8 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "sssss",
+            "ssssss",
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -187,6 +194,7 @@ if ($roleAktif === "orang_tua") {
                 k.id_balita,
                 k.id_petugas,
                 k.tanggal,
+                k.keluhan,
                 k.hasil_konsultasi,
                 k.tindak_lanjut,
                 b.nama_balita,
@@ -379,7 +387,7 @@ require_once "../includes/navbar.php";
                                 type="text"
                                 name="cari"
                                 class="form-control"
-                                placeholder="Cari balita, NIK, petugas, hasil, atau tindak lanjut"
+                                placeholder="Cari balita, NIK, petugas, keluhan, hasil, atau tindak lanjut"
                                 value="<?= htmlspecialchars(
                                     $cari,
                                     ENT_QUOTES,
@@ -485,6 +493,10 @@ require_once "../includes/navbar.php";
                                     Petugas Gizi
                                 </th>
 
+                                <th class="text-center">
+                                    Status
+                                </th>
+
                                 <th>
                                     Hasil Konsultasi
                                 </th>
@@ -532,8 +544,44 @@ require_once "../includes/navbar.php";
                                     }
                                 }
 
+                                $hasilKosong =
+                                    trim(
+                                        (string) (
+                                            $data[
+                                                "hasil_konsultasi"
+                                            ] ?? ""
+                                        )
+                                    ) === "";
+
+                                $tindakLanjutKosong =
+                                    trim(
+                                        (string) (
+                                            $data[
+                                                "tindak_lanjut"
+                                            ] ?? ""
+                                        )
+                                    ) === "";
+
                                 $belumDitangani =
-                                    empty($data["id_petugas"]);
+                                    $hasilKosong;
+
+                                $sudahDitangani =
+                                    !$hasilKosong;
+
+                                $adaTindakLanjut =
+                                    !$tindakLanjutKosong;
+
+                                $petugasDitugaskanKeAkunIni =
+                                    (
+                                        $roleAktif ===
+                                        "petugas_gizi"
+                                        && (int) (
+                                            $data[
+                                                "id_petugas"
+                                            ] ?? 0
+                                        ) ===
+                                        $idUserAktif
+                                    );
 
                             ?>
 
@@ -607,7 +655,11 @@ require_once "../includes/navbar.php";
                                     <td>
 
                                         <?php if (
-                                            !$belumDitangani
+                                            !empty(
+                                                $data[
+                                                    "nama_petugas"
+                                                ]
+                                            )
                                         ): ?>
 
                                             <?= amanKonsultasi(
@@ -620,6 +672,23 @@ require_once "../includes/navbar.php";
 
                                             <span
                                                 class="badge
+                                                bg-secondary"
+                                            >
+                                                Belum Ditentukan
+                                            </span>
+
+                                        <?php endif; ?>
+
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <?php if (
+                                            $belumDitangani
+                                        ): ?>
+
+                                            <span
+                                                class="badge
                                                 bg-warning text-dark"
                                             >
                                                 <i
@@ -627,7 +696,32 @@ require_once "../includes/navbar.php";
                                                     bi-hourglass-split
                                                     me-1"
                                                 ></i>
-                                                Menunggu Petugas
+                                                Menunggu Tanggapan
+                                            </span>
+
+                                        <?php elseif (
+                                            $adaTindakLanjut
+                                        ): ?>
+
+                                            <span
+                                                class="badge
+                                                bg-success"
+                                            >
+                                                <i
+                                                    class="bi
+                                                    bi-check-circle
+                                                    me-1"
+                                                ></i>
+                                                Sudah Ditanggapi
+                                            </span>
+
+                                        <?php else: ?>
+
+                                            <span
+                                                class="badge
+                                                bg-info"
+                                            >
+                                                Sudah Ditanggapi
                                             </span>
 
                                         <?php endif; ?>
@@ -642,11 +736,7 @@ require_once "../includes/navbar.php";
                                     >
 
                                         <?php if (
-                                            trim(
-                                                $data[
-                                                    "hasil_konsultasi"
-                                                ] ?? ""
-                                            ) !== ""
+                                            !$hasilKosong
                                         ): ?>
 
                                             <?= nl2br(
@@ -678,11 +768,7 @@ require_once "../includes/navbar.php";
                                     >
 
                                         <?php if (
-                                            trim(
-                                                $data[
-                                                    "tindak_lanjut"
-                                                ] ?? ""
-                                            ) !== ""
+                                            !$tindakLanjutKosong
                                         ): ?>
 
                                             <?= nl2br(
@@ -726,6 +812,7 @@ require_once "../includes/navbar.php";
 
                                             <?php if (
                                                 $bolehMengelola
+                                                && $petugasDitugaskanKeAkunIni
                                             ): ?>
 
                                                 <a
@@ -756,7 +843,7 @@ require_once "../includes/navbar.php";
 
                             <tr>
 
-                                <td colspan="7">
+                                <td colspan="8">
 
                                     <div class="empty-state">
 

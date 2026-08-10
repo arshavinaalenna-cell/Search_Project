@@ -6,64 +6,27 @@ require_once "../config/koneksi.php";
 
 /*
 |--------------------------------------------------------------------------
-| Pastikan koneksi menggunakan database yang benar
+| Hak akses
 |--------------------------------------------------------------------------
+|
+| Orang Tua dapat mengajukan konsultasi untuk anak miliknya.
+| Petugas Gizi dapat mencatat konsultasi yang dilakukan di Puskesmas.
+|
 */
-
-if (!mysqli_select_db($conn, "db_stunting")) {
-    die(
-        "Database db_stunting tidak dapat dipilih: "
-        . mysqli_error($conn)
-    );
-}
-
-/*
-|--------------------------------------------------------------------------
-| Memastikan kolom keluhan tersedia
-|--------------------------------------------------------------------------
-| Ini hanya menambahkan kolom jika pada database yang sedang dipakai PHP
-| kolom tersebut memang belum ada.
-*/
-
-$cekKolomKeluhan = mysqli_query(
-    $conn,
-    "SHOW COLUMNS
-     FROM `db_stunting`.`konsultasi`
-     LIKE 'keluhan'"
-);
-
-if (!$cekKolomKeluhan) {
-    die(
-        "Gagal memeriksa struktur tabel konsultasi: "
-        . mysqli_error($conn)
-    );
-}
-
-if (mysqli_num_rows($cekKolomKeluhan) === 0) {
-    $tambahKolomKeluhan = mysqli_query(
-        $conn,
-        "ALTER TABLE `db_stunting`.`konsultasi`
-         ADD COLUMN `keluhan` TEXT NULL
-         AFTER `tanggal`"
-    );
-
-    if (!$tambahKolomKeluhan) {
-        die(
-            "Kolom keluhan belum ada dan gagal ditambahkan: "
-            . mysqli_error($conn)
-        );
-    }
-}
 
 cekRole([
     "orang_tua",
     "petugas_gizi"
 ]);
 
-$judulHalaman = "Tambah Konsultasi | Sistem Deteksi Stunting";
+$judulHalaman =
+    "Tambah Konsultasi | Sistem Deteksi Stunting";
 
-$roleAktif = $_SESSION["role"] ?? "";
-$idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
+$roleAktif =
+    $_SESSION["role"] ?? "";
+
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
 
 $pesanError = "";
 
@@ -79,12 +42,13 @@ $tindakLanjut = "";
 | Mengambil daftar balita
 |--------------------------------------------------------------------------
 |
-| Orang tua hanya dapat memilih anak miliknya.
-| Petugas Gizi dapat memilih semua balita.
+| Orang Tua hanya dapat memilih anak miliknya.
+| Petugas Gizi dapat memilih balita yang akan dicatat konsultasinya.
 |
 */
 
 if ($roleAktif === "orang_tua") {
+
     $stmtBalita = mysqli_prepare(
         $conn,
         "SELECT
@@ -109,12 +73,17 @@ if ($roleAktif === "orang_tua") {
         $idUserAktif
     );
 
-    mysqli_stmt_execute($stmtBalita);
-
-    $queryBalita = mysqli_stmt_get_result(
+    mysqli_stmt_execute(
         $stmtBalita
     );
+
+    $queryBalita =
+        mysqli_stmt_get_result(
+            $stmtBalita
+        );
+
 } else {
+
     $queryBalita = mysqli_query(
         $conn,
         "SELECT
@@ -137,6 +106,10 @@ if ($roleAktif === "orang_tua") {
 |--------------------------------------------------------------------------
 | Mengambil daftar Petugas Gizi
 |--------------------------------------------------------------------------
+|
+| Daftar ini digunakan ketika Orang Tua mengajukan konsultasi langsung
+| kepada Petugas Gizi Puskesmas.
+|
 */
 
 $queryPetugas = mysqli_query(
@@ -157,6 +130,12 @@ if (!$queryPetugas) {
     );
 }
 
+$totalBalita =
+    mysqli_num_rows($queryBalita);
+
+$totalPetugas =
+    mysqli_num_rows($queryPetugas);
+
 /*
 |--------------------------------------------------------------------------
 | Memproses penyimpanan konsultasi
@@ -164,6 +143,7 @@ if (!$queryPetugas) {
 */
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
     $idBalita = filter_input(
         INPUT_POST,
         "id_balita",
@@ -178,24 +158,46 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $_POST["keluhan"] ?? ""
     );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Penentuan Petugas dan isi konsultasi berdasarkan role
+    |--------------------------------------------------------------------------
+    */
+
     if ($roleAktif === "orang_tua") {
+
         $idPetugas = filter_input(
             INPUT_POST,
             "id_petugas",
             FILTER_VALIDATE_INT
         );
 
+        /*
+        | Orang Tua hanya mengirim keluhan.
+        | Hasil konsultasi dan tindak lanjut diisi oleh Petugas Gizi.
+        */
         $hasilKonsultasi = "";
         $tindakLanjut = "";
+
     } else {
-        $idPetugas = $idUserAktif;
+
+        /*
+        | Jika konsultasi dicatat oleh Petugas Gizi,
+        | petugas aktif otomatis menjadi petugas yang menangani.
+        */
+        $idPetugas =
+            $idUserAktif;
 
         $hasilKonsultasi = trim(
-            $_POST["hasil_konsultasi"] ?? ""
+            $_POST[
+                "hasil_konsultasi"
+            ] ?? ""
         );
 
         $tindakLanjut = trim(
-            $_POST["tindak_lanjut"] ?? ""
+            $_POST[
+                "tindak_lanjut"
+            ] ?? ""
         );
     }
 
@@ -206,28 +208,64 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     */
 
     if (!$idBalita) {
-        $pesanError = "Silakan pilih balita.";
+
+        $pesanError =
+            "Silakan pilih balita.";
+
     } elseif ($tanggal === "") {
-        $pesanError = "Tanggal konsultasi wajib diisi.";
-    } elseif (
-        strtotime($tanggal) === false
-    ) {
-        $pesanError = "Tanggal konsultasi tidak valid.";
-    } elseif (
-        strtotime($tanggal) > time()
+
+        $pesanError =
+            "Tanggal konsultasi wajib diisi.";
+
+    } else {
+
+        $objekTanggal =
+            DateTime::createFromFormat(
+                "Y-m-d",
+                $tanggal
+            );
+
+        $tanggalValid = (
+            $objekTanggal !== false
+            && $objekTanggal->format(
+                "Y-m-d"
+            ) === $tanggal
+        );
+
+        if (!$tanggalValid) {
+
+            $pesanError =
+                "Tanggal konsultasi tidak valid.";
+
+        } elseif (
+            $tanggal > date("Y-m-d")
+        ) {
+
+            $pesanError =
+                "Tanggal konsultasi tidak boleh melebihi hari ini.";
+        }
+    }
+
+    if (
+        $pesanError === ""
+        && $keluhan === ""
     ) {
         $pesanError =
-            "Tanggal konsultasi tidak boleh melebihi hari ini.";
-    } elseif ($keluhan === "") {
-        $pesanError = "Keluhan wajib diisi.";
-    } elseif (
-        $roleAktif === "orang_tua"
+            "Keluhan wajib diisi.";
+    }
+
+    if (
+        $pesanError === ""
+        && $roleAktif === "orang_tua"
         && !$idPetugas
     ) {
         $pesanError =
             "Silakan pilih Petugas Gizi.";
-    } elseif (
-        $roleAktif === "petugas_gizi"
+    }
+
+    if (
+        $pesanError === ""
+        && $roleAktif === "petugas_gizi"
         && (
             $hasilKonsultasi === ""
             || $tindakLanjut === ""
@@ -244,7 +282,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     */
 
     if ($pesanError === "") {
+
         if ($roleAktif === "orang_tua") {
+
             $cekBalita = mysqli_prepare(
                 $conn,
                 "SELECT id_balita
@@ -255,9 +295,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             );
 
             if (!$cekBalita) {
+
                 $pesanError =
                     "Gagal memeriksa data balita.";
+
             } else {
+
                 mysqli_stmt_bind_param(
                     $cekBalita,
                     "ii",
@@ -265,7 +308,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $idUserAktif
                 );
             }
+
         } else {
+
             $cekBalita = mysqli_prepare(
                 $conn,
                 "SELECT id_balita
@@ -275,9 +320,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             );
 
             if (!$cekBalita) {
+
                 $pesanError =
                     "Gagal memeriksa data balita.";
+
             } else {
+
                 mysqli_stmt_bind_param(
                     $cekBalita,
                     "i",
@@ -287,7 +335,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
 
         if ($pesanError === "") {
-            mysqli_stmt_execute($cekBalita);
+
+            mysqli_stmt_execute(
+                $cekBalita
+            );
 
             $hasilCekBalita =
                 mysqli_stmt_get_result(
@@ -295,13 +346,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 );
 
             if (
-                mysqli_num_rows($hasilCekBalita) === 0
+                mysqli_num_rows(
+                    $hasilCekBalita
+                ) === 0
             ) {
                 $pesanError =
                     "Data balita tidak ditemukan atau tidak dapat diakses.";
             }
 
-            mysqli_stmt_close($cekBalita);
+            mysqli_stmt_close(
+                $cekBalita
+            );
         }
     }
 
@@ -312,6 +367,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     */
 
     if ($pesanError === "") {
+
         $cekPetugas = mysqli_prepare(
             $conn,
             "SELECT id_user
@@ -322,16 +378,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         );
 
         if (!$cekPetugas) {
+
             $pesanError =
                 "Gagal memeriksa Petugas Gizi.";
+
         } else {
+
             mysqli_stmt_bind_param(
                 $cekPetugas,
                 "i",
                 $idPetugas
             );
 
-            mysqli_stmt_execute($cekPetugas);
+            mysqli_stmt_execute(
+                $cekPetugas
+            );
 
             $hasilCekPetugas =
                 mysqli_stmt_get_result(
@@ -339,32 +400,38 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 );
 
             if (
-                mysqli_num_rows($hasilCekPetugas) === 0
+                mysqli_num_rows(
+                    $hasilCekPetugas
+                ) === 0
             ) {
                 $pesanError =
                     "Petugas Gizi tidak ditemukan.";
             }
 
-            mysqli_stmt_close($cekPetugas);
+            mysqli_stmt_close(
+                $cekPetugas
+            );
         }
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Menyimpan data konsultasi
+    | Menyimpan konsultasi
     |--------------------------------------------------------------------------
     */
 
     if ($pesanError === "") {
-        $sqlSimpan = "
-            INSERT INTO `db_stunting`.`konsultasi`
+
+        $stmtSimpan = mysqli_prepare(
+            $conn,
+            "INSERT INTO konsultasi
             (
-                `id_balita`,
-                `id_petugas`,
-                `tanggal`,
-                `keluhan`,
-                `hasil_konsultasi`,
-                `tindak_lanjut`
+                id_balita,
+                id_petugas,
+                tanggal,
+                keluhan,
+                hasil_konsultasi,
+                tindak_lanjut
             )
             VALUES
             (
@@ -374,19 +441,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 ?,
                 NULLIF(?, ''),
                 NULLIF(?, '')
-            )
-        ";
-
-        $stmtSimpan = mysqli_prepare(
-            $conn,
-            $sqlSimpan
+            )"
         );
 
         if (!$stmtSimpan) {
+
             $pesanError =
                 "Gagal menyiapkan penyimpanan konsultasi: "
                 . mysqli_error($conn);
+
         } else {
+
             mysqli_stmt_bind_param(
                 $stmtSimpan,
                 "iissss",
@@ -398,8 +463,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $tindakLanjut
             );
 
-            if (mysqli_stmt_execute($stmtSimpan)) {
-                mysqli_stmt_close($stmtSimpan);
+            if (
+                mysqli_stmt_execute(
+                    $stmtSimpan
+                )
+            ) {
+
+                mysqli_stmt_close(
+                    $stmtSimpan
+                );
 
                 header(
                     "Location: data_konsultasi.php?pesan=tambah_berhasil"
@@ -409,15 +481,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             $pesanError =
                 "Data konsultasi gagal disimpan: "
-                . mysqli_stmt_error($stmtSimpan);
+                . mysqli_stmt_error(
+                    $stmtSimpan
+                );
 
-            mysqli_stmt_close($stmtSimpan);
+            mysqli_stmt_close(
+                $stmtSimpan
+            );
         }
     }
 }
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
+
 ?>
 
 <div class="layout-wrapper">
@@ -426,302 +503,491 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div
-            class="d-flex flex-column flex-md-row
-            justify-content-between align-items-md-center
-            gap-3 mb-4"
-        >
-            <div>
-                <h2 class="mb-1">
-                    Tambah Konsultasi
-                </h2>
-
-                <p class="text-muted mb-0">
-                    <?php if (
-                        $roleAktif === "orang_tua"
-                    ): ?>
-                        Sampaikan keluhan mengenai kondisi anak
-                        kepada Petugas Gizi.
-                    <?php else: ?>
-                        Catat hasil konsultasi dan tindak lanjut
-                        pelayanan gizi balita.
-                    <?php endif; ?>
-                </p>
-            </div>
-
-            <a
-                href="data_konsultasi.php"
-                class="btn btn-outline-secondary"
-            >
-                Kembali
-            </a>
-        </div>
-
-        <?php if ($pesanError !== ""): ?>
-
-            <div
-                class="alert alert-danger
-                alert-dismissible fade show"
-                role="alert"
-            >
-                <?= htmlspecialchars(
-                    $pesanError,
-                    ENT_QUOTES,
-                    "UTF-8"
-                ) ?>
-
-                <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Tutup"
-                ></button>
-            </div>
-
-        <?php endif; ?>
-
-        <?php if (
-            mysqli_num_rows($queryBalita) === 0
-        ): ?>
-
-            <div class="alert alert-warning">
-                Tidak ada data balita yang dapat dipilih.
-            </div>
-
-        <?php endif; ?>
-
         <div class="card content-card">
 
-            <div class="card-body p-4">
+            <div class="card-header">
 
-                <form method="POST">
+                <div>
 
-                    <div class="mb-3">
+                    <h4 class="mb-1">
+                        Tambah Konsultasi
+                    </h4>
 
-                        <label
-                            for="id_balita"
-                            class="form-label"
-                        >
-                            Nama Balita
-                        </label>
+                    <small class="text-muted">
 
-                        <select
-                            id="id_balita"
-                            name="id_balita"
-                            class="form-select"
-                            required
-                        >
-                            <option value="">
-                                Pilih balita
-                            </option>
+                        <?php if (
+                            $roleAktif ===
+                            "orang_tua"
+                        ): ?>
 
-                            <?php
-                            mysqli_data_seek(
-                                $queryBalita,
-                                0
-                            );
-                            ?>
+                            Sampaikan keluhan mengenai kondisi
+                            anak langsung kepada Petugas Gizi.
 
-                            <?php while (
-                                $balita =
-                                    mysqli_fetch_assoc(
-                                        $queryBalita
-                                    )
-                            ): ?>
+                        <?php else: ?>
 
-                                <option
-                                    value="<?= (int)
-                                        $balita["id_balita"] ?>"
-                                    <?= (int) $idBalita ===
-                                        (int) $balita["id_balita"]
-                                        ? "selected"
-                                        : "" ?>
-                                >
-                                    <?= htmlspecialchars(
-                                        $balita["nama_balita"]
-                                        . " - "
-                                        . $balita["nik_balita"],
-                                        ENT_QUOTES,
-                                        "UTF-8"
-                                    ) ?>
-                                </option>
+                            Catat konsultasi gizi yang dilakukan
+                            bersama orang tua dan balita.
 
-                            <?php endwhile; ?>
+                        <?php endif; ?>
 
-                        </select>
+                    </small>
+
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+
+                    <?php if (
+                        $roleAktif ===
+                        "orang_tua"
+                    ): ?>
+
+                        <span class="badge badge-info">
+                            <i
+                                class="bi
+                                bi-person-heart"
+                            ></i>
+                            Orang Tua
+                        </span>
+
+                    <?php else: ?>
+
+                        <span class="badge badge-info">
+                            <i
+                                class="bi
+                                bi-heart-pulse"
+                            ></i>
+                            Petugas Gizi
+                        </span>
+
+                    <?php endif; ?>
+
+                    <a
+                        href="data_konsultasi.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i
+                            class="bi
+                            bi-arrow-left"
+                        ></i>
+                        Kembali
+                    </a>
+
+                </div>
+
+            </div>
+
+            <div class="card-body">
+
+                <?php if (
+                    $pesanError !== ""
+                ): ?>
+
+                    <div
+                        class="alert alert-danger
+                        alert-dismissible fade show"
+                        role="alert"
+                    >
+
+                        <i
+                            class="bi
+                            bi-x-circle me-1"
+                        ></i>
+
+                        <?= htmlspecialchars(
+                            $pesanError,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>
+
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="alert"
+                            aria-label="Tutup"
+                        ></button>
 
                     </div>
 
-                    <?php if (
-                        $roleAktif === "orang_tua"
-                    ): ?>
+                <?php endif; ?>
 
-                        <div class="mb-3">
+                <?php if (
+                    $totalBalita === 0
+                ): ?>
+
+                    <div class="alert alert-warning">
+
+                        <i
+                            class="bi
+                            bi-exclamation-triangle
+                            me-1"
+                        ></i>
+
+                        <?php if (
+                            $roleAktif ===
+                            "orang_tua"
+                        ): ?>
+
+                            Belum ada data anak yang
+                            terhubung dengan akun Anda.
+
+                        <?php else: ?>
+
+                            Belum ada data balita
+                            yang dapat dipilih.
+
+                        <?php endif; ?>
+
+                    </div>
+
+                <?php endif; ?>
+
+                <?php if (
+                    $roleAktif === "orang_tua"
+                    && $totalPetugas === 0
+                ): ?>
+
+                    <div class="alert alert-warning">
+
+                        <i
+                            class="bi
+                            bi-exclamation-triangle
+                            me-1"
+                        ></i>
+
+                        Belum ada akun Petugas Gizi
+                        yang tersedia untuk konsultasi.
+
+                    </div>
+
+                <?php endif; ?>
+
+                <form method="POST">
+
+                    <div class="row g-3">
+
+                        <div
+                            class="col-12
+                            <?= $roleAktif ===
+                                "orang_tua"
+                                ? "col-lg-6"
+                                : "col-lg-8"; ?>"
+                        >
 
                             <label
-                                for="id_petugas"
+                                for="id_balita"
                                 class="form-label"
                             >
-                                Petugas Gizi
+                                Nama Balita
                             </label>
 
                             <select
-                                id="id_petugas"
-                                name="id_petugas"
+                                id="id_balita"
+                                name="id_balita"
                                 class="form-select"
                                 required
                             >
+
                                 <option value="">
-                                    Pilih Petugas Gizi
+                                    -- Pilih Balita --
                                 </option>
 
+                                <?php
+                                mysqli_data_seek(
+                                    $queryBalita,
+                                    0
+                                );
+                                ?>
+
                                 <?php while (
-                                    $petugas =
+                                    $balita =
                                         mysqli_fetch_assoc(
-                                            $queryPetugas
+                                            $queryBalita
                                         )
                                 ): ?>
 
                                     <option
                                         value="<?= (int)
-                                            $petugas["id_user"] ?>"
-                                        <?= (int) $idPetugas ===
-                                            (int) $petugas["id_user"]
+                                            $balita[
+                                                "id_balita"
+                                            ]; ?>"
+                                        <?= (int) $idBalita ===
+                                            (int) $balita[
+                                                "id_balita"
+                                            ]
                                             ? "selected"
-                                            : "" ?>
+                                            : ""; ?>
                                     >
                                         <?= htmlspecialchars(
-                                            $petugas["nama"]
-                                            . " ("
-                                            . $petugas["username"]
-                                            . ")",
+                                            $balita[
+                                                "nama_balita"
+                                            ]
+                                            . " - "
+                                            . $balita[
+                                                "nik_balita"
+                                            ],
                                             ENT_QUOTES,
                                             "UTF-8"
-                                        ) ?>
+                                        ); ?>
                                     </option>
 
                                 <?php endwhile; ?>
 
                             </select>
 
+                            <div class="form-text">
+
+                                <?php if (
+                                    $roleAktif ===
+                                    "orang_tua"
+                                ): ?>
+
+                                    Hanya anak yang terhubung
+                                    dengan akun Anda yang
+                                    dapat dipilih.
+
+                                <?php else: ?>
+
+                                    Pilih balita yang
+                                    berkonsultasi di Puskesmas.
+
+                                <?php endif; ?>
+
+                            </div>
+
                         </div>
 
-                    <?php endif; ?>
+                        <?php if (
+                            $roleAktif ===
+                            "orang_tua"
+                        ): ?>
 
-                    <div class="mb-3">
+                            <div
+                                class="col-12
+                                col-lg-6"
+                            >
 
-                        <label
-                            for="tanggal"
-                            class="form-label"
+                                <label
+                                    for="id_petugas"
+                                    class="form-label"
+                                >
+                                    Petugas Gizi
+                                </label>
+
+                                <select
+                                    id="id_petugas"
+                                    name="id_petugas"
+                                    class="form-select"
+                                    required
+                                >
+
+                                    <option value="">
+                                        -- Pilih Petugas Gizi --
+                                    </option>
+
+                                    <?php while (
+                                        $petugas =
+                                            mysqli_fetch_assoc(
+                                                $queryPetugas
+                                            )
+                                    ): ?>
+
+                                        <option
+                                            value="<?= (int)
+                                                $petugas[
+                                                    "id_user"
+                                                ]; ?>"
+                                            <?= (int) $idPetugas ===
+                                                (int) $petugas[
+                                                    "id_user"
+                                                ]
+                                                ? "selected"
+                                                : ""; ?>
+                                        >
+                                            <?= htmlspecialchars(
+                                                $petugas[
+                                                    "nama"
+                                                ]
+                                                . " ("
+                                                . $petugas[
+                                                    "username"
+                                                ]
+                                                . ")",
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ); ?>
+                                        </option>
+
+                                    <?php endwhile; ?>
+
+                                </select>
+
+                                <div class="form-text">
+                                    Pilih Petugas Gizi
+                                    yang akan menerima konsultasi.
+                                </div>
+
+                            </div>
+
+                        <?php endif; ?>
+
+                        <div
+                            class="col-12
+                            <?= $roleAktif ===
+                                "orang_tua"
+                                ? ""
+                                : "col-lg-4"; ?>"
                         >
-                            Tanggal Konsultasi
-                        </label>
-
-                        <input
-                            type="date"
-                            id="tanggal"
-                            name="tanggal"
-                            class="form-control"
-                            value="<?= htmlspecialchars(
-                                $tanggal,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ) ?>"
-                            max="<?= date("Y-m-d") ?>"
-                            required
-                        >
-
-                    </div>
-
-                    <div class="mb-3">
-
-                        <label
-                            for="keluhan"
-                            class="form-label"
-                        >
-                            Keluhan
-                        </label>
-
-                        <textarea
-                            id="keluhan"
-                            name="keluhan"
-                            class="form-control"
-                            rows="4"
-                            placeholder="Tuliskan keluhan atau kondisi yang ingin dikonsultasikan"
-                            required
-                        ><?= htmlspecialchars(
-                            $keluhan,
-                            ENT_QUOTES,
-                            "UTF-8"
-                        ) ?></textarea>
-
-                    </div>
-
-                    <?php if (
-                        $roleAktif === "petugas_gizi"
-                    ): ?>
-
-                        <div class="mb-3">
 
                             <label
-                                for="hasil_konsultasi"
+                                for="tanggal"
                                 class="form-label"
                             >
-                                Hasil Konsultasi
+                                Tanggal Konsultasi
+                            </label>
+
+                            <input
+                                type="date"
+                                id="tanggal"
+                                name="tanggal"
+                                class="form-control"
+                                value="<?= htmlspecialchars(
+                                    $tanggal,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                                max="<?= date(
+                                    "Y-m-d"
+                                ); ?>"
+                                required
+                            >
+
+                        </div>
+
+                        <div class="col-12">
+
+                            <label
+                                for="keluhan"
+                                class="form-label"
+                            >
+                                Keluhan /
+                                Kondisi yang Dikonsultasikan
                             </label>
 
                             <textarea
-                                id="hasil_konsultasi"
-                                name="hasil_konsultasi"
+                                id="keluhan"
+                                name="keluhan"
                                 class="form-control"
                                 rows="4"
-                                placeholder="Tuliskan hasil konsultasi gizi"
+                                placeholder="Tuliskan keluhan atau kondisi yang ingin dikonsultasikan"
                                 required
                             ><?= htmlspecialchars(
-                                $hasilKonsultasi,
+                                $keluhan,
                                 ENT_QUOTES,
                                 "UTF-8"
-                            ) ?></textarea>
+                            ); ?></textarea>
+
+                            <div class="form-text">
+                                Jelaskan kondisi atau keluhan
+                                secara singkat dan jelas.
+                            </div>
 
                         </div>
 
-                        <div class="mb-3">
+                        <?php if (
+                            $roleAktif ===
+                            "petugas_gizi"
+                        ): ?>
 
-                            <label
-                                for="tindak_lanjut"
-                                class="form-label"
+                            <div
+                                class="col-12
+                                col-lg-6"
                             >
-                                Tindak Lanjut
-                            </label>
 
-                            <textarea
-                                id="tindak_lanjut"
-                                name="tindak_lanjut"
-                                class="form-control"
-                                rows="4"
-                                placeholder="Tuliskan rencana tindak lanjut"
-                                required
-                            ><?= htmlspecialchars(
-                                $tindakLanjut,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ) ?></textarea>
+                                <label
+                                    for="hasil_konsultasi"
+                                    class="form-label"
+                                >
+                                    Hasil Konsultasi
+                                </label>
 
-                        </div>
+                                <textarea
+                                    id="hasil_konsultasi"
+                                    name="hasil_konsultasi"
+                                    class="form-control"
+                                    rows="5"
+                                    placeholder="Tuliskan hasil asesmen dan konseling gizi"
+                                    required
+                                ><?= htmlspecialchars(
+                                    $hasilKonsultasi,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?></textarea>
 
-                    <?php endif; ?>
+                                <div class="form-text">
+                                    Catat hasil asesmen,
+                                    konseling, atau edukasi gizi.
+                                </div>
 
-                    <div class="d-flex flex-wrap gap-2">
+                            </div>
+
+                            <div
+                                class="col-12
+                                col-lg-6"
+                            >
+
+                                <label
+                                    for="tindak_lanjut"
+                                    class="form-label"
+                                >
+                                    Tindak Lanjut
+                                </label>
+
+                                <textarea
+                                    id="tindak_lanjut"
+                                    name="tindak_lanjut"
+                                    class="form-control"
+                                    rows="5"
+                                    placeholder="Tuliskan rencana monitoring atau tindak lanjut"
+                                    required
+                                ><?= htmlspecialchars(
+                                    $tindakLanjut,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?></textarea>
+
+                                <div class="form-text">
+                                    Catat jadwal monitoring,
+                                    kontrol, atau tindak lanjut.
+                                </div>
+
+                            </div>
+
+                        <?php endif; ?>
+
+                    </div>
+
+                    <hr>
+
+                    <div class="form-actions">
 
                         <button
                             type="submit"
-                            class="btn btn-success"
-                            <?= mysqli_num_rows(
-                                $queryBalita
-                            ) === 0
+                            class="btn btn-primary"
+                            <?= (
+                                $totalBalita === 0
+                                || (
+                                    $roleAktif ===
+                                    "orang_tua"
+                                    && $totalPetugas === 0
+                                )
+                            )
                                 ? "disabled"
-                                : "" ?>
+                                : ""; ?>
                         >
+                            <i
+                                class="bi
+                                bi-check-circle"
+                            ></i>
                             Simpan Konsultasi
                         </button>
 
@@ -729,6 +995,10 @@ require_once "../includes/navbar.php";
                             href="data_konsultasi.php"
                             class="btn btn-outline-secondary"
                         >
+                            <i
+                                class="bi
+                                bi-x-circle"
+                            ></i>
                             Batal
                         </a>
 
@@ -750,7 +1020,9 @@ if (
     isset($stmtBalita)
     && $stmtBalita instanceof mysqli_stmt
 ) {
-    mysqli_stmt_close($stmtBalita);
+    mysqli_stmt_close(
+        $stmtBalita
+    );
 }
 
 require_once "../includes/footer.php";

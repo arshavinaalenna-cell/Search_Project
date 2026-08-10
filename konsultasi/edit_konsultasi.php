@@ -99,6 +99,28 @@ $hasilKonsultasiForm =
 $tindakLanjut =
     $dataKonsultasi["tindak_lanjut"] ?? "";
 
+$belumDitanggapi = (
+    trim(
+        (string) $hasilKonsultasiForm
+    ) === ""
+);
+
+$judulForm = $belumDitanggapi
+    ? "Tanggapi Konsultasi"
+    : "Edit Hasil Konsultasi";
+
+$statusKonsultasi = $belumDitanggapi
+    ? "Menunggu Tanggapan"
+    : "Sudah Ditanggapi";
+
+$kelasStatusKonsultasi = $belumDitanggapi
+    ? "bg-warning text-dark"
+    : "bg-success";
+
+$ikonStatusKonsultasi = $belumDitanggapi
+    ? "bi-hourglass-split"
+    : "bi-check-circle";
+
 /*
 |--------------------------------------------------------------------------
 | Memproses perubahan konsultasi
@@ -165,6 +187,28 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
+$belumDitanggapi = (
+    trim(
+        (string) $hasilKonsultasiForm
+    ) === ""
+);
+
+$judulForm = $belumDitanggapi
+    ? "Tanggapi Konsultasi"
+    : "Edit Hasil Konsultasi";
+
+$statusKonsultasi = $belumDitanggapi
+    ? "Menunggu Tanggapan"
+    : "Sudah Ditanggapi";
+
+$kelasStatusKonsultasi = $belumDitanggapi
+    ? "bg-warning text-dark"
+    : "bg-success";
+
+$ikonStatusKonsultasi = $belumDitanggapi
+    ? "bi-hourglass-split"
+    : "bi-check-circle";
+
 $tanggalTampil = "-";
 
 if (!empty($dataKonsultasi["tanggal"])) {
@@ -193,23 +237,47 @@ require_once "../includes/navbar.php";
                 <div>
 
                     <h4 class="mb-1">
-                        Isi Hasil Konsultasi
+                        <?= htmlspecialchars(
+                            $judulForm,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>
                     </h4>
 
                     <small class="text-muted">
-                        Tinjau keluhan orang tua lalu isi hasil
-                        konsultasi dan tindak lanjut.
+                        Tinjau keluhan orang tua lalu isi atau
+                        perbarui hasil konsultasi dan tindak lanjut.
                     </small>
 
                 </div>
 
-                <a
-                    href="data_konsultasi.php"
-                    class="btn btn-secondary btn-sm"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali
-                </a>
+                <div class="d-flex flex-wrap gap-2">
+
+                    <span
+                        class="badge
+                        <?= $kelasStatusKonsultasi; ?>"
+                    >
+                        <i
+                            class="bi
+                            <?= $ikonStatusKonsultasi; ?>"
+                        ></i>
+
+                        <?= htmlspecialchars(
+                            $statusKonsultasi,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>
+                    </span>
+
+                    <a
+                        href="data_konsultasi.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                </div>
 
             </div>
 
@@ -373,8 +441,9 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        Lengkapi hasil konsultasi dan rencana
-                        tindak lanjut balita.
+                        <?= $belumDitanggapi
+                            ? "Lengkapi hasil konsultasi dan rencana tindak lanjut balita."
+                            : "Perbarui hasil konsultasi dan tindak lanjut bila diperlukan."; ?>
                     </small>
 
                 </div>
@@ -461,7 +530,10 @@ require_once "../includes/navbar.php";
                             class="btn btn-primary"
                         >
                             <i class="bi bi-check-circle"></i>
-                            Simpan Hasil Konsultasi
+
+                            <?= $belumDitanggapi
+                                ? "Simpan Tanggapan"
+                                : "Simpan Perubahan"; ?>
                         </button>
 
                         <a
