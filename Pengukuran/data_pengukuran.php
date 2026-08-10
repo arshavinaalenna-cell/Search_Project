@@ -82,7 +82,12 @@ if ($roleAktif === "orang_tua") {
             p.tinggi_panjang_badan,
             p.lingkar_kepala,
             p.lila,
-            b.nama_balita
+            b.nama_balita,
+            EXISTS (
+                SELECT 1
+                FROM hasil_deteksi AS hd
+                WHERE hd.id_pengukuran = p.id_pengukuran
+            ) AS digunakan_deteksi
         FROM pengukuran_antropometri AS p
         INNER JOIN balita AS b
             ON p.id_balita = b.id_balita
@@ -132,7 +137,12 @@ if ($roleAktif === "orang_tua") {
             p.tinggi_panjang_badan,
             p.lingkar_kepala,
             p.lila,
-            b.nama_balita
+            b.nama_balita,
+            EXISTS (
+                SELECT 1
+                FROM hasil_deteksi AS hd
+                WHERE hd.id_pengukuran = p.id_pengukuran
+            ) AS digunakan_deteksi
         FROM pengukuran_antropometri AS p
         INNER JOIN balita AS b
             ON p.id_balita = b.id_balita
@@ -181,7 +191,12 @@ if ($roleAktif === "orang_tua") {
             p.tinggi_panjang_badan,
             p.lingkar_kepala,
             p.lila,
-            b.nama_balita
+            b.nama_balita,
+            EXISTS (
+                SELECT 1
+                FROM hasil_deteksi AS hd
+                WHERE hd.id_pengukuran = p.id_pengukuran
+            ) AS digunakan_deteksi
         FROM pengukuran_antropometri AS p
         INNER JOIN balita AS b
             ON p.id_balita = b.id_balita
@@ -382,14 +397,14 @@ require_once "../includes/navbar.php";
                     <h4 class="mb-1">
                         <?= $bolehKelolaPengukuran
                             ? "Input Antropometri"
-                            : "Riwayat Pengukuran"; ?>
+                            : "Grafik dan Riwayat Pertumbuhan"; ?>
                     </h4>
 
                     <small class="text-muted">
                         <?php if ($bolehKelolaPengukuran): ?>
                             Kelola hasil pengukuran fisik balita dari kegiatan Posyandu.
                         <?php elseif ($roleAktif === "orang_tua"): ?>
-                            Lihat riwayat pengukuran anak yang terhubung dengan akun Anda.
+                            Lihat riwayat pengukuran pertumbuhan anak yang terhubung dengan akun Anda.
                         <?php else: ?>
                             Lihat riwayat pengukuran pertumbuhan balita.
                         <?php endif; ?>
@@ -556,9 +571,13 @@ require_once "../includes/navbar.php";
                                     LiLA
                                 </th>
 
-                                <th class="text-center">
-                                    Aksi
-                                </th>
+                                <?php if ($bolehKelolaPengukuran): ?>
+
+                                    <th class="text-center">
+                                        Aksi
+                                    </th>
+
+                                <?php endif; ?>
 
                             </tr>
 
@@ -576,6 +595,12 @@ require_once "../includes/navbar.php";
                             ):
                                 $idPengukuran =
                                     (int) $data["id_pengukuran"];
+
+                                $digunakanDeteksi =
+                                    (int) (
+                                        $data["digunakan_deteksi"]
+                                        ?? 0
+                                    ) === 1;
                             ?>
 
                                 <tr>
@@ -655,27 +680,16 @@ require_once "../includes/navbar.php";
                                         ); ?>
                                     </td>
 
-                                    <td>
+                                    <?php if (
+                                        $bolehKelolaPengukuran
+                                    ): ?>
 
-                                        <div
-                                            class="table-actions
-                                            justify-content-center"
-                                        >
+                                        <td>
 
-                                            <a
-                                                href="grafik_pertumbuhan.php?id_balita=<?= (int) $data["id_balita"]; ?>"
-                                                class="btn btn-info btn-sm"
+                                            <div
+                                                class="table-actions
+                                                justify-content-center"
                                             >
-                                                <i
-                                                    class="bi
-                                                    bi-graph-up-arrow"
-                                                ></i>
-                                                Grafik
-                                            </a>
-
-                                            <?php if (
-                                                $bolehKelolaPengukuran
-                                            ): ?>
 
                                                 <a
                                                     href="edit_pengukuran.php?id=<?= $idPengukuran; ?>"
@@ -688,37 +702,56 @@ require_once "../includes/navbar.php";
                                                     Edit
                                                 </a>
 
-                                                <form
-                                                    action="hapus_pengukuran.php"
-                                                    method="POST"
-                                                    class="d-inline"
-                                                    onsubmit="return confirm(
-                                                        'Yakin ingin menghapus data pengukuran ini?'
-                                                    );"
-                                                >
-                                                    <input
-                                                        type="hidden"
-                                                        name="id_pengukuran"
-                                                        value="<?= $idPengukuran; ?>"
-                                                    >
+                                                <?php if ($digunakanDeteksi): ?>
 
                                                     <button
-                                                        type="submit"
-                                                        class="btn btn-danger btn-sm"
+                                                        type="button"
+                                                        class="btn btn-light btn-sm"
+                                                        disabled
+                                                        title="Pengukuran sudah digunakan pada hasil deteksi dan tidak dapat dihapus."
                                                     >
                                                         <i
                                                             class="bi
-                                                            bi-trash3"
+                                                            bi-lock"
                                                         ></i>
-                                                        Hapus
+                                                        Dipakai Deteksi
                                                     </button>
-                                                </form>
 
-                                            <?php endif; ?>
+                                                <?php else: ?>
 
-                                        </div>
+                                                    <form
+                                                        action="hapus_pengukuran.php"
+                                                        method="POST"
+                                                        class="d-inline"
+                                                        onsubmit="return confirm(
+                                                            'Yakin ingin menghapus data pengukuran ini?'
+                                                        );"
+                                                    >
+                                                        <input
+                                                            type="hidden"
+                                                            name="id_pengukuran"
+                                                            value="<?= $idPengukuran; ?>"
+                                                        >
 
-                                    </td>
+                                                        <button
+                                                            type="submit"
+                                                            class="btn btn-danger btn-sm"
+                                                        >
+                                                            <i
+                                                                class="bi
+                                                                bi-trash3"
+                                                            ></i>
+                                                            Hapus
+                                                        </button>
+                                                    </form>
+
+                                                <?php endif; ?>
+
+                                            </div>
+
+                                        </td>
+
+                                    <?php endif; ?>
 
                                 </tr>
 
@@ -729,7 +762,9 @@ require_once "../includes/navbar.php";
                             <tr>
 
                                 <td
-                                    colspan="9"
+                                    colspan="<?= $bolehKelolaPengukuran
+                                        ? "9"
+                                        : "8"; ?>"
                                 >
 
                                     <div class="empty-state">

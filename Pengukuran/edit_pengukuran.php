@@ -155,8 +155,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $old["tanggal_pengukuran"] =
         trim($_POST["tanggal_pengukuran"] ?? "");
 
-    $old["umur_bulan"] =
-        trim($_POST["umur_bulan"] ?? "");
+    /*
+    | Umur tidak diambil dari input manual.
+    | Nilainya dihitung otomatis dari tanggal lahir balita
+    | dan tanggal pengukuran.
+    */
+    $old["umur_bulan"] = "";
 
     $old["berat_badan"] =
         trim($_POST["berat_badan"] ?? "");
@@ -184,10 +188,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $tanggalPengukuran =
         $old["tanggal_pengukuran"];
 
-    $umurBulan = filter_var(
-        $old["umur_bulan"],
-        FILTER_VALIDATE_INT
-    );
+    $umurBulan = null;
 
     $beratBadan = filter_var(
         $old["berat_badan"],
@@ -240,12 +241,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (
         $old["id_balita"] === ""
         || $old["tanggal_pengukuran"] === ""
-        || $old["umur_bulan"] === ""
         || $old["berat_badan"] === ""
         || $old["tinggi_panjang_badan"] === ""
     ) {
         $error =
-            "Nama balita, tanggal, umur, berat badan, dan tinggi badan wajib diisi.";
+            "Nama balita, tanggal, berat badan, dan tinggi badan wajib diisi.";
 
     } elseif (
         $idBalita === false
@@ -263,14 +263,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     ) {
         $error =
             "Tanggal pengukuran tidak boleh melebihi tanggal hari ini.";
-
-    } elseif (
-        $umurBulan === false
-        || $umurBulan < 0
-        || $umurBulan > 59
-    ) {
-        $error =
-            "Umur balita harus berada antara 0 sampai 59 bulan.";
 
     } elseif (
         $beratBadan === false
@@ -321,7 +313,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $stmtCekBalita = mysqli_prepare(
             $conn,
-            "SELECT id_balita
+            "SELECT id_balita, tanggal_lahir
              FROM balita
              WHERE id_balita = ?
              LIMIT 1"
@@ -358,6 +350,59 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             if (!$dataBalita) {
                 $error =
                     "Data balita tidak ditemukan.";
+            } else {
+
+                /*
+                |--------------------------------------------------------------------------
+                | Hitung umur otomatis dalam bulan
+                |--------------------------------------------------------------------------
+                |
+                | Umur dihitung dari tanggal lahir balita sampai tanggal pengukuran.
+                | Nilai balita.umur tidak digunakan.
+                |
+                */
+
+                $tanggalLahir = DateTime::createFromFormat(
+                    "Y-m-d",
+                    (string) $dataBalita["tanggal_lahir"]
+                );
+
+                $tanggalUkur = DateTime::createFromFormat(
+                    "Y-m-d",
+                    $tanggalPengukuran
+                );
+
+                if (
+                    !$tanggalLahir
+                    || !$tanggalUkur
+                ) {
+                    $error =
+                        "Tanggal lahir balita atau tanggal pengukuran tidak valid.";
+
+                } elseif ($tanggalUkur < $tanggalLahir) {
+                    $error =
+                        "Tanggal pengukuran tidak boleh lebih awal dari tanggal lahir balita.";
+
+                } else {
+
+                    $selisihUmur =
+                        $tanggalLahir->diff($tanggalUkur);
+
+                    $umurBulan =
+                        ($selisihUmur->y * 12)
+                        + $selisihUmur->m;
+
+                    $old["umur_bulan"] =
+                        (string) $umurBulan;
+
+                    if (
+                        $umurBulan < 0
+                        || $umurBulan > 59
+                    ) {
+                        $error =
+                            "Umur balita pada tanggal pengukuran harus berada antara 0 sampai 59 bulan.";
+                    }
+                }
             }
         }
     }
@@ -455,7 +500,8 @@ $queryBalita = mysqli_query(
     $conn,
     "SELECT
         id_balita,
-        nama_balita
+        nama_balita,
+        tanggal_lahir
      FROM balita
      ORDER BY nama_balita ASC"
 );
@@ -597,6 +643,9 @@ require_once "../includes/navbar.php";
 
                                 <option
                                     value="<?= (int) $balita["id_balita"]; ?>"
+                                    data-tanggal-lahir="<?= amanEditPengukuran(
+                                        $balita["tanggal_lahir"]
+                                    ); ?>"
                                     <?= (
                                         (string) $old["id_balita"]
                                         ===
@@ -666,7 +715,8 @@ require_once "../includes/navbar.php";
                                     ); ?>"
                                     min="0"
                                     max="59"
-                                    placeholder="Contoh: 24"
+                                    placeholder="Otomatis"
+                                    readonly
                                     required
                                 >
 
@@ -675,6 +725,10 @@ require_once "../includes/navbar.php";
                                 </span>
 
                             </div>
+
+                            <small class="text-muted">
+                                Umur dihitung otomatis dari tanggal lahir balita dan tanggal pengukuran.
+                            </small>
 
                         </div>
 
@@ -860,5 +914,108 @@ require_once "../includes/navbar.php";
     </main>
 
 </div>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const balitaSelect =
+        document.getElementById("id_balita");
+
+    const tanggalPengukuran =
+        document.getElementById("tanggal_pengukuran");
+
+    const umurBulanInput =
+        document.getElementById("umur_bulan");
+
+    if (
+        !balitaSelect
+        || !tanggalPengukuran
+        || !umurBulanInput
+    ) {
+        return;
+    }
+
+    function parseTanggal(tanggal) {
+        if (!tanggal) {
+            return null;
+        }
+
+        const bagian =
+            tanggal.split("-").map(Number);
+
+        if (bagian.length !== 3) {
+            return null;
+        }
+
+        return {
+            tahun: bagian[0],
+            bulan: bagian[1],
+            hari: bagian[2]
+        };
+    }
+
+    function hitungUmurBulan() {
+        const optionBalita =
+            balitaSelect.options[
+                balitaSelect.selectedIndex
+            ];
+
+        if (
+            !optionBalita
+            || !optionBalita.value
+            || !tanggalPengukuran.value
+        ) {
+            umurBulanInput.value = "";
+            return;
+        }
+
+        const lahir =
+            parseTanggal(
+                optionBalita.dataset.tanggalLahir
+            );
+
+        const ukur =
+            parseTanggal(
+                tanggalPengukuran.value
+            );
+
+        if (!lahir || !ukur) {
+            umurBulanInput.value = "";
+            return;
+        }
+
+        let umurBulan =
+            (ukur.tahun - lahir.tahun) * 12
+            + (ukur.bulan - lahir.bulan);
+
+        if (ukur.hari < lahir.hari) {
+            umurBulan--;
+        }
+
+        if (
+            umurBulan < 0
+            || umurBulan > 59
+        ) {
+            umurBulanInput.value = "";
+            return;
+        }
+
+        umurBulanInput.value =
+            umurBulan;
+    }
+
+    balitaSelect.addEventListener(
+        "change",
+        hitungUmurBulan
+    );
+
+    tanggalPengukuran.addEventListener(
+        "change",
+        hitungUmurBulan
+    );
+
+    hitungUmurBulan();
+});
+</script>
 
 <?php require_once "../includes/footer.php"; ?>
