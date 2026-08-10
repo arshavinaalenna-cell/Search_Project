@@ -99,6 +99,7 @@ function kelasStatusLaporan($status): string
             [
                 "risiko rendah",
                 "normal",
+                "normal/sehat",
                 "tidak stunting"
             ],
             true
@@ -112,6 +113,7 @@ function kelasStatusLaporan($status): string
             $status,
             [
                 "risiko sedang",
+                "risiko stunting",
                 "pendek"
             ],
             true
@@ -124,10 +126,22 @@ function kelasStatusLaporan($status): string
         in_array(
             $status,
             [
-                "risiko tinggi",
-                "stunting",
+                "stunting berat",
                 "sangat pendek",
                 "severely stunted"
+            ],
+            true
+        )
+    ) {
+        return "bg-dark text-white";
+    }
+
+    if (
+        in_array(
+            $status,
+            [
+                "risiko tinggi",
+                "stunting"
             ],
             true
         )
@@ -393,6 +407,7 @@ while (
             [
                 "risiko rendah",
                 "normal",
+                "normal/sehat",
                 "tidak stunting"
             ],
             true
@@ -405,6 +420,7 @@ while (
             $status,
             [
                 "risiko sedang",
+                "risiko stunting",
                 "pendek"
             ],
             true
@@ -418,6 +434,7 @@ while (
             [
                 "risiko tinggi",
                 "stunting",
+                "stunting berat",
                 "sangat pendek",
                 "severely stunted"
             ],

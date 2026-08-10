@@ -131,100 +131,168 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div
-            class="d-flex flex-column flex-md-row
-            justify-content-between align-items-md-center
-            gap-3 mb-4"
-        >
-            <div>
-                <h2 class="mb-1">
-                    Detail Konsultasi
-                </h2>
-
-                <p class="text-muted mb-0">
-                    Informasi lengkap konsultasi gizi balita.
-                </p>
-            </div>
-
-            <a
-                href="data_konsultasi.php"
-                class="btn btn-outline-secondary"
-            >
-                Kembali
-            </a>
-        </div>
-
         <div class="card content-card">
 
-            <div class="card-body p-4">
+            <div class="card-header">
 
-                <div class="table-responsive">
+                <div>
 
-                    <table class="table table-bordered align-middle">
+                    <h4 class="mb-1">
+                        Detail Konsultasi
+                    </h4>
 
-                        <tr>
-                            <th width="30%">
+                    <small class="text-muted">
+                        Informasi lengkap konsultasi gizi balita.
+                    </small>
+
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+
+                    <a
+                        href="data_konsultasi.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                    <?php if ($bolehEdit): ?>
+
+                        <a
+                            href="edit_konsultasi.php?id=<?= (int) $data["id_konsultasi"]; ?>"
+                            class="btn btn-warning btn-sm"
+                        >
+                            <i class="bi bi-chat-left-text"></i>
+                            Isi Hasil Konsultasi
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+            <div class="card-body">
+
+                <div class="row g-3 mb-3">
+
+                    <div class="col-12 col-lg-4">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
                                 Tanggal Konsultasi
-                            </th>
+                            </span>
 
-                            <td>
+                            <div class="detail-value">
+                                <i
+                                    class="bi bi-calendar3 me-1"
+                                ></i>
+
                                 <?= htmlspecialchars(
                                     $tanggalTampil,
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>Nama Balita</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12 col-lg-4">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Nama Balita
+                            </span>
+
+                            <div class="detail-value">
+                                <i
+                                    class="bi bi-person-heart me-1"
+                                ></i>
+
                                 <?= htmlspecialchars(
                                     $data["nama_balita"] ?? "-",
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>NIK Balita</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12 col-lg-4">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                NIK Balita
+                            </span>
+
+                            <div class="detail-value">
                                 <?= htmlspecialchars(
                                     $data["nik_balita"] ?? "-",
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>Nama Ibu</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                </div>
+
+                <div class="row g-3 mb-3">
+
+                    <div class="col-12 col-lg-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Nama Ibu
+                            </span>
+
+                            <div class="detail-value">
                                 <?= htmlspecialchars(
                                     $data["nama_ibu"] ?? "-",
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>Petugas Gizi</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Petugas Gizi
+                            </span>
+
+                            <div class="detail-value">
+
                                 <?php if (
                                     !empty($data["nama_petugas"])
                                 ): ?>
+
+                                    <i
+                                        class="bi
+                                        bi-person-badge me-1"
+                                    ></i>
 
                                     <?= htmlspecialchars(
                                         $data["nama_petugas"],
                                         ENT_QUOTES,
                                         "UTF-8"
-                                    ) ?>
+                                    ); ?>
 
                                     <?php if (
                                         !empty(
@@ -232,7 +300,7 @@ require_once "../includes/navbar.php";
                                         )
                                     ): ?>
 
-                                        <span class="text-muted">
+                                        <small class="text-muted">
                                             (
                                             <?= htmlspecialchars(
                                                 $data[
@@ -240,40 +308,66 @@ require_once "../includes/navbar.php";
                                                 ],
                                                 ENT_QUOTES,
                                                 "UTF-8"
-                                            ) ?>
+                                            ); ?>
                                             )
-                                        </span>
+                                        </small>
 
                                     <?php endif; ?>
 
                                 <?php else: ?>
 
-                                    <span class="text-muted">
-                                        Belum ditentukan
+                                    <span class="badge bg-warning text-dark">
+                                        <i
+                                            class="bi
+                                            bi-hourglass-split"
+                                        ></i>
+                                        Belum Ditentukan
                                     </span>
 
                                 <?php endif; ?>
-                            </td>
-                        </tr>
 
-                        <tr>
-                            <th>Keluhan</th>
+                            </div>
 
-                            <td>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="row g-3">
+
+                    <div class="col-12">
+
+                        <div class="detail-item">
+
+                            <span class="detail-label">
+                                Keluhan
+                            </span>
+
+                            <div class="detail-value">
                                 <?= nl2br(
                                     htmlspecialchars(
                                         $data["keluhan"] ?? "-",
                                         ENT_QUOTES,
                                         "UTF-8"
                                     )
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>Hasil Konsultasi</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Hasil Konsultasi
+                            </span>
+
+                            <div class="detail-value">
+
                                 <?php if (
                                     !empty(
                                         trim(
@@ -292,22 +386,39 @@ require_once "../includes/navbar.php";
                                             ENT_QUOTES,
                                             "UTF-8"
                                         )
-                                    ) ?>
+                                    ); ?>
 
                                 <?php else: ?>
 
-                                    <span class="text-muted">
-                                        Belum diisi oleh Petugas Gizi.
+                                    <span
+                                        class="badge
+                                        bg-warning text-dark"
+                                    >
+                                        <i
+                                            class="bi
+                                            bi-hourglass-split"
+                                        ></i>
+                                        Belum Diisi
                                     </span>
 
                                 <?php endif; ?>
-                            </td>
-                        </tr>
 
-                        <tr>
-                            <th>Tindak Lanjut</th>
+                            </div>
 
-                            <td>
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Tindak Lanjut
+                            </span>
+
+                            <div class="detail-value">
+
                                 <?php if (
                                     !empty(
                                         trim(
@@ -326,41 +437,25 @@ require_once "../includes/navbar.php";
                                             ENT_QUOTES,
                                             "UTF-8"
                                         )
-                                    ) ?>
+                                    ); ?>
 
                                 <?php else: ?>
 
-                                    <span class="text-muted">
-                                        Belum ada tindak lanjut.
+                                    <span class="badge bg-secondary">
+                                        <i
+                                            class="bi
+                                            bi-clock-history"
+                                        ></i>
+                                        Belum Ada
                                     </span>
 
                                 <?php endif; ?>
-                            </td>
-                        </tr>
 
-                    </table>
+                            </div>
 
-                </div>
+                        </div>
 
-                <div class="d-flex flex-wrap gap-2 mt-3">
-
-                    <?php if ($bolehEdit): ?>
-
-                        <a
-                            href="edit_konsultasi.php?id=<?= (int) $data["id_konsultasi"] ?>"
-                            class="btn btn-warning"
-                        >
-                            Isi Hasil Konsultasi
-                        </a>
-
-                    <?php endif; ?>
-
-                    <a
-                        href="data_konsultasi.php"
-                        class="btn btn-secondary"
-                    >
-                        Kembali
-                    </a>
+                    </div>
 
                 </div>
 

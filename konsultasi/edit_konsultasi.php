@@ -186,127 +186,161 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div
-            class="d-flex flex-column flex-md-row
-            justify-content-between align-items-md-center
-            gap-3 mb-4"
-        >
-            <div>
-                <h2 class="mb-1">
-                    Isi Hasil Konsultasi
-                </h2>
-
-                <p class="text-muted mb-0">
-                    Tinjau keluhan orang tua lalu isi hasil
-                    konsultasi dan tindak lanjut.
-                </p>
-            </div>
-
-            <a
-                href="data_konsultasi.php"
-                class="btn btn-outline-secondary"
-            >
-                Kembali
-            </a>
-        </div>
-
-        <?php if ($pesanError !== ""): ?>
-
-            <div
-                class="alert alert-danger
-                alert-dismissible fade show"
-                role="alert"
-            >
-                <?= htmlspecialchars(
-                    $pesanError,
-                    ENT_QUOTES,
-                    "UTF-8"
-                ) ?>
-
-                <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Tutup"
-                ></button>
-            </div>
-
-        <?php endif; ?>
-
         <div class="card content-card mb-4">
 
-            <div class="card-body p-4">
+            <div class="card-header">
 
-                <h5 class="mb-3">
-                    Informasi Konsultasi
-                </h5>
+                <div>
 
-                <div class="table-responsive">
+                    <h4 class="mb-1">
+                        Isi Hasil Konsultasi
+                    </h4>
 
-                    <table
-                        class="table table-bordered align-middle mb-0"
+                    <small class="text-muted">
+                        Tinjau keluhan orang tua lalu isi hasil
+                        konsultasi dan tindak lanjut.
+                    </small>
+
+                </div>
+
+                <a
+                    href="data_konsultasi.php"
+                    class="btn btn-secondary btn-sm"
+                >
+                    <i class="bi bi-arrow-left"></i>
+                    Kembali
+                </a>
+
+            </div>
+
+            <div class="card-body">
+
+                <?php if ($pesanError !== ""): ?>
+
+                    <div
+                        class="alert alert-danger
+                        alert-dismissible fade show"
+                        role="alert"
                     >
+                        <i class="bi bi-x-circle me-1"></i>
 
-                        <tr>
-                            <th width="30%">
+                        <?= htmlspecialchars(
+                            $pesanError,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>
+
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="alert"
+                            aria-label="Tutup"
+                        ></button>
+                    </div>
+
+                <?php endif; ?>
+
+                <div class="row g-3">
+
+                    <div class="col-12 col-lg-3">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
                                 Tanggal Konsultasi
-                            </th>
+                            </span>
 
-                            <td>
+                            <div class="detail-value">
+                                <i class="bi bi-calendar3 me-1"></i>
+
                                 <?= htmlspecialchars(
                                     $tanggalTampil,
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>Nama Balita</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12 col-lg-3">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Nama Balita
+                            </span>
+
+                            <div class="detail-value">
+                                <i class="bi bi-person-heart me-1"></i>
+
                                 <?= htmlspecialchars(
                                     $dataKonsultasi[
                                         "nama_balita"
                                     ] ?? "-",
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>NIK Balita</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12 col-lg-3">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                NIK Balita
+                            </span>
+
+                            <div class="detail-value">
                                 <?= htmlspecialchars(
                                     $dataKonsultasi[
                                         "nik_balita"
                                     ] ?? "-",
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>Nama Ibu</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12 col-lg-3">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Nama Ibu
+                            </span>
+
+                            <div class="detail-value">
                                 <?= htmlspecialchars(
                                     $dataKonsultasi[
                                         "nama_ibu"
                                     ] ?? "-",
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>Keluhan</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12">
+
+                        <div class="detail-item">
+
+                            <span class="detail-label">
+                                Keluhan
+                            </span>
+
+                            <div class="detail-value">
                                 <?= nl2br(
                                     htmlspecialchars(
                                         $dataKonsultasi[
@@ -315,11 +349,12 @@ require_once "../includes/navbar.php";
                                         ENT_QUOTES,
                                         "UTF-8"
                                     )
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                    </table>
+                        </div>
+
+                    </div>
 
                 </div>
 
@@ -329,71 +364,111 @@ require_once "../includes/navbar.php";
 
         <div class="card content-card">
 
-            <div class="card-body p-4">
+            <div class="card-header">
+
+                <div>
+
+                    <h4 class="mb-1">
+                        Hasil & Tindak Lanjut
+                    </h4>
+
+                    <small class="text-muted">
+                        Lengkapi hasil konsultasi dan rencana
+                        tindak lanjut balita.
+                    </small>
+
+                </div>
+
+                <span class="badge badge-info">
+                    <i class="bi bi-heart-pulse"></i>
+                    Petugas Gizi
+                </span>
+
+            </div>
+
+            <div class="card-body">
 
                 <form method="POST">
 
-                    <div class="mb-3">
+                    <div class="row g-3">
 
-                        <label
-                            for="hasil_konsultasi"
-                            class="form-label"
-                        >
-                            Hasil Konsultasi
-                        </label>
+                        <div class="col-12 col-lg-6">
 
-                        <textarea
-                            id="hasil_konsultasi"
-                            name="hasil_konsultasi"
-                            class="form-control"
-                            rows="5"
-                            placeholder="Tuliskan hasil pemeriksaan dan saran gizi"
-                            required
-                        ><?= htmlspecialchars(
-                            $hasilKonsultasiForm,
-                            ENT_QUOTES,
-                            "UTF-8"
-                        ) ?></textarea>
+                            <label
+                                for="hasil_konsultasi"
+                                class="form-label"
+                            >
+                                Hasil Konsultasi
+                            </label>
+
+                            <textarea
+                                id="hasil_konsultasi"
+                                name="hasil_konsultasi"
+                                class="form-control"
+                                rows="6"
+                                placeholder="Tuliskan hasil pemeriksaan dan saran gizi"
+                                required
+                            ><?= htmlspecialchars(
+                                $hasilKonsultasiForm,
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ); ?></textarea>
+
+                            <div class="form-text">
+                                Catat hasil konsultasi, edukasi,
+                                atau saran gizi yang diberikan.
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+
+                            <label
+                                for="tindak_lanjut"
+                                class="form-label"
+                            >
+                                Tindak Lanjut
+                            </label>
+
+                            <textarea
+                                id="tindak_lanjut"
+                                name="tindak_lanjut"
+                                class="form-control"
+                                rows="6"
+                                placeholder="Tuliskan rencana pemantauan atau tindakan berikutnya"
+                                required
+                            ><?= htmlspecialchars(
+                                $tindakLanjut,
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ); ?></textarea>
+
+                            <div class="form-text">
+                                Catat rencana pemantauan,
+                                kunjungan ulang, atau tindakan berikutnya.
+                            </div>
+
+                        </div>
 
                     </div>
 
-                    <div class="mb-3">
+                    <hr>
 
-                        <label
-                            for="tindak_lanjut"
-                            class="form-label"
-                        >
-                            Tindak Lanjut
-                        </label>
-
-                        <textarea
-                            id="tindak_lanjut"
-                            name="tindak_lanjut"
-                            class="form-control"
-                            rows="5"
-                            placeholder="Tuliskan rencana pemantauan atau tindakan berikutnya"
-                            required
-                        ><?= htmlspecialchars(
-                            $tindakLanjut,
-                            ENT_QUOTES,
-                            "UTF-8"
-                        ) ?></textarea>
-
-                    </div>
-
-                    <div class="d-flex flex-wrap gap-2">
+                    <div class="form-actions">
 
                         <button
                             type="submit"
-                            class="btn btn-warning"
+                            class="btn btn-primary"
                         >
+                            <i class="bi bi-check-circle"></i>
                             Simpan Hasil Konsultasi
                         </button>
 
                         <a
-                            href="detail_konsultasi.php?id=<?= (int) $idKonsultasi ?>"
+                            href="detail_konsultasi.php?id=<?= (int) $idKonsultasi; ?>"
                             class="btn btn-outline-secondary"
                         >
+                            <i class="bi bi-x-circle"></i>
                             Batal
                         </a>
 
