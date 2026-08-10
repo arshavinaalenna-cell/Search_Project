@@ -4,107 +4,156 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
-
 cekRole([
+    "kader",
     "petugas_kia"
 ]);
 
+$judulHalaman =
+    "Tambah Riwayat Kelahiran | Sistem Deteksi Stunting";
 
-$judulHalaman = "Tambah Riwayat Kelahiran | Sistem Deteksi Stunting";
+$error = "";
 
+$old = [
+    "id_balita" => "",
+    "berat_lahir" => "",
+    "panjang_lahir" => "",
+    "usia_kehamilan" => "",
+    "jenis_persalinan" => "",
+    "usia_ibu_melahirkan" => "",
+    "riwayat_kehamilan" => "",
+    "komplikasi_kehamilan" => ""
+];
 
-// SIMPAN DATA
+/*
+|--------------------------------------------------------------------------
+| Fungsi output aman
+|--------------------------------------------------------------------------
+*/
 
-$pesanError = "";
+function amanTambahKelahiran($nilai): string
+{
+    return htmlspecialchars(
+        (string) $nilai,
+        ENT_QUOTES,
+        "UTF-8"
+    );
+}
 
-$id_balita = "";
-$berat_lahir = "";
-$panjang_lahir = "";
-$usia_kehamilan = "";
-$jenis_persalinan = "";
-$usia_ibu_melahirkan = "";
-$riwayat_kehamilan = "";
-$komplikasi_kehamilan = "";
+/*
+|--------------------------------------------------------------------------
+| Simpan data
+|--------------------------------------------------------------------------
+*/
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
-    $id_balita = filter_input(
-        INPUT_POST,
-        "id_balita",
+    $old["id_balita"] =
+        trim($_POST["id_balita"] ?? "");
+
+    $old["berat_lahir"] =
+        trim($_POST["berat_lahir"] ?? "");
+
+    $old["panjang_lahir"] =
+        trim($_POST["panjang_lahir"] ?? "");
+
+    $old["usia_kehamilan"] =
+        trim($_POST["usia_kehamilan"] ?? "");
+
+    $old["jenis_persalinan"] =
+        trim($_POST["jenis_persalinan"] ?? "");
+
+    $old["usia_ibu_melahirkan"] =
+        trim($_POST["usia_ibu_melahirkan"] ?? "");
+
+    $old["riwayat_kehamilan"] =
+        trim($_POST["riwayat_kehamilan"] ?? "");
+
+    $old["komplikasi_kehamilan"] =
+        trim($_POST["komplikasi_kehamilan"] ?? "");
+
+    $idBalita = filter_var(
+        $old["id_balita"],
         FILTER_VALIDATE_INT
     );
 
-    $berat_lahir = trim(
-        $_POST["berat_lahir"] ?? ""
+    $beratLahir = filter_var(
+        $old["berat_lahir"],
+        FILTER_VALIDATE_FLOAT
     );
 
-    $panjang_lahir = trim(
-        $_POST["panjang_lahir"] ?? ""
+    $panjangLahir = filter_var(
+        $old["panjang_lahir"],
+        FILTER_VALIDATE_FLOAT
     );
 
-    $usia_kehamilan = trim(
-        $_POST["usia_kehamilan"] ?? ""
+    $usiaKehamilan = filter_var(
+        $old["usia_kehamilan"],
+        FILTER_VALIDATE_INT
     );
 
-    $jenis_persalinan = trim(
-        $_POST["jenis_persalinan"] ?? ""
-    );
-
-    $usia_ibu_melahirkan = trim(
-        $_POST["usia_ibu_melahirkan"] ?? ""
-    );
-
-    $riwayat_kehamilan = trim(
-        $_POST["riwayat_kehamilan"] ?? ""
-    );
-
-    $komplikasi_kehamilan = trim(
-        $_POST["komplikasi_kehamilan"] ?? ""
+    $usiaIbuMelahirkan = filter_var(
+        $old["usia_ibu_melahirkan"],
+        FILTER_VALIDATE_INT
     );
 
     if (
-        !$id_balita ||
-        $berat_lahir === "" ||
-        $panjang_lahir === "" ||
-        $usia_kehamilan === "" ||
-        $jenis_persalinan === "" ||
-        $usia_ibu_melahirkan === "" ||
-        $riwayat_kehamilan === "" ||
-        $komplikasi_kehamilan === ""
+        $old["id_balita"] === ""
+        || $old["berat_lahir"] === ""
+        || $old["panjang_lahir"] === ""
+        || $old["usia_kehamilan"] === ""
+        || $old["jenis_persalinan"] === ""
+        || $old["usia_ibu_melahirkan"] === ""
     ) {
-        $pesanError = "Semua data wajib diisi.";
-    } elseif (
-        !is_numeric($berat_lahir) ||
-        (float) $berat_lahir <= 0
-    ) {
-        $pesanError = "Berat lahir tidak valid.";
-    } elseif (
-        !is_numeric($panjang_lahir) ||
-        (float) $panjang_lahir <= 0
-    ) {
-        $pesanError = "Panjang lahir tidak valid.";
-    } elseif (
-        filter_var(
-            $usia_kehamilan,
-            FILTER_VALIDATE_INT
-        ) === false ||
-        (int) $usia_kehamilan <= 0
-    ) {
-        $pesanError = "Usia kehamilan tidak valid.";
-    } elseif (
-        filter_var(
-            $usia_ibu_melahirkan,
-            FILTER_VALIDATE_INT
-        ) === false ||
-        (int) $usia_ibu_melahirkan <= 0
-    ) {
-        $pesanError =
-            "Usia ibu saat melahirkan tidak valid.";
-    }
+        $error =
+            "Nama balita, berat lahir, panjang lahir, usia kehamilan, jenis persalinan, dan usia ibu saat melahirkan wajib diisi.";
 
-    if ($pesanError === "") {
+    } elseif (
+        $idBalita === false
+        || $idBalita < 1
+    ) {
+        $error =
+            "Data balita tidak valid.";
 
-        $stmtCekBalita = mysqli_prepare(
+    } elseif (
+        $beratLahir === false
+        || $beratLahir <= 0
+    ) {
+        $error =
+            "Berat lahir harus lebih dari 0 kg.";
+
+    } elseif (
+        $panjangLahir === false
+        || $panjangLahir <= 0
+    ) {
+        $error =
+            "Panjang lahir harus lebih dari 0 cm.";
+
+    } elseif (
+        $usiaKehamilan === false
+        || $usiaKehamilan < 20
+        || $usiaKehamilan > 45
+    ) {
+        $error =
+            "Usia kehamilan harus berada antara 20 sampai 45 minggu.";
+
+    } elseif (
+        $usiaIbuMelahirkan === false
+        || $usiaIbuMelahirkan < 10
+        || $usiaIbuMelahirkan > 60
+    ) {
+        $error =
+            "Usia ibu saat melahirkan harus berada antara 10 sampai 60 tahun.";
+
+    } else {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Pastikan balita ada
+        |--------------------------------------------------------------------------
+        */
+
+        $stmtBalita = mysqli_prepare(
             $conn,
             "SELECT id_balita
              FROM balita
@@ -112,88 +161,78 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
              LIMIT 1"
         );
 
-        if (!$stmtCekBalita) {
-            $pesanError =
-                "Gagal memeriksa data balita: "
-                . mysqli_error($conn);
-        } else {
-
-            mysqli_stmt_bind_param(
-                $stmtCekBalita,
-                "i",
-                $id_balita
-            );
-
-            mysqli_stmt_execute($stmtCekBalita);
-
-            $hasilCekBalita =
-                mysqli_stmt_get_result(
-                    $stmtCekBalita
-                );
-
-            if (
-                mysqli_num_rows($hasilCekBalita) === 0
-            ) {
-                $pesanError =
-                    "Data balita tidak ditemukan.";
-            }
-
-            mysqli_stmt_close($stmtCekBalita);
-        }
-    }
-
-    if ($pesanError === "") {
-
-        $beratLahirFloat =
-            (float) $berat_lahir;
-
-        $panjangLahirFloat =
-            (float) $panjang_lahir;
-
-        $usiaKehamilanInt =
-            (int) $usia_kehamilan;
-
-        $usiaIbuMelahirkanInt =
-            (int) $usia_ibu_melahirkan;
-
-        $stmtSimpan = mysqli_prepare(
-            $conn,
-            "INSERT INTO riwayat_kelahiran
-            (
-                id_balita,
-                berat_lahir,
-                panjang_lahir,
-                usia_kehamilan,
-                jenis_persalinan,
-                usia_ibu_melahirkan,
-                riwayat_kehamilan,
-                komplikasi_kehamilan
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        mysqli_stmt_bind_param(
+            $stmtBalita,
+            "i",
+            $idBalita
         );
 
-        if (!$stmtSimpan) {
-            $pesanError =
-                "Gagal menyiapkan penyimpanan data: "
-                . mysqli_error($conn);
-        } else {
+        mysqli_stmt_execute(
+            $stmtBalita
+        );
 
-            mysqli_stmt_bind_param(
-                $stmtSimpan,
-                "iddisiss",
-                $id_balita,
-                $beratLahirFloat,
-                $panjangLahirFloat,
-                $usiaKehamilanInt,
-                $jenis_persalinan,
-                $usiaIbuMelahirkanInt,
-                $riwayat_kehamilan,
-                $komplikasi_kehamilan
+        $hasilBalita =
+            mysqli_stmt_get_result(
+                $stmtBalita
             );
 
-            if (mysqli_stmt_execute($stmtSimpan)) {
+        $dataBalita =
+            mysqli_fetch_assoc(
+                $hasilBalita
+            );
 
-                mysqli_stmt_close($stmtSimpan);
+        mysqli_stmt_close(
+            $stmtBalita
+        );
+
+        if (!$dataBalita) {
+            $error =
+                "Balita tidak ditemukan.";
+
+        } else {
+
+            $stmt = mysqli_prepare(
+                $conn,
+                "INSERT INTO riwayat_kelahiran
+                (
+                    id_balita,
+                    berat_lahir,
+                    panjang_lahir,
+                    usia_kehamilan,
+                    jenis_persalinan,
+                    usia_ibu_melahirkan,
+                    riwayat_kehamilan,
+                    komplikasi_kehamilan
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            );
+
+            if (!$stmt) {
+                die(
+                    "Gagal menyiapkan penyimpanan data: "
+                    . mysqli_error($conn)
+                );
+            }
+
+            mysqli_stmt_bind_param(
+                $stmt,
+                "iddisiss",
+                $idBalita,
+                $beratLahir,
+                $panjangLahir,
+                $usiaKehamilan,
+                $old["jenis_persalinan"],
+                $usiaIbuMelahirkan,
+                $old["riwayat_kehamilan"],
+                $old["komplikasi_kehamilan"]
+            );
+
+            if (
+                mysqli_stmt_execute($stmt)
+            ) {
+                mysqli_stmt_close(
+                    $stmt
+                );
 
                 header(
                     "Location: riwayat_kelahiran.php?pesan=tambah_berhasil"
@@ -201,26 +240,38 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 exit;
             }
 
-            $pesanError =
-                "Data gagal disimpan: "
-                . mysqli_stmt_error($stmtSimpan);
+            $error =
+                "Data gagal disimpan.";
 
-            mysqli_stmt_close($stmtSimpan);
+            mysqli_stmt_close(
+                $stmt
+            );
         }
     }
 }
 
+/*
+|--------------------------------------------------------------------------
+| Data balita
+|--------------------------------------------------------------------------
+*/
 
+$balita = mysqli_query(
+    $conn,
+    "SELECT
+        id_balita,
+        nik_balita,
+        nama_balita
+     FROM balita
+     ORDER BY nama_balita ASC"
+);
 
-// DATA BALITA
-
-$balita = mysqli_query($conn,"
-    SELECT *
-    FROM balita
-    ORDER BY nama_balita ASC
-");
-
-
+if (!$balita) {
+    die(
+        "Gagal mengambil data balita: "
+        . mysqli_error($conn)
+    );
+}
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
@@ -262,27 +313,15 @@ require_once "../includes/navbar.php";
 
             <div class="card-body">
 
-                <?php if ($pesanError !== ""): ?>
+                <?php if ($error !== ""): ?>
 
                     <div
-                        class="alert alert-danger
-                        alert-dismissible fade show"
+                        class="alert alert-danger"
                         role="alert"
                     >
-                        <i class="bi bi-x-circle me-1"></i>
-
-                        <?= htmlspecialchars(
-                            $pesanError,
-                            ENT_QUOTES,
-                            "UTF-8"
+                        <?= amanTambahKelahiran(
+                            $error
                         ); ?>
-
-                        <button
-                            type="button"
-                            class="btn-close"
-                            data-bs-dismiss="alert"
-                            aria-label="Tutup"
-                        ></button>
                     </div>
 
                 <?php endif; ?>
@@ -295,6 +334,7 @@ require_once "../includes/navbar.php";
 
                             <label class="form-label">
                                 Nama Balita
+                                <span class="text-danger">*</span>
                             </label>
 
                             <select
@@ -312,20 +352,21 @@ require_once "../includes/navbar.php";
                                 ): ?>
 
                                     <option
-                                        value="<?= $b[
-                                            "id_balita"
-                                        ]; ?>"
+                                        value="<?= (int) $b["id_balita"]; ?>"
+                                        <?= (
+                                            (string) $old["id_balita"]
+                                            ===
+                                            (string) $b["id_balita"]
+                                        )
+                                            ? "selected"
+                                            : ""; ?>
                                     >
-                                        <?= htmlspecialchars(
-                                            $b["nama_balita"],
-                                            ENT_QUOTES,
-                                            "UTF-8"
+                                        <?= amanTambahKelahiran(
+                                            $b["nama_balita"]
                                         ); ?>
 
-                                        (<?= htmlspecialchars(
-                                            $b["nik_balita"],
-                                            ENT_QUOTES,
-                                            "UTF-8"
+                                        (<?= amanTambahKelahiran(
+                                            $b["nik_balita"]
                                         ); ?>)
                                     </option>
 
@@ -344,6 +385,7 @@ require_once "../includes/navbar.php";
 
                             <label class="form-label">
                                 Berat Lahir
+                                <span class="text-danger">*</span>
                             </label>
 
                             <div class="input-group">
@@ -351,15 +393,13 @@ require_once "../includes/navbar.php";
                                 <input
                                     type="number"
                                     step="0.01"
-                                    id="berat_lahir"
+                                    min="0.01"
                                     name="berat_lahir"
                                     class="form-control"
-                                    placeholder="Contoh: 3.20"
-                                    value="<?= htmlspecialchars(
-                                        $berat_lahir,
-                                        ENT_QUOTES,
-                                        "UTF-8"
+                                    value="<?= amanTambahKelahiran(
+                                        $old["berat_lahir"]
                                     ); ?>"
+                                    placeholder="Contoh: 3.20"
                                     required
                                 >
 
@@ -375,6 +415,7 @@ require_once "../includes/navbar.php";
 
                             <label class="form-label">
                                 Panjang Lahir
+                                <span class="text-danger">*</span>
                             </label>
 
                             <div class="input-group">
@@ -382,14 +423,13 @@ require_once "../includes/navbar.php";
                                 <input
                                     type="number"
                                     step="0.01"
+                                    min="0.01"
                                     name="panjang_lahir"
                                     class="form-control"
-                                    placeholder="Contoh: 49"
-                                    value="<?= htmlspecialchars(
-                                        $panjang_lahir,
-                                        ENT_QUOTES,
-                                        "UTF-8"
+                                    value="<?= amanTambahKelahiran(
+                                        $old["panjang_lahir"]
                                     ); ?>"
+                                    placeholder="Contoh: 49"
                                     required
                                 >
 
@@ -405,21 +445,21 @@ require_once "../includes/navbar.php";
 
                             <label class="form-label">
                                 Usia Kehamilan
+                                <span class="text-danger">*</span>
                             </label>
 
                             <div class="input-group">
 
                                 <input
                                     type="number"
-                                    id="usia_kehamilan"
                                     name="usia_kehamilan"
                                     class="form-control"
-                                    placeholder="Contoh: 39"
-                                    value="<?= htmlspecialchars(
-                                        $usia_kehamilan,
-                                        ENT_QUOTES,
-                                        "UTF-8"
+                                    min="20"
+                                    max="45"
+                                    value="<?= amanTambahKelahiran(
+                                        $old["usia_kehamilan"]
                                     ); ?>"
+                                    placeholder="Contoh: 39"
                                     required
                                 >
 
@@ -433,15 +473,12 @@ require_once "../includes/navbar.php";
 
                         <div class="col-12 col-md-6">
 
-                            <label
-                                for="jenis_persalinan"
-                                class="form-label"
-                            >
+                            <label class="form-label">
                                 Jenis Persalinan
+                                <span class="text-danger">*</span>
                             </label>
 
                             <select
-                                id="jenis_persalinan"
                                 name="jenis_persalinan"
                                 class="form-select"
                                 required
@@ -452,7 +489,7 @@ require_once "../includes/navbar.php";
                                 </option>
 
                                 <?php
-                                $daftarPersalinan = [
+                                $jenisPersalinan = [
                                     "Normal",
                                     "Caesar",
                                     "Vakum",
@@ -460,26 +497,22 @@ require_once "../includes/navbar.php";
                                 ];
 
                                 foreach (
-                                    $daftarPersalinan
-                                    as $persalinan
+                                    $jenisPersalinan
+                                    as $jenis
                                 ):
                                 ?>
 
                                     <option
-                                        value="<?= htmlspecialchars(
-                                            $persalinan,
-                                            ENT_QUOTES,
-                                            "UTF-8"
+                                        value="<?= amanTambahKelahiran(
+                                            $jenis
                                         ); ?>"
-                                        <?= $jenis_persalinan ===
-                                            $persalinan
+                                        <?= $old["jenis_persalinan"]
+                                            === $jenis
                                             ? "selected"
                                             : ""; ?>
                                     >
-                                        <?= htmlspecialchars(
-                                            $persalinan,
-                                            ENT_QUOTES,
-                                            "UTF-8"
+                                        <?= amanTambahKelahiran(
+                                            $jenis
                                         ); ?>
                                     </option>
 
@@ -489,112 +522,25 @@ require_once "../includes/navbar.php";
 
                         </div>
 
-                        <div class="col-12">
+                        <div class="col-12 col-md-6">
 
-                            <div class="row g-3">
-
-                                <div class="col-12 col-md-6">
-
-                                    <div class="detail-item h-100">
-
-                                        <span class="detail-label">
-                                            Status Berat Lahir
-                                        </span>
-
-                                        <div class="detail-value">
-
-                                            <span
-                                                id="status_bblr"
-                                                class="badge bg-secondary"
-                                            >
-                                                Belum Dinilai
-                                            </span>
-
-                                        </div>
-
-                                        <small
-                                            class="text-muted d-block mt-2"
-                                        >
-                                            BBLR apabila berat lahir
-                                            kurang dari 2,5 kg.
-                                        </small>
-
-                                    </div>
-
-                                </div>
-
-                                <div class="col-12 col-md-6">
-
-                                    <div class="detail-item h-100">
-
-                                        <span class="detail-label">
-                                            Status Usia Kehamilan
-                                        </span>
-
-                                        <div class="detail-value">
-
-                                            <span
-                                                id="status_prematur"
-                                                class="badge bg-secondary"
-                                            >
-                                                Belum Dinilai
-                                            </span>
-
-                                        </div>
-
-                                        <small
-                                            class="text-muted d-block mt-2"
-                                        >
-                                            Prematur apabila usia
-                                            kehamilan kurang dari 37 minggu.
-                                        </small>
-
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                        <div class="col-12">
-
-                            <hr>
-
-                            <h6 class="mb-1">
-                                Data Maternal
-                            </h6>
-
-                            <small class="text-muted">
-                                Lengkapi riwayat kehamilan ibu
-                                yang berkaitan dengan kelahiran balita.
-                            </small>
-
-                        </div>
-
-                        <div class="col-12 col-md-4">
-
-                            <label
-                                for="usia_ibu_melahirkan"
-                                class="form-label"
-                            >
+                            <label class="form-label">
                                 Usia Ibu Saat Melahirkan
+                                <span class="text-danger">*</span>
                             </label>
 
                             <div class="input-group">
 
                                 <input
                                     type="number"
-                                    min="1"
-                                    id="usia_ibu_melahirkan"
                                     name="usia_ibu_melahirkan"
                                     class="form-control"
-                                    placeholder="Contoh: 28"
-                                    value="<?= htmlspecialchars(
-                                        $usia_ibu_melahirkan,
-                                        ENT_QUOTES,
-                                        "UTF-8"
+                                    min="10"
+                                    max="60"
+                                    value="<?= amanTambahKelahiran(
+                                        $old["usia_ibu_melahirkan"]
                                     ); ?>"
+                                    placeholder="Contoh: 27"
                                     required
                                 >
 
@@ -606,55 +552,46 @@ require_once "../includes/navbar.php";
 
                         </div>
 
-                        <div class="col-12 col-md-8">
+                        <div class="col-12">
 
-                            <label
-                                for="riwayat_kehamilan"
-                                class="form-label"
-                            >
+                            <label class="form-label">
                                 Riwayat Kehamilan
                             </label>
 
                             <textarea
-                                id="riwayat_kehamilan"
                                 name="riwayat_kehamilan"
                                 class="form-control"
                                 rows="3"
-                                placeholder="Contoh: Kehamilan pertama, kontrol rutin, tidak ada keluhan khusus"
-                                required
-                            ><?= htmlspecialchars(
-                                $riwayat_kehamilan,
-                                ENT_QUOTES,
-                                "UTF-8"
+                                placeholder="Contoh: Kehamilan pertama, kontrol rutin, tidak ada keluhan khusus."
+                            ><?= amanTambahKelahiran(
+                                $old["riwayat_kehamilan"]
                             ); ?></textarea>
+
+                            <div class="form-text">
+                                Opsional. Isi informasi penting
+                                selama masa kehamilan.
+                            </div>
 
                         </div>
 
                         <div class="col-12">
 
-                            <label
-                                for="komplikasi_kehamilan"
-                                class="form-label"
-                            >
-                                Komplikasi Kehamilan / Persalinan
+                            <label class="form-label">
+                                Komplikasi Kehamilan
                             </label>
 
                             <textarea
-                                id="komplikasi_kehamilan"
                                 name="komplikasi_kehamilan"
                                 class="form-control"
                                 rows="3"
-                                placeholder="Tuliskan komplikasi yang pernah dialami atau isi Tidak ada"
-                                required
-                            ><?= htmlspecialchars(
-                                $komplikasi_kehamilan,
-                                ENT_QUOTES,
-                                "UTF-8"
+                                placeholder="Contoh: Tidak ada komplikasi."
+                            ><?= amanTambahKelahiran(
+                                $old["komplikasi_kehamilan"]
                             ); ?></textarea>
 
                             <div class="form-text">
-                                Jika tidak ada komplikasi,
-                                isi dengan "Tidak ada".
+                                Opsional. Isi jika terdapat
+                                komplikasi selama kehamilan.
                             </div>
 
                         </div>
@@ -667,7 +604,6 @@ require_once "../includes/navbar.php";
 
                         <button
                             type="submit"
-                            name="simpan"
                             class="btn btn-primary"
                         >
                             <i class="bi bi-check-circle"></i>
@@ -693,92 +629,5 @@ require_once "../includes/navbar.php";
     </main>
 
 </div>
-
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-
-    const inputBerat =
-        document.getElementById("berat_lahir");
-
-    const inputUsia =
-        document.getElementById("usia_kehamilan");
-
-    const statusBBLR =
-        document.getElementById("status_bblr");
-
-    const statusPrematur =
-        document.getElementById("status_prematur");
-
-    function aturBadge(elemen, teks, kelas) {
-        elemen.className = "badge " + kelas;
-        elemen.textContent = teks;
-    }
-
-    function perbaruiStatus() {
-
-        const berat =
-            parseFloat(inputBerat.value);
-
-        const usia =
-            parseInt(inputUsia.value, 10);
-
-        if (!Number.isNaN(berat)) {
-            if (berat < 2.5) {
-                aturBadge(
-                    statusBBLR,
-                    "BBLR",
-                    "bg-danger"
-                );
-            } else {
-                aturBadge(
-                    statusBBLR,
-                    "Tidak BBLR",
-                    "bg-success"
-                );
-            }
-        } else {
-            aturBadge(
-                statusBBLR,
-                "Belum Dinilai",
-                "bg-secondary"
-            );
-        }
-
-        if (!Number.isNaN(usia)) {
-            if (usia < 37) {
-                aturBadge(
-                    statusPrematur,
-                    "Prematur",
-                    "bg-warning text-dark"
-                );
-            } else {
-                aturBadge(
-                    statusPrematur,
-                    "Tidak Prematur",
-                    "bg-success"
-                );
-            }
-        } else {
-            aturBadge(
-                statusPrematur,
-                "Belum Dinilai",
-                "bg-secondary"
-            );
-        }
-    }
-
-    inputBerat.addEventListener(
-        "input",
-        perbaruiStatus
-    );
-
-    inputUsia.addEventListener(
-        "input",
-        perbaruiStatus
-    );
-
-    perbaruiStatus();
-});
-</script>
 
 <?php require_once "../includes/footer.php"; ?>
