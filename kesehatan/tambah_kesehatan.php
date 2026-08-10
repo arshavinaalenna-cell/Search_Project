@@ -11,6 +11,13 @@ $judulHalaman =
 
 $pesanError = "";
 
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
+
 $idBalita = "";
 
 $riwayatPenyakit = "";
@@ -19,32 +26,148 @@ $riwayatPerawatan = "";
 
 $penyakitPenyerta = "";
 $redFlag = "";
+$redFlagPilihan = "";
+$redFlagDetail = "";
 $statusRujukan = "";
 $rekomendasiRujukan = "";
 $catatanKia = "";
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil daftar balita
+| Mengambil Puskesmas Petugas KIA aktif
 |--------------------------------------------------------------------------
+|
+| Puskesmas tidak dipilih manual pada form.
+| Wilayah otomatis mengikuti id_puskesmas akun Petugas KIA.
+|
 */
 
-$queryBalita = mysqli_query(
+$stmtPuskesmasAkun = mysqli_prepare(
     $conn,
     "SELECT
-        id_balita,
-        nik_balita,
-        nama_balita
-     FROM balita
-     ORDER BY nama_balita ASC"
+        u.id_puskesmas,
+        p.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS p
+        ON u.id_puskesmas = p.id_puskesmas
+     WHERE u.id_user = ?
+     AND u.role = 'petugas_kia'
+     LIMIT 1"
 );
 
-if (!$queryBalita) {
+if (!$stmtPuskesmasAkun) {
     die(
-        "Gagal mengambil data balita: "
+        "Gagal memeriksa Puskesmas Petugas KIA: "
         . mysqli_error($conn)
     );
 }
+
+mysqli_stmt_bind_param(
+    $stmtPuskesmasAkun,
+    "i",
+    $idUserAktif
+);
+
+mysqli_stmt_execute(
+    $stmtPuskesmasAkun
+);
+
+$hasilPuskesmasAkun =
+    mysqli_stmt_get_result(
+        $stmtPuskesmasAkun
+    );
+
+$dataPuskesmasAkun =
+    mysqli_fetch_assoc(
+        $hasilPuskesmasAkun
+    );
+
+mysqli_stmt_close(
+    $stmtPuskesmasAkun
+);
+
+if (
+    !$dataPuskesmasAkun
+    || empty(
+        $dataPuskesmasAkun["id_puskesmas"]
+    )
+) {
+    $puskesmasBelumTerhubung = true;
+} else {
+    $idPuskesmasAktif =
+        (int) $dataPuskesmasAkun[
+            "id_puskesmas"
+        ];
+
+    $namaPuskesmasAktif =
+        trim(
+            (string) (
+                $dataPuskesmasAkun[
+                    "nama_puskesmas"
+                ]
+                ?? ""
+            )
+        );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil daftar balita
+|--------------------------------------------------------------------------
+|
+| Hanya balita dari Puskesmas akun Petugas KIA yang ditampilkan.
+|
+*/
+
+$queryBalita = false;
+$stmtBalita = null;
+
+if (!$puskesmasBelumTerhubung) {
+
+    $stmtBalita = mysqli_prepare(
+        $conn,
+        "SELECT
+            id_balita,
+            nik_balita,
+            nama_balita
+         FROM balita
+         WHERE id_puskesmas = ?
+         ORDER BY nama_balita ASC"
+    );
+
+    if (!$stmtBalita) {
+        die(
+            "Gagal menyiapkan data balita: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtBalita,
+        "i",
+        $idPuskesmasAktif
+    );
+
+    mysqli_stmt_execute(
+        $stmtBalita
+    );
+
+    $queryBalita =
+        mysqli_stmt_get_result(
+            $stmtBalita
+        );
+
+    if (!$queryBalita) {
+        die(
+            "Gagal mengambil data balita."
+        );
+    }
+}
+
+$jumlahBalita =
+    $queryBalita
+        ? mysqli_num_rows($queryBalita)
+        : 0;
 
 /*
 |--------------------------------------------------------------------------
@@ -52,7 +175,10 @@ if (!$queryBalita) {
 |--------------------------------------------------------------------------
 */
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
+if (
+    $_SERVER["REQUEST_METHOD"] === "POST"
+    && !$puskesmasBelumTerhubung
+) {
 
     $idBalita = filter_input(
         INPUT_POST,
@@ -76,9 +202,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $_POST["penyakit_penyerta"] ?? ""
     );
 
-    $redFlag = trim(
-        $_POST["red_flag"] ?? ""
+    $redFlagPilihan = trim(
+        $_POST["red_flag_pilihan"] ?? ""
     );
+
+    $redFlagDetail = trim(
+        $_POST["red_flag_detail"] ?? ""
+    );
+
+    $redFlag = "";
+
+    if ($redFlagPilihan === "Tidak Ada") {
+        $redFlag = "Tidak ada";
+    } elseif ($redFlagPilihan === "Ada") {
+        $redFlag = $redFlagDetail;
+    }
 
     $statusRujukan = trim(
         $_POST["status_rujukan"] ?? ""
@@ -104,13 +242,31 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         || $riwayatImunisasi === ""
         || $riwayatPerawatan === ""
         || $penyakitPenyerta === ""
-        || $redFlag === ""
+        || $redFlagPilihan === ""
         || $statusRujukan === ""
         || $rekomendasiRujukan === ""
         || $catatanKia === ""
     ) {
         $pesanError =
             "Semua data wajib diisi.";
+    } elseif (
+        !in_array(
+            $redFlagPilihan,
+            [
+                "Tidak Ada",
+                "Ada"
+            ],
+            true
+        )
+    ) {
+        $pesanError =
+            "Pilihan red flag tidak valid.";
+    } elseif (
+        $redFlagPilihan === "Ada"
+        && $redFlagDetail === ""
+    ) {
+        $pesanError =
+            "Jelaskan red flag yang ditemukan.";
     }
 
     /*
@@ -126,6 +282,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             "SELECT id_balita
              FROM balita
              WHERE id_balita = ?
+             AND id_puskesmas = ?
              LIMIT 1"
         );
 
@@ -139,8 +296,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             mysqli_stmt_bind_param(
                 $cekBalita,
-                "i",
-                $idBalita
+                "ii",
+                $idBalita,
+                $idPuskesmasAktif
             );
 
             mysqli_stmt_execute(
@@ -158,7 +316,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 ) === 0
             ) {
                 $pesanError =
-                    "Data balita tidak ditemukan.";
+                    "Data balita tidak ditemukan atau tidak termasuk Puskesmas akun Petugas KIA.";
             }
 
             mysqli_stmt_close(
@@ -281,17 +439,58 @@ require_once "../includes/navbar.php";
 
                 </div>
 
-                <a
-                    href="riwayat_kesehatan.php"
-                    class="btn btn-secondary btn-sm"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali
-                </a>
+                <div class="d-flex flex-wrap gap-2">
+
+                    <?php if (
+                        !$puskesmasBelumTerhubung
+                    ): ?>
+
+                        <span
+                            class="badge badge-info
+                            d-inline-flex
+                            align-items-center
+                            px-3"
+                        >
+                            <i class="bi bi-hospital me-1"></i>
+                            <?= htmlspecialchars(
+                                $namaPuskesmasAktif,
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ); ?>
+                        </span>
+
+                    <?php endif; ?>
+
+                    <a
+                        href="riwayat_kesehatan.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                </div>
 
             </div>
 
             <div class="card-body">
+
+                <?php if (
+                    $puskesmasBelumTerhubung
+                ): ?>
+
+                    <div class="alert alert-warning">
+                        <i
+                            class="bi bi-exclamation-triangle me-1"
+                        ></i>
+
+                        Akun Petugas KIA belum terhubung dengan
+                        Puskesmas. Hubungkan akun ke Puskesmas
+                        terlebih dahulu sebelum menambah
+                        riwayat kesehatan.
+                    </div>
+
+                <?php endif; ?>
 
                 <?php if ($pesanError !== ""): ?>
 
@@ -319,7 +518,7 @@ require_once "../includes/navbar.php";
                 <?php endif; ?>
 
                 <?php if (
-                    mysqli_num_rows($queryBalita) === 0
+                    $jumlahBalita === 0
                 ): ?>
 
                     <div class="alert alert-warning">
@@ -335,6 +534,32 @@ require_once "../includes/navbar.php";
                     </div>
 
                 <?php endif; ?>
+
+                <?php if (
+                    !$puskesmasBelumTerhubung
+                ): ?>
+
+                <div class="detail-item mb-4">
+
+                    <span class="detail-label">
+                        Puskesmas
+                    </span>
+
+                    <div class="detail-value mt-1">
+                        <i class="bi bi-hospital me-1"></i>
+                        <?= htmlspecialchars(
+                            $namaPuskesmasAktif,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>
+                    </div>
+
+                    <div class="form-text mt-1">
+                        Balita yang dapat dipilih otomatis dibatasi
+                        berdasarkan Puskesmas akun Petugas KIA.
+                    </div>
+
+                </div>
 
                 <form method="POST">
 
@@ -536,28 +761,75 @@ require_once "../includes/navbar.php";
                         <div class="col-12 col-lg-6">
 
                             <label
-                                for="red_flag"
+                                for="red_flag_pilihan"
                                 class="form-label"
                             >
                                 Red Flag Kesehatan
                             </label>
 
-                            <textarea
-                                id="red_flag"
-                                name="red_flag"
-                                class="form-control"
-                                rows="4"
-                                placeholder="Isi Tidak ada atau jelaskan red flag yang ditemukan"
+                            <select
+                                id="red_flag_pilihan"
+                                name="red_flag_pilihan"
+                                class="form-select"
                                 required
-                            ><?= htmlspecialchars(
-                                $redFlag,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ); ?></textarea>
+                            >
+                                <option value="">
+                                    -- Pilih Hasil Evaluasi --
+                                </option>
+
+                                <option
+                                    value="Tidak Ada"
+                                    <?= $redFlagPilihan === "Tidak Ada"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Tidak Ada
+                                </option>
+
+                                <option
+                                    value="Ada"
+                                    <?= $redFlagPilihan === "Ada"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Ada Red Flag
+                                </option>
+                            </select>
 
                             <div class="form-text">
-                                Jika tidak ada red flag,
-                                isi dengan "Tidak ada".
+                                Penetapan red flag dilakukan oleh
+                                Petugas KIA berdasarkan hasil
+                                pemeriksaan. Sistem hanya mencatat
+                                hasil evaluasi.
+                            </div>
+
+                            <div
+                                id="bagian_detail_red_flag"
+                                class="mt-3"
+                                <?= $redFlagPilihan === "Ada"
+                                    ? ""
+                                    : "hidden"; ?>
+                            >
+
+                                <label
+                                    for="red_flag_detail"
+                                    class="form-label"
+                                >
+                                    Temuan Red Flag
+                                </label>
+
+                                <textarea
+                                    id="red_flag_detail"
+                                    name="red_flag_detail"
+                                    class="form-control"
+                                    rows="3"
+                                    placeholder="Jelaskan red flag yang ditemukan"
+                                ><?= htmlspecialchars(
+                                    $redFlagDetail,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?></textarea>
+
                             </div>
 
                         </div>
@@ -676,9 +948,7 @@ require_once "../includes/navbar.php";
                         <button
                             type="submit"
                             class="btn btn-primary"
-                            <?= mysqli_num_rows(
-                                $queryBalita
-                            ) === 0
+                            <?= $jumlahBalita === 0
                                 ? "disabled"
                                 : ""; ?>
                         >
@@ -698,6 +968,8 @@ require_once "../includes/navbar.php";
 
                 </form>
 
+                <?php endif; ?>
+
             </div>
 
         </div>
@@ -706,4 +978,68 @@ require_once "../includes/navbar.php";
 
 </div>
 
-<?php require_once "../includes/footer.php"; ?>
+<script>
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+
+        const pilihan =
+            document.getElementById(
+                "red_flag_pilihan"
+            );
+
+        const bagianDetail =
+            document.getElementById(
+                "bagian_detail_red_flag"
+            );
+
+        const detail =
+            document.getElementById(
+                "red_flag_detail"
+            );
+
+        function aturRedFlag() {
+
+            if (
+                !pilihan
+                || !bagianDetail
+                || !detail
+            ) {
+                return;
+            }
+
+            const adaRedFlag =
+                pilihan.value === "Ada";
+
+            bagianDetail.hidden =
+                !adaRedFlag;
+
+            detail.required =
+                adaRedFlag;
+
+            if (!adaRedFlag) {
+                detail.value = "";
+            }
+        }
+
+        if (pilihan) {
+            pilihan.addEventListener(
+                "change",
+                aturRedFlag
+            );
+
+            aturRedFlag();
+        }
+    }
+);
+</script>
+
+<?php
+
+if ($stmtBalita instanceof mysqli_stmt) {
+    mysqli_stmt_close($stmtBalita);
+}
+
+require_once "../includes/footer.php";
+
+?>

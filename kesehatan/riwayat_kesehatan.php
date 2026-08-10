@@ -20,54 +20,176 @@ $cari = trim($_GET["cari"] ?? "");
 
 $kataKunci = "%" . $cari . "%";
 
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
+
+$roleBerbasisPuskesmas =
+    in_array(
+        $roleAktif,
+        [
+            "petugas_kia",
+            "petugas_gizi",
+            "kepala_puskesmas"
+        ],
+        true
+    );
+
 /*
 |--------------------------------------------------------------------------
-| Mengambil data riwayat kesehatan
+| Mengambil Puskesmas akun aktif
 |--------------------------------------------------------------------------
 |
-| Orang tua hanya melihat riwayat kesehatan anak miliknya.
-| Role lainnya dapat melihat seluruh data.
+| Petugas KIA, Petugas Gizi, dan Kepala Puskesmas hanya boleh melihat
+| riwayat kesehatan dari Puskesmas akun masing-masing.
+| Orang Tua hanya melihat anak sendiri.
+| Dinkes dapat melihat seluruh wilayah.
 |
 */
 
+if ($roleBerbasisPuskesmas) {
+
+    $stmtPuskesmas = mysqli_prepare(
+        $conn,
+        "SELECT
+            u.id_puskesmas,
+            p.nama_puskesmas
+         FROM pengguna AS u
+         LEFT JOIN puskesmas AS p
+            ON u.id_puskesmas = p.id_puskesmas
+         WHERE u.id_user = ?
+         LIMIT 1"
+    );
+
+    if (!$stmtPuskesmas) {
+        die(
+            "Gagal memeriksa Puskesmas pengguna: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmas,
+        "i",
+        $idUserAktif
+    );
+
+    mysqli_stmt_execute(
+        $stmtPuskesmas
+    );
+
+    $hasilPuskesmas =
+        mysqli_stmt_get_result(
+            $stmtPuskesmas
+        );
+
+    $dataPuskesmas =
+        mysqli_fetch_assoc(
+            $hasilPuskesmas
+        );
+
+    mysqli_stmt_close(
+        $stmtPuskesmas
+    );
+
+    if (
+        !$dataPuskesmas
+        || empty(
+            $dataPuskesmas[
+                "id_puskesmas"
+            ]
+        )
+    ) {
+        $puskesmasBelumTerhubung = true;
+    } else {
+        $idPuskesmasAktif =
+            (int) $dataPuskesmas[
+                "id_puskesmas"
+            ];
+
+        $namaPuskesmasAktif =
+            trim(
+                (string) (
+                    $dataPuskesmas[
+                        "nama_puskesmas"
+                    ]
+                    ?? ""
+                )
+            );
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Kolom SELECT bersama
+|--------------------------------------------------------------------------
+*/
+
+$selectRiwayat = "
+    SELECT
+        rk.id_riwayat,
+        rk.id_balita,
+        rk.riwayat_penyakit,
+        rk.riwayat_imunisasi,
+        rk.riwayat_perawatan,
+        rk.penyakit_penyerta,
+        rk.red_flag,
+        rk.status_rujukan,
+        rk.rekomendasi_rujukan,
+        rk.catatan_kia,
+
+        b.nama_balita,
+        b.nik_balita,
+        b.id_puskesmas,
+
+        p.nama_puskesmas
+
+    FROM riwayat_kesehatan AS rk
+
+    INNER JOIN balita AS b
+        ON rk.id_balita = b.id_balita
+
+    LEFT JOIN puskesmas AS p
+        ON b.id_puskesmas = p.id_puskesmas
+";
+
+$filterPencarian = "
+    (
+        b.nama_balita LIKE ?
+        OR b.nik_balita LIKE ?
+        OR rk.riwayat_penyakit LIKE ?
+        OR rk.riwayat_imunisasi LIKE ?
+        OR rk.riwayat_perawatan LIKE ?
+        OR rk.penyakit_penyerta LIKE ?
+        OR rk.red_flag LIKE ?
+        OR rk.status_rujukan LIKE ?
+        OR rk.rekomendasi_rujukan LIKE ?
+        OR rk.catatan_kia LIKE ?
+    )
+";
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil data riwayat kesehatan berdasarkan role
+|--------------------------------------------------------------------------
+*/
+
 if ($roleAktif === "orang_tua") {
+
     if ($cari !== "") {
+
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                rk.id_riwayat,
-                rk.id_balita,
-                rk.riwayat_penyakit,
-                rk.riwayat_imunisasi,
-                rk.riwayat_perawatan,
-                rk.penyakit_penyerta,
-                rk.red_flag,
-                rk.status_rujukan,
-                rk.rekomendasi_rujukan,
-                rk.catatan_kia,
-                b.nama_balita,
-                b.nik_balita
-             FROM riwayat_kesehatan rk
-             INNER JOIN balita b
-                ON rk.id_balita = b.id_balita
-             WHERE b.id_user = ?
-             AND (
-                b.nama_balita LIKE ?
-                OR b.nik_balita LIKE ?
-                OR rk.riwayat_penyakit LIKE ?
-                OR rk.riwayat_imunisasi LIKE ?
-                OR rk.riwayat_perawatan LIKE ?
-                OR rk.penyakit_penyerta LIKE ?
-                OR rk.red_flag LIKE ?
-                OR rk.status_rujukan LIKE ?
-                OR rk.rekomendasi_rujukan LIKE ?
-                OR rk.catatan_kia LIKE ?
-             )
-             ORDER BY rk.id_riwayat DESC"
+            $selectRiwayat . "
+            WHERE b.id_user = ?
+            AND " . $filterPencarian . "
+            ORDER BY rk.id_riwayat DESC"
         );
 
         if (!$stmt) {
-            die("Gagal menyiapkan pencarian riwayat kesehatan.");
+            die(
+                "Gagal menyiapkan pencarian riwayat kesehatan."
+            );
         }
 
         mysqli_stmt_bind_param(
@@ -85,31 +207,20 @@ if ($roleAktif === "orang_tua") {
             $kataKunci,
             $kataKunci
         );
+
     } else {
+
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                rk.id_riwayat,
-                rk.id_balita,
-                rk.riwayat_penyakit,
-                rk.riwayat_imunisasi,
-                rk.riwayat_perawatan,
-                rk.penyakit_penyerta,
-                rk.red_flag,
-                rk.status_rujukan,
-                rk.rekomendasi_rujukan,
-                rk.catatan_kia,
-                b.nama_balita,
-                b.nik_balita
-             FROM riwayat_kesehatan rk
-             INNER JOIN balita b
-                ON rk.id_balita = b.id_balita
-             WHERE b.id_user = ?
-             ORDER BY rk.id_riwayat DESC"
+            $selectRiwayat . "
+            WHERE b.id_user = ?
+            ORDER BY rk.id_riwayat DESC"
         );
 
         if (!$stmt) {
-            die("Gagal mengambil riwayat kesehatan.");
+            die(
+                "Gagal mengambil riwayat kesehatan."
+            );
         }
 
         mysqli_stmt_bind_param(
@@ -118,42 +229,99 @@ if ($roleAktif === "orang_tua") {
             $idUserAktif
         );
     }
-} else {
-    if ($cari !== "") {
+
+} elseif ($roleBerbasisPuskesmas) {
+
+    if ($puskesmasBelumTerhubung) {
+
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                rk.id_riwayat,
-                rk.id_balita,
-                rk.riwayat_penyakit,
-                rk.riwayat_imunisasi,
-                rk.riwayat_perawatan,
-                rk.penyakit_penyerta,
-                rk.red_flag,
-                rk.status_rujukan,
-                rk.rekomendasi_rujukan,
-                rk.catatan_kia,
-                b.nama_balita,
-                b.nik_balita
-             FROM riwayat_kesehatan rk
-             INNER JOIN balita b
-                ON rk.id_balita = b.id_balita
-             WHERE
-                b.nama_balita LIKE ?
-                OR b.nik_balita LIKE ?
-                OR rk.riwayat_penyakit LIKE ?
-                OR rk.riwayat_imunisasi LIKE ?
-                OR rk.riwayat_perawatan LIKE ?
-                OR rk.penyakit_penyerta LIKE ?
-                OR rk.red_flag LIKE ?
-                OR rk.status_rujukan LIKE ?
-                OR rk.rekomendasi_rujukan LIKE ?
-                OR rk.catatan_kia LIKE ?
-             ORDER BY rk.id_riwayat DESC"
+            $selectRiwayat . "
+            WHERE 1 = 0
+            ORDER BY rk.id_riwayat DESC"
         );
 
         if (!$stmt) {
-            die("Gagal menyiapkan pencarian riwayat kesehatan.");
+            die(
+                "Gagal menyiapkan data riwayat kesehatan."
+            );
+        }
+
+    } elseif ($cari !== "") {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectRiwayat . "
+            WHERE b.id_puskesmas = ?
+            AND " . $filterPencarian . "
+            ORDER BY rk.id_riwayat DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal menyiapkan pencarian riwayat kesehatan."
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "issssssssss",
+            $idPuskesmasAktif,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci
+        );
+
+    } else {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectRiwayat . "
+            WHERE b.id_puskesmas = ?
+            ORDER BY rk.id_riwayat DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal mengambil riwayat kesehatan."
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "i",
+            $idPuskesmasAktif
+        );
+    }
+
+} else {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dinkes
+    |--------------------------------------------------------------------------
+    */
+
+    if ($cari !== "") {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectRiwayat . "
+            WHERE " . $filterPencarian . "
+            ORDER BY rk.id_riwayat DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal menyiapkan pencarian riwayat kesehatan."
+            );
         }
 
         mysqli_stmt_bind_param(
@@ -170,36 +338,36 @@ if ($roleAktif === "orang_tua") {
             $kataKunci,
             $kataKunci
         );
+
     } else {
+
         $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                rk.id_riwayat,
-                rk.id_balita,
-                rk.riwayat_penyakit,
-                rk.riwayat_imunisasi,
-                rk.riwayat_perawatan,
-                rk.penyakit_penyerta,
-                rk.red_flag,
-                rk.status_rujukan,
-                rk.rekomendasi_rujukan,
-                rk.catatan_kia,
-                b.nama_balita,
-                b.nik_balita
-             FROM riwayat_kesehatan rk
-             INNER JOIN balita b
-                ON rk.id_balita = b.id_balita
-             ORDER BY rk.id_riwayat DESC"
+            $selectRiwayat . "
+            ORDER BY rk.id_riwayat DESC"
         );
 
         if (!$stmt) {
-            die("Gagal mengambil riwayat kesehatan.");
+            die(
+                "Gagal mengambil riwayat kesehatan."
+            );
         }
     }
 }
 
 mysqli_stmt_execute($stmt);
-$query = mysqli_stmt_get_result($stmt);
+
+$query =
+    mysqli_stmt_get_result($stmt);
+
+if (!$query) {
+    die(
+        "Gagal membaca hasil riwayat kesehatan."
+    );
+}
+
+$totalData =
+    mysqli_num_rows($query);
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
@@ -230,6 +398,27 @@ require_once "../includes/navbar.php";
 
                 <div class="d-flex flex-wrap gap-2">
 
+                    <?php if (
+                        $roleBerbasisPuskesmas
+                        && !$puskesmasBelumTerhubung
+                    ): ?>
+
+                        <span
+                            class="badge badge-info
+                            d-inline-flex
+                            align-items-center
+                            px-3"
+                        >
+                            <i class="bi bi-hospital me-1"></i>
+                            <?= htmlspecialchars(
+                                $namaPuskesmasAktif,
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ); ?>
+                        </span>
+
+                    <?php endif; ?>
+
                     <a
                         href="../dashboard/dashboard.php"
                         class="btn btn-secondary btn-sm"
@@ -240,6 +429,7 @@ require_once "../includes/navbar.php";
 
                     <?php if (
                         $roleAktif === "petugas_kia"
+                        && !$puskesmasBelumTerhubung
                     ): ?>
 
                         <a
@@ -257,6 +447,24 @@ require_once "../includes/navbar.php";
             </div>
 
             <div class="card-body">
+
+                <?php if (
+                    $roleBerbasisPuskesmas
+                    && $puskesmasBelumTerhubung
+                ): ?>
+
+                    <div class="alert alert-warning">
+                        <i
+                            class="bi bi-exclamation-triangle me-1"
+                        ></i>
+
+                        Akun ini belum terhubung dengan Puskesmas.
+                        Hubungkan akun ke Puskesmas terlebih dahulu
+                        agar riwayat kesehatan wilayah dapat
+                        ditampilkan.
+                    </div>
+
+                <?php endif; ?>
 
                 <?php if (isset($_GET["pesan"])): ?>
 
@@ -312,9 +520,13 @@ require_once "../includes/navbar.php";
 
                 <?php endif; ?>
 
+                <div
+                    class="detail-item mb-3"
+                >
+
                 <form
                     method="GET"
-                    class="row g-2 mb-3"
+                    class="row g-2 align-items-end"
                 >
 
                     <div class="col-12 col-md-8">
@@ -337,7 +549,7 @@ require_once "../includes/navbar.php";
 
                         <button
                             type="submit"
-                            class="btn btn-primary w-100"
+                            class="btn btn-primary btn-sm w-100"
                         >
                             <i class="bi bi-search"></i>
                             Cari
@@ -349,7 +561,7 @@ require_once "../includes/navbar.php";
 
                         <a
                             href="riwayat_kesehatan.php"
-                            class="btn btn-outline-secondary w-100"
+                            class="btn btn-outline-secondary btn-sm w-100"
                         >
                             <i
                                 class="bi
@@ -362,6 +574,8 @@ require_once "../includes/navbar.php";
 
                 </form>
 
+                </div>
+
                 <div
                     class="d-flex flex-wrap
                     justify-content-between align-items-center
@@ -371,21 +585,43 @@ require_once "../includes/navbar.php";
                     <span class="text-muted small">
                         Total data:
                         <strong>
-                            <?= mysqli_num_rows($query); ?>
+                            <?= $totalData; ?>
                         </strong>
                         riwayat kesehatan
                     </span>
 
-                    <?php if (
-                        $roleAktif !== "petugas_kia"
-                    ): ?>
+                    <div class="d-flex flex-wrap gap-2">
 
-                        <span class="badge badge-info">
-                            <i class="bi bi-eye"></i>
-                            Mode lihat
-                        </span>
+                        <?php if (
+                            $roleAktif === "petugas_kia"
+                        ): ?>
 
-                    <?php endif; ?>
+                            <span class="badge badge-primary">
+                                <i class="bi bi-pencil-square"></i>
+                                Kelola KIA
+                            </span>
+
+                        <?php else: ?>
+
+                            <span class="badge badge-info">
+                                <i class="bi bi-eye"></i>
+                                Mode lihat
+                            </span>
+
+                        <?php endif; ?>
+
+                        <?php if (
+                            $roleAktif === "dinkes"
+                        ): ?>
+
+                            <span class="badge badge-info">
+                                <i class="bi bi-buildings"></i>
+                                Semua Puskesmas
+                            </span>
+
+                        <?php endif; ?>
+
+                    </div>
 
                 </div>
 
@@ -413,6 +649,10 @@ require_once "../includes/navbar.php";
                                     Penyakit Penyerta
                                 </th>
 
+                                <th>
+                                    Puskesmas
+                                </th>
+
                                 <th class="text-center">
                                     Red Flag
                                 </th>
@@ -435,7 +675,7 @@ require_once "../includes/navbar.php";
                         <tbody>
 
                             <?php if (
-                                mysqli_num_rows($query) > 0
+                                $totalData > 0
                             ): ?>
 
                                 <?php
@@ -650,6 +890,15 @@ require_once "../includes/navbar.php";
 
                                         </td>
 
+                                        <td>
+                                            <?= htmlspecialchars(
+                                                $d["nama_puskesmas"]
+                                                    ?? "-",
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ); ?>
+                                        </td>
+
                                         <td class="text-center">
 
                                             <?php if (
@@ -783,7 +1032,7 @@ require_once "../includes/navbar.php";
 
                                 <tr>
 
-                                    <td colspan="7">
+                                    <td colspan="8">
 
                                         <div class="empty-state">
 
@@ -808,6 +1057,7 @@ require_once "../includes/navbar.php";
                                             <?php if (
                                                 $roleAktif ===
                                                 "petugas_kia"
+                                                && !$puskesmasBelumTerhubung
                                             ): ?>
 
                                                 <a
