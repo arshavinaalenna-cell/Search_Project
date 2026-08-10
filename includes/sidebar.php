@@ -57,7 +57,7 @@ $menuSidebar = [
         [
             "nama" => "Grafik Pertumbuhan",
             "ikon" => "↗",
-            "url" => "../pengukuran/data_pengukuran.php",
+            "url" => "../pengukuran/grafik_pertumbuhan.php",
             "halaman" => [
                 "data_pengukuran.php",
                 "grafik_pertumbuhan.php"
@@ -85,7 +85,7 @@ $menuSidebar = [
         [
             "nama" => "Grafik Pertumbuhan",
             "ikon" => "↗",
-            "url" => "../pengukuran/data_pengukuran.php",
+            "url" => "../pengukuran/grafik_pertumbuhan.php",
             "halaman" => [
                 "data_pengukuran.php",
                 "grafik_pertumbuhan.php"
@@ -193,7 +193,7 @@ $menuSidebar = [
         [
             "nama" => "Grafik Pertumbuhan",
             "ikon" => "↗",
-            "url" => "../pengukuran/data_pengukuran.php",
+            "url" => "../pengukuran/grafik_pertumbuhan.php",
             "halaman" => [
                 "data_pengukuran.php",
                 "grafik_pertumbuhan.php"
@@ -259,7 +259,7 @@ $menuSidebar = [
         [
             "nama" => "Grafik Pertumbuhan",
             "ikon" => "↗",
-            "url" => "../pengukuran/data_pengukuran.php",
+            "url" => "../pengukuran/grafik_pertumbuhan.php",
             "halaman" => [
                 "data_pengukuran.php",
                 "grafik_pertumbuhan.php"
@@ -297,7 +297,7 @@ $menuSidebar = [
         [
             "nama" => "Grafik Pertumbuhan Anak",
             "ikon" => "↗",
-            "url" => "../pengukuran/data_pengukuran.php",
+            "url" => "../pengukuran/grafik_pertumbuhan.php",
             "halaman" => [
                 "data_pengukuran.php",
                 "grafik_pertumbuhan.php"

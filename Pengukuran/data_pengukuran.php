@@ -382,16 +382,16 @@ require_once "../includes/navbar.php";
                     <h4 class="mb-1">
                         <?= $bolehKelolaPengukuran
                             ? "Input Antropometri"
-                            : "Grafik dan Riwayat Pertumbuhan"; ?>
+                            : "Riwayat Pengukuran"; ?>
                     </h4>
 
                     <small class="text-muted">
                         <?php if ($bolehKelolaPengukuran): ?>
                             Kelola hasil pengukuran fisik balita dari kegiatan Posyandu.
                         <?php elseif ($roleAktif === "orang_tua"): ?>
-                            Lihat riwayat dan grafik pertumbuhan anak yang terhubung dengan akun Anda.
+                            Lihat riwayat pengukuran anak yang terhubung dengan akun Anda.
                         <?php else: ?>
-                            Lihat riwayat dan grafik pertumbuhan balita.
+                            Lihat riwayat pengukuran pertumbuhan balita.
                         <?php endif; ?>
                     </small>
 

@@ -22,167 +22,9 @@ $roleAktif =
 $idUserAktif =
     (int) ($_SESSION["id_user"] ?? 0);
 
-$idBalita = filter_input(
-    INPUT_GET,
-    "id_balita",
-    FILTER_VALIDATE_INT
-);
-
-if (!$idBalita || $idBalita < 1) {
-    header(
-        "Location: data_pengukuran.php?pesan=tidak_ditemukan"
-    );
-    exit;
-}
-
 /*
 |--------------------------------------------------------------------------
-| Mengambil identitas balita
-|--------------------------------------------------------------------------
-*/
-
-$stmtBalita = mysqli_prepare(
-    $conn,
-    "SELECT
-        b.id_balita,
-        b.id_user,
-        b.nama_balita,
-        b.nik_balita,
-        b.jenis_kelamin,
-        b.tanggal_lahir,
-        b.nama_ibu,
-        b.nama_posyandu,
-        ps.nama_puskesmas
-     FROM balita AS b
-     LEFT JOIN puskesmas AS ps
-        ON b.id_puskesmas = ps.id_puskesmas
-     WHERE b.id_balita = ?
-     LIMIT 1"
-);
-
-if (!$stmtBalita) {
-    die(
-        "Gagal menyiapkan identitas balita: "
-        . mysqli_error($conn)
-    );
-}
-
-mysqli_stmt_bind_param(
-    $stmtBalita,
-    "i",
-    $idBalita
-);
-
-mysqli_stmt_execute(
-    $stmtBalita
-);
-
-$hasilBalita =
-    mysqli_stmt_get_result(
-        $stmtBalita
-    );
-
-$balita =
-    mysqli_fetch_assoc(
-        $hasilBalita
-    );
-
-mysqli_stmt_close(
-    $stmtBalita
-);
-
-if (!$balita) {
-    header(
-        "Location: data_pengukuran.php?pesan=tidak_ditemukan"
-    );
-    exit;
-}
-
-/*
-|--------------------------------------------------------------------------
-| Orang Tua hanya boleh membuka grafik anak sendiri
-|--------------------------------------------------------------------------
-*/
-
-if (
-    $roleAktif === "orang_tua"
-    && (int) $balita["id_user"] !==
-        $idUserAktif
-) {
-    http_response_code(403);
-
-    echo "
-        <h2>Akses Ditolak</h2>
-        <p>Kamu hanya dapat melihat grafik pertumbuhan anakmu sendiri.</p>
-        <a href='data_pengukuran.php'>Kembali</a>
-    ";
-
-    exit;
-}
-
-/*
-|--------------------------------------------------------------------------
-| Mengambil seluruh riwayat pengukuran balita
-|--------------------------------------------------------------------------
-*/
-
-$stmtRiwayat = mysqli_prepare(
-    $conn,
-    "SELECT
-        id_pengukuran,
-        tanggal_pengukuran,
-        umur_bulan,
-        berat_badan,
-        tinggi_panjang_badan,
-        lingkar_kepala,
-        lila
-     FROM pengukuran_antropometri
-     WHERE id_balita = ?
-     ORDER BY
-        tanggal_pengukuran ASC,
-        id_pengukuran ASC"
-);
-
-if (!$stmtRiwayat) {
-    die(
-        "Gagal menyiapkan riwayat pertumbuhan: "
-        . mysqli_error($conn)
-    );
-}
-
-mysqli_stmt_bind_param(
-    $stmtRiwayat,
-    "i",
-    $idBalita
-);
-
-mysqli_stmt_execute(
-    $stmtRiwayat
-);
-
-$hasilRiwayat =
-    mysqli_stmt_get_result(
-        $stmtRiwayat
-    );
-
-$riwayat = [];
-
-while (
-    $data =
-        mysqli_fetch_assoc(
-            $hasilRiwayat
-        )
-) {
-    $riwayat[] = $data;
-}
-
-mysqli_stmt_close(
-    $stmtRiwayat
-);
-
-/*
-|--------------------------------------------------------------------------
-| Fungsi output
+| Fungsi bantuan
 |--------------------------------------------------------------------------
 */
 
@@ -226,79 +68,421 @@ function formatTanggalGrafik($tanggal): string
 
 /*
 |--------------------------------------------------------------------------
-| Menyiapkan data grafik dan ringkasan
+| Mengambil daftar balita yang boleh dilihat
+|--------------------------------------------------------------------------
+|
+| Orang Tua:
+| hanya balita yang terhubung melalui balita.id_user.
+|
+| Role pelayanan/monitoring:
+| dapat memilih balita dari daftar yang tersedia.
+|
+*/
+
+$daftarBalita = [];
+
+if ($roleAktif === "orang_tua") {
+
+    $stmtDaftar = mysqli_prepare(
+        $conn,
+        "SELECT
+            b.id_balita,
+            b.nama_balita,
+            b.nik_balita
+         FROM balita AS b
+         WHERE b.id_user = ?
+         ORDER BY
+            (
+                SELECT COUNT(*)
+                FROM pengukuran_antropometri AS pa
+                WHERE pa.id_balita = b.id_balita
+            ) DESC,
+            b.nama_balita ASC"
+    );
+
+    if (!$stmtDaftar) {
+        die(
+            "Gagal menyiapkan daftar anak: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtDaftar,
+        "i",
+        $idUserAktif
+    );
+
+    if (!mysqli_stmt_execute($stmtDaftar)) {
+        die(
+            "Gagal mengambil daftar anak: "
+            . mysqli_stmt_error($stmtDaftar)
+        );
+    }
+
+    $hasilDaftar =
+        mysqli_stmt_get_result(
+            $stmtDaftar
+        );
+
+    while (
+        $item =
+            mysqli_fetch_assoc(
+                $hasilDaftar
+            )
+    ) {
+        $daftarBalita[] = $item;
+    }
+
+    mysqli_stmt_close(
+        $stmtDaftar
+    );
+
+} else {
+
+    $queryDaftar = mysqli_query(
+        $conn,
+        "SELECT
+            b.id_balita,
+            b.nama_balita,
+            b.nik_balita
+         FROM balita AS b
+         ORDER BY
+            (
+                SELECT COUNT(*)
+                FROM pengukuran_antropometri AS pa
+                WHERE pa.id_balita = b.id_balita
+            ) DESC,
+            b.nama_balita ASC"
+    );
+
+    if (!$queryDaftar) {
+        die(
+            "Gagal mengambil daftar balita: "
+            . mysqli_error($conn)
+        );
+    }
+
+    while (
+        $item =
+            mysqli_fetch_assoc(
+                $queryDaftar
+            )
+    ) {
+        $daftarBalita[] = $item;
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Menentukan balita aktif
+|--------------------------------------------------------------------------
+|
+| Jika halaman dibuka dari sidebar tanpa id_balita,
+| sistem otomatis memilih balita pertama yang dapat diakses.
+|
+*/
+
+$idBalita = filter_input(
+    INPUT_GET,
+    "id_balita",
+    FILTER_VALIDATE_INT
+);
+
+if (
+    $idBalita === false
+    || $idBalita === null
+    || $idBalita < 1
+) {
+    $idBalita = 0;
+}
+
+$idBalita = (int) $idBalita;
+
+$idBalitaDiizinkan = [];
+
+foreach (
+    $daftarBalita
+    as $itemBalita
+) {
+    $idBalitaDiizinkan[] =
+        (int) $itemBalita[
+            "id_balita"
+        ];
+}
+
+if (
+    $idBalita > 0
+    && !in_array(
+        $idBalita,
+        $idBalitaDiizinkan,
+        true
+    )
+) {
+    $idBalita = 0;
+}
+
+if (
+    $idBalita === 0
+    && count($daftarBalita) > 0
+) {
+    $idBalita =
+        (int) $daftarBalita[0][
+            "id_balita"
+        ];
+}
+
+/*
+|--------------------------------------------------------------------------
+| Nilai default halaman
 |--------------------------------------------------------------------------
 */
+
+$balita = null;
+$riwayat = [];
 
 $labelGrafik = [];
 $dataBeratBadan = [];
 $dataTinggiBadan = [];
 
-foreach ($riwayat as $item) {
-    $umur =
-        (int) (
-            $item["umur_bulan"] ?? 0
+$totalPengukuran = 0;
+
+$pengukuranTerakhir = null;
+$umurTerakhir = null;
+$beratTerakhir = null;
+$tinggiTerakhir = null;
+$tanggalTerakhir = null;
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil identitas balita aktif
+|--------------------------------------------------------------------------
+*/
+
+if ($idBalita > 0) {
+
+    $stmtBalita = mysqli_prepare(
+        $conn,
+        "SELECT
+            b.id_balita,
+            b.id_user,
+            b.nama_balita,
+            b.nik_balita,
+            b.jenis_kelamin,
+            b.tanggal_lahir,
+            b.nama_posyandu,
+            ps.nama_puskesmas
+         FROM balita AS b
+         LEFT JOIN puskesmas AS ps
+            ON b.id_puskesmas = ps.id_puskesmas
+         WHERE b.id_balita = ?
+         LIMIT 1"
+    );
+
+    if (!$stmtBalita) {
+        die(
+            "Gagal menyiapkan identitas balita: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtBalita,
+        "i",
+        $idBalita
+    );
+
+    if (!mysqli_stmt_execute($stmtBalita)) {
+        die(
+            "Gagal mengambil identitas balita: "
+            . mysqli_stmt_error($stmtBalita)
+        );
+    }
+
+    $hasilBalita =
+        mysqli_stmt_get_result(
+            $stmtBalita
         );
 
-    $tanggal =
-        formatTanggalGrafik(
-            $item["tanggal_pengukuran"]
+    $balita =
+        mysqli_fetch_assoc(
+            $hasilBalita
         );
 
-    $labelGrafik[] =
-        $umur
-        . " bln"
-        . " • "
-        . $tanggal;
-
-    $dataBeratBadan[] =
-        $item["berat_badan"] !== null
-        && $item["berat_badan"] !== ""
-            ? (float) $item["berat_badan"]
-            : null;
-
-    $dataTinggiBadan[] =
-        $item[
-            "tinggi_panjang_badan"
-        ] !== null
-        && $item[
-            "tinggi_panjang_badan"
-        ] !== ""
-            ? (float) $item[
-                "tinggi_panjang_badan"
-            ]
-            : null;
+    mysqli_stmt_close(
+        $stmtBalita
+    );
 }
 
-$totalPengukuran =
-    count($riwayat);
+/*
+|--------------------------------------------------------------------------
+| Pemeriksaan kepemilikan Orang Tua
+|--------------------------------------------------------------------------
+*/
 
-$pengukuranTerakhir =
-    $totalPengukuran > 0
-        ? $riwayat[
-            $totalPengukuran - 1
-        ]
-        : null;
+if (
+    $balita
+    && $roleAktif === "orang_tua"
+    && (int) $balita["id_user"] !==
+        $idUserAktif
+) {
+    http_response_code(403);
 
-$umurTerakhir =
-    $pengukuranTerakhir[
-        "umur_bulan"
-    ] ?? null;
+    die(
+        "Akses ditolak. Anda hanya dapat melihat grafik pertumbuhan anak sendiri."
+    );
+}
 
-$beratTerakhir =
-    $pengukuranTerakhir[
-        "berat_badan"
-    ] ?? null;
+/*
+|--------------------------------------------------------------------------
+| Mengambil riwayat pengukuran balita aktif
+|--------------------------------------------------------------------------
+*/
 
-$tinggiTerakhir =
-    $pengukuranTerakhir[
-        "tinggi_panjang_badan"
-    ] ?? null;
+if ($balita) {
 
-$tanggalTerakhir =
-    $pengukuranTerakhir[
-        "tanggal_pengukuran"
-    ] ?? null;
+    $stmtRiwayat = mysqli_prepare(
+        $conn,
+        "SELECT
+            id_pengukuran,
+            tanggal_pengukuran,
+            umur_bulan,
+            berat_badan,
+            tinggi_panjang_badan,
+            lingkar_kepala,
+            lila
+         FROM pengukuran_antropometri
+         WHERE id_balita = ?
+         ORDER BY
+            tanggal_pengukuran ASC,
+            id_pengukuran ASC"
+    );
+
+    if (!$stmtRiwayat) {
+        die(
+            "Gagal menyiapkan riwayat pertumbuhan: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtRiwayat,
+        "i",
+        $idBalita
+    );
+
+    if (!mysqli_stmt_execute($stmtRiwayat)) {
+        die(
+            "Gagal mengambil riwayat pertumbuhan: "
+            . mysqli_stmt_error($stmtRiwayat)
+        );
+    }
+
+    $hasilRiwayat =
+        mysqli_stmt_get_result(
+            $stmtRiwayat
+        );
+
+    while (
+        $data =
+            mysqli_fetch_assoc(
+                $hasilRiwayat
+            )
+    ) {
+        $riwayat[] = $data;
+    }
+
+    mysqli_stmt_close(
+        $stmtRiwayat
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Menyiapkan data grafik
+    |--------------------------------------------------------------------------
+    */
+
+    foreach (
+        $riwayat
+        as $item
+    ) {
+        $umur =
+            (int) (
+                $item[
+                    "umur_bulan"
+                ] ?? 0
+            );
+
+        $tanggal =
+            formatTanggalGrafik(
+                $item[
+                    "tanggal_pengukuran"
+                ]
+            );
+
+        $labelGrafik[] =
+            $umur
+            . " bln"
+            . " • "
+            . $tanggal;
+
+        $dataBeratBadan[] =
+            $item["berat_badan"] !== null
+            && $item["berat_badan"] !== ""
+                ? (float) $item[
+                    "berat_badan"
+                ]
+                : null;
+
+        $dataTinggiBadan[] =
+            $item[
+                "tinggi_panjang_badan"
+            ] !== null
+            && $item[
+                "tinggi_panjang_badan"
+            ] !== ""
+                ? (float) $item[
+                    "tinggi_panjang_badan"
+                ]
+                : null;
+    }
+
+    $totalPengukuran =
+        count($riwayat);
+
+    $pengukuranTerakhir =
+        $totalPengukuran > 0
+            ? $riwayat[
+                $totalPengukuran - 1
+            ]
+            : null;
+
+    $umurTerakhir =
+        $pengukuranTerakhir[
+            "umur_bulan"
+        ] ?? null;
+
+    $beratTerakhir =
+        $pengukuranTerakhir[
+            "berat_badan"
+        ] ?? null;
+
+    $tinggiTerakhir =
+        $pengukuranTerakhir[
+            "tinggi_panjang_badan"
+        ] ?? null;
+
+    $tanggalTerakhir =
+        $pengukuranTerakhir[
+            "tanggal_pengukuran"
+        ] ?? null;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Template aplikasi
+|--------------------------------------------------------------------------
+*/
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
@@ -322,425 +506,540 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        Tren berat badan dan tinggi/panjang badan
-                        berdasarkan riwayat pengukuran balita.
+                        Pantau tren berat badan dan tinggi/panjang
+                        badan berdasarkan seluruh riwayat pengukuran.
                     </small>
 
                 </div>
 
-                <a
-                    href="data_pengukuran.php"
-                    class="btn btn-secondary btn-sm"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali
-                </a>
+                <?php if ($roleAktif === "kader"): ?>
+
+                    <a
+                        href="data_pengukuran.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Riwayat Pengukuran
+                    </a>
+
+                <?php endif; ?>
 
             </div>
 
             <div class="card-body">
 
-                <div class="row g-3 mb-4">
+                <?php if (
+                    count($daftarBalita) > 0
+                ): ?>
 
-                    <div class="col-12 col-lg-3">
+                    <?php if (
+                        count($daftarBalita) > 1
+                        || $roleAktif !== "orang_tua"
+                    ): ?>
 
-                        <div class="detail-item h-100">
-
-                            <span class="detail-label">
-                                Nama Balita
-                            </span>
-
-                            <div class="detail-value">
-                                <i
-                                    class="bi
-                                    bi-person-heart me-1"
-                                ></i>
-
-                                <?= amanGrafik(
-                                    $balita[
-                                        "nama_balita"
-                                    ]
-                                ); ?>
-                            </div>
-
-                            <small class="text-muted">
-                                NIK:
-                                <?= amanGrafik(
-                                    $balita[
-                                        "nik_balita"
-                                    ]
-                                ); ?>
-                            </small>
-
-                        </div>
-
-                    </div>
-
-                    <div class="col-12 col-lg-3">
-
-                        <div class="detail-item h-100">
-
-                            <span class="detail-label">
-                                Pengukuran Terakhir
-                            </span>
-
-                            <div class="detail-value">
-                                <?= formatTanggalGrafik(
-                                    $tanggalTerakhir
-                                ); ?>
-                            </div>
-
-                            <small class="text-muted">
-                                <?= $umurTerakhir !== null
-                                    ? (int) $umurTerakhir
-                                        . " bulan"
-                                    : "-"; ?>
-                            </small>
-
-                        </div>
-
-                    </div>
-
-                    <div class="col-6 col-lg-2">
-
-                        <div class="detail-item h-100">
-
-                            <span class="detail-label">
-                                BB Terakhir
-                            </span>
-
-                            <div class="detail-value">
-                                <?= $beratTerakhir !== null
-                                    && $beratTerakhir !== ""
-                                    ? amanGrafik(
-                                        $beratTerakhir
-                                    ) . " kg"
-                                    : "-"; ?>
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                    <div class="col-6 col-lg-2">
-
-                        <div class="detail-item h-100">
-
-                            <span class="detail-label">
-                                TB/PB Terakhir
-                            </span>
-
-                            <div class="detail-value">
-                                <?= $tinggiTerakhir !== null
-                                    && $tinggiTerakhir !== ""
-                                    ? amanGrafik(
-                                        $tinggiTerakhir
-                                    ) . " cm"
-                                    : "-"; ?>
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                    <div class="col-12 col-lg-2">
-
-                        <div class="detail-item h-100">
-
-                            <span class="detail-label">
-                                Total Riwayat
-                            </span>
-
-                            <div class="detail-value">
-                                <?= $totalPengukuran; ?>
-                                pengukuran
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <?php if ($totalPengukuran > 0): ?>
-
-                    <div class="row g-4">
-
-                        <div class="col-12">
-
-                            <div class="detail-item">
-
-                                <div
-                                    class="d-flex flex-wrap
-                                    justify-content-between
-                                    align-items-center
-                                    gap-2 mb-3"
-                                >
-
-                                    <div>
-                                        <span
-                                            class="detail-label"
-                                        >
-                                            Tren Berat Badan
-                                        </span>
-
-                                        <small
-                                            class="text-muted
-                                            d-block"
-                                        >
-                                            Perubahan berat badan
-                                            dari setiap pengukuran.
-                                        </small>
-                                    </div>
-
-                                    <span
-                                        class="badge
-                                        badge-info"
-                                    >
-                                        kg
-                                    </span>
-
-                                </div>
-
-                                <div
-                                    style="
-                                        position: relative;
-                                        height: 330px;
-                                    "
-                                >
-                                    <canvas
-                                        id="grafikBeratBadan"
-                                        aria-label="Grafik tren berat badan balita"
-                                    ></canvas>
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                        <div class="col-12">
-
-                            <div class="detail-item">
-
-                                <div
-                                    class="d-flex flex-wrap
-                                    justify-content-between
-                                    align-items-center
-                                    gap-2 mb-3"
-                                >
-
-                                    <div>
-                                        <span
-                                            class="detail-label"
-                                        >
-                                            Tren Tinggi /
-                                            Panjang Badan
-                                        </span>
-
-                                        <small
-                                            class="text-muted
-                                            d-block"
-                                        >
-                                            Perubahan tinggi atau
-                                            panjang badan dari
-                                            setiap pengukuran.
-                                        </small>
-                                    </div>
-
-                                    <span
-                                        class="badge
-                                        badge-info"
-                                    >
-                                        cm
-                                    </span>
-
-                                </div>
-
-                                <div
-                                    style="
-                                        position: relative;
-                                        height: 330px;
-                                    "
-                                >
-                                    <canvas
-                                        id="grafikTinggiBadan"
-                                        aria-label="Grafik tren tinggi atau panjang badan balita"
-                                    ></canvas>
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                    <hr>
-
-                    <div class="table-responsive">
-
-                        <table
-                            class="table
-                            table-hover
-                            align-middle"
+                        <form
+                            method="GET"
+                            action="grafik_pertumbuhan.php"
+                            class="row g-3 align-items-end mb-4"
                         >
 
-                            <thead>
+                            <div class="col-12 col-lg-9">
 
-                                <tr>
+                                <label
+                                    for="id_balita"
+                                    class="form-label"
+                                >
+                                    Pilih Balita
+                                </label>
 
-                                    <th
-                                        class="text-center"
-                                    >
-                                        No
-                                    </th>
+                                <select
+                                    name="id_balita"
+                                    id="id_balita"
+                                    class="form-select"
+                                    onchange="this.form.submit();"
+                                >
 
-                                    <th
-                                        class="text-center"
-                                    >
-                                        Tanggal
-                                    </th>
+                                    <?php foreach (
+                                        $daftarBalita
+                                        as $itemBalita
+                                    ): ?>
 
-                                    <th
-                                        class="text-center"
-                                    >
-                                        Umur
-                                    </th>
+                                        <?php
+                                        $idPilihan =
+                                            (int) $itemBalita[
+                                                "id_balita"
+                                            ];
+                                        ?>
 
-                                    <th
-                                        class="text-center"
-                                    >
-                                        BB
-                                    </th>
-
-                                    <th
-                                        class="text-center"
-                                    >
-                                        TB/PB
-                                    </th>
-
-                                    <th
-                                        class="text-center"
-                                    >
-                                        Lingkar Kepala
-                                    </th>
-
-                                    <th
-                                        class="text-center"
-                                    >
-                                        LiLA
-                                    </th>
-
-                                </tr>
-
-                            </thead>
-
-                            <tbody>
-
-                                <?php foreach (
-                                    $riwayat
-                                    as $nomor => $item
-                                ): ?>
-
-                                    <tr>
-
-                                        <td
-                                            class="text-center"
-                                        >
-                                            <?= $nomor + 1; ?>
-                                        </td>
-
-                                        <td
-                                            class="text-center"
-                                        >
-                                            <?= formatTanggalGrafik(
-                                                $item[
-                                                    "tanggal_pengukuran"
-                                                ]
-                                            ); ?>
-                                        </td>
-
-                                        <td
-                                            class="text-center"
+                                        <option
+                                            value="<?= $idPilihan; ?>"
+                                            <?= $idPilihan ===
+                                                $idBalita
+                                                ? "selected"
+                                                : ""; ?>
                                         >
                                             <?= amanGrafik(
-                                                $item[
-                                                    "umur_bulan"
+                                                $itemBalita[
+                                                    "nama_balita"
                                                 ]
                                             ); ?>
-                                            bulan
-                                        </td>
 
-                                        <td
-                                            class="text-center"
+                                            <?php if (
+                                                !empty(
+                                                    $itemBalita[
+                                                        "nik_balita"
+                                                    ]
+                                                )
+                                            ): ?>
+                                                —
+                                                <?= amanGrafik(
+                                                    $itemBalita[
+                                                        "nik_balita"
+                                                    ]
+                                                ); ?>
+                                            <?php endif; ?>
+
+                                        </option>
+
+                                    <?php endforeach; ?>
+
+                                </select>
+
+                            </div>
+
+                            <div class="col-12 col-lg-3">
+
+                                <button
+                                    type="submit"
+                                    class="btn btn-primary w-100"
+                                >
+                                    <i class="bi bi-graph-up-arrow"></i>
+                                    Tampilkan Grafik
+                                </button>
+
+                            </div>
+
+                        </form>
+
+                    <?php endif; ?>
+
+                    <?php if ($balita): ?>
+
+                        <div class="row g-3 mb-4">
+
+                            <div class="col-12 col-lg-4">
+
+                                <div class="detail-item h-100">
+
+                                    <span class="detail-label">
+                                        Balita
+                                    </span>
+
+                                    <div class="detail-value">
+                                        <?= amanGrafik(
+                                            $balita[
+                                                "nama_balita"
+                                            ]
+                                        ); ?>
+                                    </div>
+
+                                    <small class="text-muted">
+                                        NIK:
+                                        <?= amanGrafik(
+                                            $balita[
+                                                "nik_balita"
+                                            ]
+                                        ); ?>
+                                    </small>
+
+                                </div>
+
+                            </div>
+
+                            <div class="col-12 col-md-6 col-lg-2">
+
+                                <div class="detail-item h-100">
+
+                                    <span class="detail-label">
+                                        Pengukuran Terakhir
+                                    </span>
+
+                                    <div class="detail-value">
+                                        <?= formatTanggalGrafik(
+                                            $tanggalTerakhir
+                                        ); ?>
+                                    </div>
+
+                                    <small class="text-muted">
+                                        <?= $umurTerakhir !== null
+                                            ? (int) $umurTerakhir
+                                                . " bulan"
+                                            : "-"; ?>
+                                    </small>
+
+                                </div>
+
+                            </div>
+
+                            <div class="col-6 col-lg-2">
+
+                                <div class="detail-item h-100">
+
+                                    <span class="detail-label">
+                                        BB Terakhir
+                                    </span>
+
+                                    <div class="detail-value">
+                                        <?= $beratTerakhir !== null
+                                            && $beratTerakhir !== ""
+                                            ? amanGrafik(
+                                                $beratTerakhir
+                                            ) . " kg"
+                                            : "-"; ?>
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <div class="col-6 col-lg-2">
+
+                                <div class="detail-item h-100">
+
+                                    <span class="detail-label">
+                                        TB/PB Terakhir
+                                    </span>
+
+                                    <div class="detail-value">
+                                        <?= $tinggiTerakhir !== null
+                                            && $tinggiTerakhir !== ""
+                                            ? amanGrafik(
+                                                $tinggiTerakhir
+                                            ) . " cm"
+                                            : "-"; ?>
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <div class="col-12 col-md-6 col-lg-2">
+
+                                <div class="detail-item h-100">
+
+                                    <span class="detail-label">
+                                        Total Riwayat
+                                    </span>
+
+                                    <div class="detail-value">
+                                        <?= $totalPengukuran; ?>
+                                    </div>
+
+                                    <small class="text-muted">
+                                        pengukuran
+                                    </small>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <?php if (
+                            $totalPengukuran > 0
+                        ): ?>
+
+                            <div class="row g-4">
+
+                                <div class="col-12">
+
+                                    <div class="detail-item">
+
+                                        <div
+                                            class="d-flex flex-wrap
+                                            justify-content-between
+                                            align-items-center
+                                            gap-2 mb-3"
                                         >
-                                            <?= amanGrafik(
-                                                $item[
-                                                    "berat_badan"
-                                                ]
-                                            ); ?>
-                                            kg
-                                        </td>
 
-                                        <td
-                                            class="text-center"
+                                            <div>
+
+                                                <span class="detail-label">
+                                                    Tren Berat Badan
+                                                </span>
+
+                                                <small
+                                                    class="text-muted d-block"
+                                                >
+                                                    Perubahan berat badan
+                                                    dari setiap pengukuran.
+                                                </small>
+
+                                            </div>
+
+                                            <span class="badge badge-info">
+                                                kg
+                                            </span>
+
+                                        </div>
+
+                                        <div
+                                            style="
+                                                position: relative;
+                                                height: 330px;
+                                            "
                                         >
-                                            <?= amanGrafik(
-                                                $item[
-                                                    "tinggi_panjang_badan"
-                                                ]
-                                            ); ?>
-                                            cm
-                                        </td>
+                                            <canvas
+                                                id="grafikBeratBadan"
+                                                aria-label="Grafik tren berat badan balita"
+                                            ></canvas>
+                                        </div>
 
-                                        <td
-                                            class="text-center"
+                                    </div>
+
+                                </div>
+
+                                <div class="col-12">
+
+                                    <div class="detail-item">
+
+                                        <div
+                                            class="d-flex flex-wrap
+                                            justify-content-between
+                                            align-items-center
+                                            gap-2 mb-3"
                                         >
-                                            <?= amanGrafik(
-                                                $item[
-                                                    "lingkar_kepala"
-                                                ]
-                                            ); ?>
-                                            cm
-                                        </td>
 
-                                        <td
-                                            class="text-center"
+                                            <div>
+
+                                                <span class="detail-label">
+                                                    Tren Tinggi /
+                                                    Panjang Badan
+                                                </span>
+
+                                                <small
+                                                    class="text-muted d-block"
+                                                >
+                                                    Perubahan tinggi atau
+                                                    panjang badan dari
+                                                    setiap pengukuran.
+                                                </small>
+
+                                            </div>
+
+                                            <span class="badge badge-info">
+                                                cm
+                                            </span>
+
+                                        </div>
+
+                                        <div
+                                            style="
+                                                position: relative;
+                                                height: 330px;
+                                            "
                                         >
-                                            <?= amanGrafik(
-                                                $item["lila"]
-                                            ); ?>
-                                            cm
-                                        </td>
+                                            <canvas
+                                                id="grafikTinggiBadan"
+                                                aria-label="Grafik tren tinggi atau panjang badan balita"
+                                            ></canvas>
+                                        </div>
 
-                                    </tr>
+                                    </div>
 
-                                <?php endforeach; ?>
+                                </div>
 
-                            </tbody>
+                            </div>
 
-                        </table>
+                            <div class="mt-4">
 
-                    </div>
+                                <div class="d-flex flex-wrap
+                                    justify-content-between
+                                    align-items-center gap-2 mb-3"
+                                >
+
+                                    <div>
+
+                                        <h5 class="mb-1">
+                                            Riwayat Pengukuran
+                                        </h5>
+
+                                        <small class="text-muted">
+                                            Data yang membentuk grafik
+                                            pertumbuhan di atas.
+                                        </small>
+
+                                    </div>
+
+                                    <span class="badge badge-info">
+                                        <?= $totalPengukuran; ?>
+                                        data
+                                    </span>
+
+                                </div>
+
+                                <div class="table-responsive">
+
+                                    <table
+                                        class="table
+                                        table-hover
+                                        align-middle"
+                                    >
+
+                                        <thead>
+
+                                            <tr>
+
+                                                <th class="text-center">
+                                                    No
+                                                </th>
+
+                                                <th class="text-center">
+                                                    Tanggal
+                                                </th>
+
+                                                <th class="text-center">
+                                                    Umur
+                                                </th>
+
+                                                <th class="text-center">
+                                                    BB
+                                                </th>
+
+                                                <th class="text-center">
+                                                    TB/PB
+                                                </th>
+
+                                                <th class="text-center">
+                                                    Lingkar Kepala
+                                                </th>
+
+                                                <th class="text-center">
+                                                    LiLA
+                                                </th>
+
+                                            </tr>
+
+                                        </thead>
+
+                                        <tbody>
+
+                                            <?php foreach (
+                                                $riwayat
+                                                as $nomor => $item
+                                            ): ?>
+
+                                                <tr>
+
+                                                    <td class="text-center">
+                                                        <?= $nomor + 1; ?>
+                                                    </td>
+
+                                                    <td class="text-center">
+                                                        <?= formatTanggalGrafik(
+                                                            $item[
+                                                                "tanggal_pengukuran"
+                                                            ]
+                                                        ); ?>
+                                                    </td>
+
+                                                    <td class="text-center">
+                                                        <?= amanGrafik(
+                                                            $item[
+                                                                "umur_bulan"
+                                                            ]
+                                                        ); ?>
+                                                        bulan
+                                                    </td>
+
+                                                    <td class="text-center">
+                                                        <?= amanGrafik(
+                                                            $item[
+                                                                "berat_badan"
+                                                            ]
+                                                        ); ?>
+                                                        kg
+                                                    </td>
+
+                                                    <td class="text-center">
+                                                        <?= amanGrafik(
+                                                            $item[
+                                                                "tinggi_panjang_badan"
+                                                            ]
+                                                        ); ?>
+                                                        cm
+                                                    </td>
+
+                                                    <td class="text-center">
+                                                        <?= amanGrafik(
+                                                            $item[
+                                                                "lingkar_kepala"
+                                                            ]
+                                                        ); ?>
+                                                        cm
+                                                    </td>
+
+                                                    <td class="text-center">
+                                                        <?= amanGrafik(
+                                                            $item[
+                                                                "lila"
+                                                            ]
+                                                        ); ?>
+                                                        cm
+                                                    </td>
+
+                                                </tr>
+
+                                            <?php endforeach; ?>
+
+                                        </tbody>
+
+                                    </table>
+
+                                </div>
+
+                            </div>
+
+                        <?php else: ?>
+
+                            <div class="empty-state">
+
+                                <div class="empty-state-icon">
+                                    <i class="bi bi-graph-up"></i>
+                                </div>
+
+                                <h3>
+                                    Belum ada data pertumbuhan
+                                </h3>
+
+                                <p>
+                                    Balita ini belum memiliki
+                                    pengukuran antropometri.
+                                    Grafik akan muncul setelah
+                                    data pengukuran tersedia.
+                                </p>
+
+                            </div>
+
+                        <?php endif; ?>
+
+                    <?php endif; ?>
 
                 <?php else: ?>
 
                     <div class="empty-state">
 
                         <div class="empty-state-icon">
-                            <i
-                                class="bi
-                                bi-graph-up"
-                            ></i>
+                            <i class="bi bi-person-x"></i>
                         </div>
 
                         <h3>
-                            Belum ada data pertumbuhan
+                            Belum ada balita
                         </h3>
 
                         <p>
-                            Grafik akan tersedia setelah
-                            balita memiliki data pengukuran
-                            antropometri.
+                            Belum ada data balita yang dapat
+                            ditampilkan pada grafik pertumbuhan.
                         </p>
 
                     </div>
@@ -755,7 +1054,10 @@ require_once "../includes/navbar.php";
 
 </div>
 
-<?php if ($totalPengukuran > 0): ?>
+<?php if (
+    $balita
+    && $totalPengukuran > 0
+): ?>
 
     <script
         type="application/json"
