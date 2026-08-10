@@ -9,6 +9,87 @@ cekRole(["kader"]);
 $judulHalaman = "Edit Data Balita | Sistem Deteksi Stunting";
 $pesanError = "";
 
+$idKaderAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil Puskesmas Kader aktif
+|--------------------------------------------------------------------------
+|
+| Kader hanya boleh mengedit balita dari Puskesmas yang sama
+| dengan akun Kader.
+|
+*/
+
+$stmtKader = mysqli_prepare(
+    $conn,
+    "SELECT
+        u.id_puskesmas,
+        p.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS p
+        ON u.id_puskesmas = p.id_puskesmas
+     WHERE u.id_user = ?
+     AND u.role = 'kader'
+     LIMIT 1"
+);
+
+if (!$stmtKader) {
+    die(
+        "Gagal memeriksa Puskesmas Kader: "
+        . mysqli_error($conn)
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtKader,
+    "i",
+    $idKaderAktif
+);
+
+mysqli_stmt_execute($stmtKader);
+
+$hasilKader =
+    mysqli_stmt_get_result(
+        $stmtKader
+    );
+
+$dataKader =
+    mysqli_fetch_assoc(
+        $hasilKader
+    );
+
+mysqli_stmt_close($stmtKader);
+
+$idPuskesmasKader =
+    !empty($dataKader["id_puskesmas"])
+        ? (int) $dataKader["id_puskesmas"]
+        : 0;
+
+$namaPuskesmasKader =
+    trim(
+        (string) (
+            $dataKader["nama_puskesmas"]
+            ?? ""
+        )
+    );
+
+if (
+    $idPuskesmasKader < 1
+    || $namaPuskesmasKader === ""
+) {
+    http_response_code(403);
+
+    echo "
+        <h2>Akses Ditolak</h2>
+        <p>Akun Kader belum terhubung dengan Puskesmas.</p>
+        <a href='data_balita.php'>Kembali</a>
+    ";
+
+    exit;
+}
+
 /*
 |--------------------------------------------------------------------------
 | Mengambil ID balita
@@ -22,7 +103,9 @@ $idBalita = filter_input(
 );
 
 if (!$idBalita) {
-    header("Location: data_balita.php?pesan=tidak_ditemukan");
+    header(
+        "Location: data_balita.php?pesan=tidak_ditemukan"
+    );
     exit;
 }
 
@@ -30,6 +113,9 @@ if (!$idBalita) {
 |--------------------------------------------------------------------------
 | Mengambil data balita
 |--------------------------------------------------------------------------
+|
+| Balita harus berada pada Puskesmas yang sama dengan akun Kader.
+|
 */
 
 $stmtBalita = mysqli_prepare(
@@ -48,6 +134,7 @@ $stmtBalita = mysqli_prepare(
         nama_posyandu
      FROM balita
      WHERE id_balita = ?
+     AND id_puskesmas = ?
      LIMIT 1"
 );
 
@@ -60,19 +147,29 @@ if (!$stmtBalita) {
 
 mysqli_stmt_bind_param(
     $stmtBalita,
-    "i",
-    $idBalita
+    "ii",
+    $idBalita,
+    $idPuskesmasKader
 );
 
 mysqli_stmt_execute($stmtBalita);
 
-$hasilBalita = mysqli_stmt_get_result($stmtBalita);
-$dataBalita = mysqli_fetch_assoc($hasilBalita);
+$hasilBalita =
+    mysqli_stmt_get_result(
+        $stmtBalita
+    );
+
+$dataBalita =
+    mysqli_fetch_assoc(
+        $hasilBalita
+    );
 
 mysqli_stmt_close($stmtBalita);
 
 if (!$dataBalita) {
-    header("Location: data_balita.php?pesan=tidak_ditemukan");
+    header(
+        "Location: data_balita.php?pesan=tidak_ditemukan"
+    );
     exit;
 }
 
@@ -82,79 +179,129 @@ if (!$dataBalita) {
 |--------------------------------------------------------------------------
 */
 
-$idUser = (int) ($dataBalita["id_user"] ?? 0);
-$idPuskesmas = (int) ($dataBalita["id_puskesmas"] ?? 0);
+$idUser =
+    (int) (
+        $dataBalita["id_user"]
+        ?? 0
+    );
 
-$nikBalita = $dataBalita["nik_balita"] ?? "";
-$namaBalita = $dataBalita["nama_balita"] ?? "";
-$jenisKelamin = $dataBalita["jenis_kelamin"] ?? "";
-$tanggalLahir = $dataBalita["tanggal_lahir"] ?? "";
-$namaIbu = $dataBalita["nama_ibu"] ?? "";
-$alamat = $dataBalita["alamat"] ?? "";
-$namaPosyandu = $dataBalita["nama_posyandu"] ?? "";
+$idPuskesmas =
+    (int) (
+        $dataBalita["id_puskesmas"]
+        ?? 0
+    );
+
+$nikBalita =
+    $dataBalita["nik_balita"]
+    ?? "";
+
+$namaBalita =
+    $dataBalita["nama_balita"]
+    ?? "";
+
+$jenisKelamin =
+    $dataBalita["jenis_kelamin"]
+    ?? "";
+
+$tanggalLahir =
+    $dataBalita["tanggal_lahir"]
+    ?? "";
+
+$namaIbu =
+    $dataBalita["nama_ibu"]
+    ?? "";
+
+$alamat =
+    $dataBalita["alamat"]
+    ?? "";
+
+$namaPosyandu =
+    $dataBalita["nama_posyandu"]
+    ?? "";
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil daftar Profil Ibu
+| Mengambil Profil Ibu pemilik balita
 |--------------------------------------------------------------------------
 |
-| Kader hanya dapat memilih akun Orang Tua yang sudah memiliki profil
-| pada tabel orang_tua. Nama ibu dan alamat tidak diinput ulang.
+| Pemilik balita dikunci. id_user tidak dapat diubah dari halaman edit.
+| Nama ibu dan alamat selalu disegarkan dari Profil Ibu pemilik yang sama.
 |
 */
 
-$queryOrangTua = mysqli_query(
+$stmtOrangTua = mysqli_prepare(
     $conn,
     "SELECT
-        ot.id_orang_tua,
         ot.id_user,
         ot.nik_ibu,
         ot.nama_ibu,
-        ot.no_hp,
         ot.alamat,
-        ot.pendidikan_ibu,
-        ot.pekerjaan_ibu,
         p.username
      FROM orang_tua AS ot
      INNER JOIN pengguna AS p
         ON ot.id_user = p.id_user
-     WHERE p.role = 'orang_tua'
-     ORDER BY ot.nama_ibu ASC"
+     WHERE ot.id_user = ?
+     AND p.role = 'orang_tua'
+     LIMIT 1"
 );
 
-if (!$queryOrangTua) {
+if (!$stmtOrangTua) {
     die(
         "Gagal mengambil Profil Ibu: "
         . mysqli_error($conn)
     );
 }
 
-$jumlahOrangTua =
-    mysqli_num_rows($queryOrangTua);
-
-/*
-|--------------------------------------------------------------------------
-| Mengambil daftar Puskesmas
-|--------------------------------------------------------------------------
-*/
-
-$queryPuskesmas = mysqli_query(
-    $conn,
-    "SELECT
-        id_puskesmas,
-        nama_puskesmas
-     FROM puskesmas
-     ORDER BY nama_puskesmas ASC"
+mysqli_stmt_bind_param(
+    $stmtOrangTua,
+    "i",
+    $idUser
 );
 
-if (!$queryPuskesmas) {
-    die(
-        "Gagal mengambil data Puskesmas: "
-        . mysqli_error($conn)
-    );
-}
+mysqli_stmt_execute(
+    $stmtOrangTua
+);
 
-$jumlahPuskesmas = mysqli_num_rows($queryPuskesmas);
+$hasilOrangTua =
+    mysqli_stmt_get_result(
+        $stmtOrangTua
+    );
+
+$profilIbu =
+    mysqli_fetch_assoc(
+        $hasilOrangTua
+    );
+
+mysqli_stmt_close(
+    $stmtOrangTua
+);
+
+$profilIbuTersedia =
+    $profilIbu !== null;
+
+if ($profilIbuTersedia) {
+
+    $namaIbuProfil =
+        trim(
+            (string) (
+                $profilIbu["nama_ibu"]
+                ?? ""
+            )
+        );
+
+    $alamatProfil =
+        trim(
+            (string) (
+                $profilIbu["alamat"]
+                ?? ""
+            )
+        );
+
+} else {
+
+    $namaIbuProfil = "";
+    $alamatProfil = "";
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -164,32 +311,40 @@ $jumlahPuskesmas = mysqli_num_rows($queryPuskesmas);
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
-    $idUser = filter_input(
-        INPUT_POST,
-        "id_user",
-        FILTER_VALIDATE_INT
-    );
-
-    $idPuskesmas = filter_input(
-        INPUT_POST,
-        "id_puskesmas",
-        FILTER_VALIDATE_INT
-    );
-
-    $nikBalita = trim($_POST["nik_balita"] ?? "");
-    $namaBalita = trim($_POST["nama_balita"] ?? "");
-    $jenisKelamin = $_POST["jenis_kelamin"] ?? "";
-    $tanggalLahir = $_POST["tanggal_lahir"] ?? "";
-    $namaPosyandu = trim($_POST["nama_posyandu"] ?? "");
-
     /*
-    |--------------------------------------------------------------------------
-    | Nama ibu dan alamat selalu diambil dari Profil Ibu
-    |--------------------------------------------------------------------------
+    | id_user dan id_puskesmas sengaja tidak dibaca dari POST.
+    | Keduanya dikunci berdasarkan data yang sudah tersimpan.
     */
 
-    $namaIbu = "";
-    $alamat = "";
+    $nikBalita =
+        preg_replace(
+            "/\D/",
+            "",
+            trim(
+                $_POST["nik_balita"]
+                ?? ""
+            )
+        );
+
+    $namaBalita =
+        trim(
+            $_POST["nama_balita"]
+            ?? ""
+        );
+
+    $jenisKelamin =
+        $_POST["jenis_kelamin"]
+        ?? "";
+
+    $tanggalLahir =
+        $_POST["tanggal_lahir"]
+        ?? "";
+
+    $namaPosyandu =
+        trim(
+            $_POST["nama_posyandu"]
+            ?? ""
+        );
 
     $jenisKelaminDiizinkan = [
         "Laki-laki",
@@ -202,22 +357,40 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     |--------------------------------------------------------------------------
     */
 
-    if (
-        $jumlahOrangTua === 0
-        || !$idUser
-        || !$idPuskesmas
-        || $nikBalita === ""
+    if (!$profilIbuTersedia) {
+
+        $pesanError =
+            "Profil Ibu pemilik balita tidak ditemukan.";
+
+    } elseif (
+        $namaIbuProfil === ""
+        || $alamatProfil === ""
+    ) {
+
+        $pesanError =
+            "Profil Ibu belum lengkap. Lengkapi nama dan alamat terlebih dahulu.";
+
+    } elseif (
+        $nikBalita === ""
         || $namaBalita === ""
         || $jenisKelamin === ""
         || $tanggalLahir === ""
         || $namaPosyandu === ""
     ) {
+
         $pesanError =
-            $jumlahOrangTua === 0
-                ? "Belum ada Profil Ibu yang dapat dipilih."
-                : "Semua data wajib diisi.";
-    } elseif (!preg_match("/^[0-9]{16}$/", $nikBalita)) {
-        $pesanError = "NIK balita harus terdiri dari 16 angka.";
+            "Semua data wajib diisi.";
+
+    } elseif (
+        !preg_match(
+            "/^[0-9]{16}$/",
+            $nikBalita
+        )
+    ) {
+
+        $pesanError =
+            "NIK balita harus terdiri dari 16 angka.";
+
     } elseif (
         !in_array(
             $jenisKelamin,
@@ -225,141 +398,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             true
         )
     ) {
-        $pesanError = "Jenis kelamin tidak valid.";
-    } elseif (strtotime($tanggalLahir) === false) {
-        $pesanError = "Tanggal lahir tidak valid.";
-    } elseif (strtotime($tanggalLahir) > time()) {
+
+        $pesanError =
+            "Jenis kelamin tidak valid.";
+
+    } elseif (
+        strtotime(
+            $tanggalLahir
+        ) === false
+    ) {
+
+        $pesanError =
+            "Tanggal lahir tidak valid.";
+
+    } elseif (
+        strtotime(
+            $tanggalLahir
+        ) > time()
+    ) {
+
         $pesanError =
             "Tanggal lahir tidak boleh melebihi hari ini.";
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Memastikan Profil Ibu valid dan mengambil data otomatis
-    |--------------------------------------------------------------------------
-    */
-
-    if ($pesanError === "") {
-
-        $cekOrangTua = mysqli_prepare(
-            $conn,
-            "SELECT
-                ot.id_user,
-                ot.nama_ibu,
-                ot.alamat
-             FROM orang_tua AS ot
-             INNER JOIN pengguna AS p
-                ON ot.id_user = p.id_user
-             WHERE ot.id_user = ?
-             AND p.role = 'orang_tua'
-             LIMIT 1"
-        );
-
-        if (!$cekOrangTua) {
-
-            $pesanError =
-                "Terjadi kesalahan saat memeriksa Profil Ibu.";
-
-        } else {
-
-            mysqli_stmt_bind_param(
-                $cekOrangTua,
-                "i",
-                $idUser
-            );
-
-            mysqli_stmt_execute(
-                $cekOrangTua
-            );
-
-            $hasilOrangTua =
-                mysqli_stmt_get_result(
-                    $cekOrangTua
-                );
-
-            $profilIbu =
-                mysqli_fetch_assoc(
-                    $hasilOrangTua
-                );
-
-            if (!$profilIbu) {
-
-                $pesanError =
-                    "Profil Ibu tidak ditemukan atau belum lengkap.";
-
-            } else {
-
-                $namaIbu =
-                    trim(
-                        (string) $profilIbu[
-                            "nama_ibu"
-                        ]
-                    );
-
-                $alamat =
-                    trim(
-                        (string) $profilIbu[
-                            "alamat"
-                        ]
-                    );
-
-                if (
-                    $namaIbu === ""
-                    || $alamat === ""
-                ) {
-                    $pesanError =
-                        "Profil Ibu belum lengkap. Lengkapi nama dan alamat terlebih dahulu.";
-                }
-            }
-
-            mysqli_stmt_close(
-                $cekOrangTua
-            );
-        }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Memastikan Puskesmas tersedia
-    |--------------------------------------------------------------------------
-    */
-
-    if ($pesanError === "") {
-
-        $cekPuskesmas = mysqli_prepare(
-            $conn,
-            "SELECT id_puskesmas
-             FROM puskesmas
-             WHERE id_puskesmas = ?
-             LIMIT 1"
-        );
-
-        if (!$cekPuskesmas) {
-
-            $pesanError =
-                "Terjadi kesalahan saat memeriksa Puskesmas.";
-
-        } else {
-
-            mysqli_stmt_bind_param(
-                $cekPuskesmas,
-                "i",
-                $idPuskesmas
-            );
-
-            mysqli_stmt_execute($cekPuskesmas);
-
-            $hasilPuskesmas = mysqli_stmt_get_result(
-                $cekPuskesmas
-            );
-
-            if (mysqli_num_rows($hasilPuskesmas) === 0) {
-                $pesanError =
-                    "Puskesmas yang dipilih tidak ditemukan.";
-            }
-
-            mysqli_stmt_close($cekPuskesmas);
-        }
     }
 
     /*
@@ -393,16 +452,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $idBalita
             );
 
-            mysqli_stmt_execute($cekNik);
+            mysqli_stmt_execute(
+                $cekNik
+            );
 
-            $hasilNik = mysqli_stmt_get_result($cekNik);
+            $hasilNik =
+                mysqli_stmt_get_result(
+                    $cekNik
+                );
 
-            if (mysqli_num_rows($hasilNik) > 0) {
+            if (
+                mysqli_num_rows(
+                    $hasilNik
+                ) > 0
+            ) {
                 $pesanError =
                     "NIK balita sudah digunakan oleh data lain.";
             }
 
-            mysqli_stmt_close($cekNik);
+            mysqli_stmt_close(
+                $cekNik
+            );
         }
     }
 
@@ -418,21 +488,28 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         try {
 
-            $tanggalLahirObjek = new DateTime(
-                $tanggalLahir
-            );
+            $tanggalLahirObjek =
+                new DateTime(
+                    $tanggalLahir
+                );
 
-            $tanggalHariIni = new DateTime();
+            $tanggalHariIni =
+                new DateTime(
+                    "today"
+                );
 
-            $selisih = $tanggalLahirObjek->diff(
-                $tanggalHariIni
-            );
+            $selisih =
+                $tanggalLahirObjek->diff(
+                    $tanggalHariIni
+                );
 
             $umur = (
                 $selisih->y * 12
             ) + $selisih->m;
 
-        } catch (Exception $exception) {
+        } catch (
+            Exception $exception
+        ) {
 
             $pesanError =
                 "Tanggal lahir tidak dapat diproses.";
@@ -443,16 +520,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     |--------------------------------------------------------------------------
     | Memperbarui data balita
     |--------------------------------------------------------------------------
+    |
+    | id_user dan id_puskesmas tidak diubah.
+    | Nama ibu dan alamat disinkronkan dari Profil Ibu pemilik balita.
+    |
     */
 
     if ($pesanError === "") {
+
+        $namaIbu =
+            $namaIbuProfil;
+
+        $alamat =
+            $alamatProfil;
 
         $update = mysqli_prepare(
             $conn,
             "UPDATE balita
              SET
-                id_user = ?,
-                id_puskesmas = ?,
                 nik_balita = ?,
                 nama_balita = ?,
                 jenis_kelamin = ?,
@@ -461,7 +546,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 nama_ibu = ?,
                 alamat = ?,
                 nama_posyandu = ?
-             WHERE id_balita = ?"
+             WHERE id_balita = ?
+             AND id_user = ?
+             AND id_puskesmas = ?"
         );
 
         if (!$update) {
@@ -474,9 +561,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             mysqli_stmt_bind_param(
                 $update,
-                "iissssisssi",
-                $idUser,
-                $idPuskesmas,
+                "ssssisssiii",
                 $nikBalita,
                 $namaBalita,
                 $jenisKelamin,
@@ -485,12 +570,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $namaIbu,
                 $alamat,
                 $namaPosyandu,
-                $idBalita
+                $idBalita,
+                $idUser,
+                $idPuskesmasKader
             );
 
-            if (mysqli_stmt_execute($update)) {
+            if (
+                mysqli_stmt_execute(
+                    $update
+                )
+            ) {
 
-                mysqli_stmt_close($update);
+                mysqli_stmt_close(
+                    $update
+                );
 
                 header(
                     "Location: data_balita.php?pesan=edit_berhasil"
@@ -500,18 +593,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             $pesanError =
                 "Data balita gagal diperbarui: "
-                . mysqli_stmt_error($update);
+                . mysqli_stmt_error(
+                    $update
+                );
 
-            mysqli_stmt_close($update);
+            mysqli_stmt_close(
+                $update
+            );
         }
     }
 }
-
-/*
-|--------------------------------------------------------------------------
-| Memanggil template aplikasi
-|--------------------------------------------------------------------------
-*/
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
@@ -524,103 +615,6 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div class="page-header">
-
-            <div>
-
-                <h1 class="page-title">
-
-                    <i class="bi bi-pencil-square me-2"></i>
-
-                    Edit Data Balita
-
-                </h1>
-
-                <p class="page-subtitle">
-
-                    Perbarui data balita dan pilih Profil Ibu
-                    yang terhubung tanpa menginput ulang data ibu.
-
-                </p>
-
-            </div>
-
-            <div class="d-flex flex-wrap gap-2">
-
-                <a
-                    href="data_balita.php"
-                    class="btn btn-secondary"
-                >
-
-                    <i class="bi bi-arrow-left"></i>
-
-                    Kembali
-
-                </a>
-
-            </div>
-
-        </div>
-
-        <?php if ($pesanError !== ""): ?>
-
-            <div
-                class="alert alert-danger alert-dismissible fade show"
-                role="alert"
-            >
-
-                <?= htmlspecialchars(
-                    $pesanError,
-                    ENT_QUOTES,
-                    "UTF-8"
-                ); ?>
-
-                <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Tutup"
-                ></button>
-
-            </div>
-
-        <?php endif; ?>
-
-        <?php if ($jumlahPuskesmas === 0): ?>
-
-            <div
-                class="alert alert-warning"
-                role="alert"
-            >
-
-                <strong>Data Puskesmas belum tersedia.</strong>
-
-                Tambahkan data ke tabel
-                <code>puskesmas</code>
-                terlebih dahulu sebelum menyimpan perubahan.
-
-            </div>
-
-        <?php endif; ?>
-
-        <?php if ($jumlahOrangTua === 0): ?>
-
-            <div
-                class="alert alert-warning"
-                role="alert"
-            >
-
-                <i class="bi bi-person-exclamation me-1"></i>
-
-                Belum ada Profil Ibu yang dapat dipilih.
-                Orang Tua harus melengkapi
-                <strong>Profil Ibu</strong>
-                terlebih dahulu.
-
-            </div>
-
-        <?php endif; ?>
-
         <div class="card content-card">
 
             <div class="card-header">
@@ -628,158 +622,212 @@ require_once "../includes/navbar.php";
                 <div>
 
                     <h4 class="mb-1">
-                        Form Edit Balita
+                        Edit Data Balita
                     </h4>
 
                     <small class="text-muted">
-                        Data bertanda wajib harus dilengkapi.
+                        Perbarui identitas balita.
+                        Pemilik dan Puskesmas dikunci
+                        agar relasi data tetap aman.
                     </small>
 
                 </div>
 
-                <span class="badge badge-primary">
-
-                    <i class="bi bi-person-heart"></i>
-
-                    Data Balita
-
-                </span>
+                <a
+                    href="data_balita.php"
+                    class="btn btn-secondary btn-sm"
+                >
+                    <i class="bi bi-arrow-left"></i>
+                    Kembali
+                </a>
 
             </div>
 
-            <div class="card-body p-4">
+            <div class="card-body">
 
-                <form method="POST">
+                <?php if (
+                    $pesanError !== ""
+                ): ?>
+
+                    <div
+                        class="alert alert-danger
+                        alert-dismissible fade show"
+                        role="alert"
+                    >
+
+                        <i
+                            class="bi
+                            bi-exclamation-circle me-1"
+                        ></i>
+
+                        <?= htmlspecialchars(
+                            $pesanError,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>
+
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="alert"
+                            aria-label="Tutup"
+                        ></button>
+
+                    </div>
+
+                <?php endif; ?>
+
+                <?php if (
+                    !$profilIbuTersedia
+                ): ?>
+
+                    <div class="alert alert-warning">
+
+                        <i
+                            class="bi
+                            bi-person-exclamation me-1"
+                        ></i>
+
+                        Profil Ibu pemilik balita
+                        tidak ditemukan. Data balita
+                        tidak dapat diperbarui sampai
+                        profil Orang Tua tersedia.
+
+                    </div>
+
+                <?php endif; ?>
+
+                <form
+                    method="POST"
+                    autocomplete="off"
+                >
 
                     <div class="row g-3">
 
                         <div class="col-12 col-lg-6">
 
-                            <label
-                                for="id_user"
-                                class="form-label"
-                            >
+                            <label class="form-label">
                                 Profil Ibu / Orang Tua
                             </label>
 
-                            <select
-                                id="id_user"
-                                name="id_user"
-                                class="form-select"
-                                <?= $jumlahOrangTua === 0
-                                    ? "disabled"
-                                    : "required"; ?>
-                            >
+                            <div class="detail-item">
 
-                                <option value="">
-                                    Pilih Profil Ibu
-                                </option>
+                                <span class="detail-label">
+                                    Pemilik Balita
+                                </span>
 
-                                <?php
-                                mysqli_data_seek(
-                                    $queryOrangTua,
-                                    0
-                                );
-                                ?>
+                                <div class="detail-value">
 
-                                <?php while (
-                                    $orangTua =
-                                        mysqli_fetch_assoc(
-                                            $queryOrangTua
-                                        )
-                                ): ?>
+                                    <?php if (
+                                        $profilIbuTersedia
+                                    ): ?>
 
-                                    <option
-                                        value="<?= (int)
-                                            $orangTua[
-                                                "id_user"
-                                            ]; ?>"
-                                        <?= (int) $idUser ===
-                                            (int) $orangTua[
-                                                "id_user"
-                                            ]
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
+                                        <i
+                                            class="bi
+                                            bi-person-heart me-1"
+                                        ></i>
+
                                         <?= htmlspecialchars(
-                                            $orangTua[
+                                            $profilIbu[
                                                 "nama_ibu"
-                                            ]
-                                            . " — NIK "
-                                            . $orangTua[
-                                                "nik_ibu"
-                                            ]
-                                            . " ("
-                                            . $orangTua[
-                                                "username"
-                                            ]
-                                            . ")",
+                                            ] ?? "-",
                                             ENT_QUOTES,
                                             "UTF-8"
                                         ); ?>
-                                    </option>
 
-                                <?php endwhile; ?>
+                                    <?php else: ?>
 
-                            </select>
+                                        <span
+                                            class="badge
+                                            bg-warning text-dark"
+                                        >
+                                            Profil Tidak Ditemukan
+                                        </span>
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                                <?php if (
+                                    $profilIbuTersedia
+                                ): ?>
+
+                                    <small class="text-muted">
+
+                                        NIK:
+                                        <?= htmlspecialchars(
+                                            $profilIbu[
+                                                "nik_ibu"
+                                            ] ?? "-",
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+
+                                        <?php if (
+                                            !empty(
+                                                $profilIbu[
+                                                    "username"
+                                                ]
+                                            )
+                                        ): ?>
+
+                                            · Username:
+                                            <?= htmlspecialchars(
+                                                $profilIbu[
+                                                    "username"
+                                                ],
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ); ?>
+
+                                        <?php endif; ?>
+
+                                    </small>
+
+                                <?php endif; ?>
+
+                            </div>
 
                             <div class="form-text">
-                                Nama Ibu dan alamat akan mengikuti
-                                Profil Ibu yang dipilih.
+                                Pemilik balita tidak dapat
+                                diganti dari halaman edit.
                             </div>
 
                         </div>
 
                         <div class="col-12 col-lg-6">
 
-                            <label
-                                for="id_puskesmas"
-                                class="form-label"
-                            >
+                            <label class="form-label">
                                 Puskesmas Pembina
                             </label>
 
-                            <select
-                                id="id_puskesmas"
-                                name="id_puskesmas"
-                                class="form-select"
-                                required
-                                <?= $jumlahPuskesmas === 0
-                                    ? "disabled"
-                                    : ""; ?>
-                            >
+                            <div class="detail-item">
 
-                                <option value="">
-                                    Pilih Puskesmas
-                                </option>
+                                <span class="detail-label">
+                                    Puskesmas Kader
+                                </span>
 
-                                <?php while (
-                                    $puskesmas = mysqli_fetch_assoc(
-                                        $queryPuskesmas
-                                    )
-                                ): ?>
+                                <div class="detail-value">
 
-                                    <option
-                                        value="<?= (int)
-                                            $puskesmas["id_puskesmas"]; ?>"
-                                        <?= (int) $idPuskesmas ===
-                                            (int) $puskesmas["id_puskesmas"]
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= htmlspecialchars(
-                                            $puskesmas["nama_puskesmas"],
-                                            ENT_QUOTES,
-                                            "UTF-8"
-                                        ); ?>
-                                    </option>
+                                    <i
+                                        class="bi
+                                        bi-hospital me-1"
+                                    ></i>
 
-                                <?php endwhile; ?>
+                                    <?= htmlspecialchars(
+                                        $namaPuskesmasKader,
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
 
-                            </select>
+                                </div>
+
+                            </div>
 
                             <div class="form-text">
-                                Pilihan diambil dari master Puskesmas.
+                                Puskesmas mengikuti wilayah
+                                akun Kader dan tidak dapat
+                                dipindahkan dari halaman ini.
                             </div>
 
                         </div>
@@ -859,7 +907,8 @@ require_once "../includes/navbar.php";
 
                                 <option
                                     value="Laki-laki"
-                                    <?= $jenisKelamin === "Laki-laki"
+                                    <?= $jenisKelamin ===
+                                        "Laki-laki"
                                         ? "selected"
                                         : ""; ?>
                                 >
@@ -868,7 +917,8 @@ require_once "../includes/navbar.php";
 
                                 <option
                                     value="Perempuan"
-                                    <?= $jenisKelamin === "Perempuan"
+                                    <?= $jenisKelamin ===
+                                        "Perempuan"
                                         ? "selected"
                                         : ""; ?>
                                 >
@@ -903,23 +953,8 @@ require_once "../includes/navbar.php";
                             >
 
                             <div class="form-text">
-                                Umur dihitung ulang otomatis dalam bulan.
-                            </div>
-
-                        </div>
-
-                        <div class="col-12 col-lg-6">
-
-                            <div class="alert alert-info h-100 mb-0">
-
-                                <i class="bi bi-info-circle me-1"></i>
-
-                                <strong>Data Ibu otomatis.</strong>
-
-                                Nama Ibu dan alamat tidak diedit
-                                dari halaman balita. Perubahan data
-                                dilakukan melalui Profil Ibu.
-
+                                Umur dihitung ulang
+                                otomatis dalam bulan.
                             </div>
 
                         </div>
@@ -949,7 +984,31 @@ require_once "../includes/navbar.php";
                             >
 
                             <div class="form-text">
-                                Nama Posyandu diisi secara manual.
+                                Nama Posyandu diisi manual.
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+
+                            <div
+                                class="alert alert-info
+                                h-100 mb-0"
+                            >
+
+                                <i
+                                    class="bi
+                                    bi-info-circle me-1"
+                                ></i>
+
+                                <strong>
+                                    Data Ibu otomatis.
+                                </strong>
+
+                                Nama Ibu dan alamat mengikuti
+                                Profil Ibu pemilik balita yang
+                                sudah terhubung.
+
                             </div>
 
                         </div>
@@ -959,67 +1018,78 @@ require_once "../includes/navbar.php";
                             <div class="detail-item">
 
                                 <span class="detail-label">
-                                    Data Ibu Saat Ini
+                                    Data Ibu yang Akan Digunakan
                                 </span>
 
                                 <div class="detail-value">
+
                                     <?= htmlspecialchars(
-                                        $namaIbu !== ""
-                                            ? $namaIbu
+                                        $namaIbuProfil !== ""
+                                            ? $namaIbuProfil
                                             : "-",
                                         ENT_QUOTES,
                                         "UTF-8"
                                     ); ?>
+
                                 </div>
 
                                 <small class="text-muted">
+
                                     Alamat:
                                     <?= htmlspecialchars(
-                                        $alamat !== ""
-                                            ? $alamat
+                                        $alamatProfil !== ""
+                                            ? $alamatProfil
                                             : "-",
                                         ENT_QUOTES,
                                         "UTF-8"
                                     ); ?>
+
                                 </small>
 
                             </div>
 
                         </div>
 
-                        <div class="col-12">
+                    </div>
 
-                            <div class="d-flex flex-wrap gap-2">
+                    <hr>
 
-                                <button
-                                    type="submit"
-                                    class="btn btn-primary"
-                                    <?= (
-                                        $jumlahPuskesmas === 0
-                                        || $jumlahOrangTua === 0
-                                    )
-                                        ? "disabled"
-                                        : ""; ?>
-                                >
+                    <div class="form-actions">
 
-                                    <i class="bi bi-check-circle"></i>
+                        <button
+                            type="submit"
+                            class="btn btn-primary"
+                            <?= (
+                                !$profilIbuTersedia
+                                || $namaIbuProfil === ""
+                                || $alamatProfil === ""
+                            )
+                                ? "disabled"
+                                : ""; ?>
+                        >
 
-                                    Simpan Perubahan
+                            <i
+                                class="bi
+                                bi-check-circle"
+                            ></i>
 
-                                </button>
+                            Simpan Perubahan
 
-                                <a
-                                    href="data_balita.php"
-                                    class="btn btn-secondary"
-                                >
+                        </button>
 
-                                    Batal
+                        <a
+                            href="data_balita.php"
+                            class="btn btn-outline-secondary"
+                        >
 
-                                </a>
+                            <i
+                                class="bi
+                                bi-x-circle"
+                            ></i>
 
-                            </div>
+                            Batal
 
-                        </div>
+                        </a>
 
                     </div>
 

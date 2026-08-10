@@ -19,6 +19,99 @@ cekRole([
 $judulHalaman =
     "Detail Laporan Stunting | Sistem Deteksi Stunting";
 
+$roleAktif =
+    $_SESSION["role"] ?? "";
+
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+$aksesPuskesmasTerbatas =
+    in_array(
+        $roleAktif,
+        [
+            "petugas_gizi",
+            "kepala_puskesmas"
+        ],
+        true
+    );
+
+$idPuskesmasAktif = 0;
+
+/*
+|--------------------------------------------------------------------------
+| Menentukan Puskesmas pengguna aktif
+|--------------------------------------------------------------------------
+|
+| Petugas Gizi dan Kepala Puskesmas hanya boleh membuka detail laporan
+| balita dari Puskesmas yang sama dengan akun mereka.
+| Dinkes tetap dapat membuka seluruh wilayah.
+|
+*/
+
+if ($aksesPuskesmasTerbatas) {
+
+    $stmtPuskesmas = mysqli_prepare(
+        $conn,
+        "SELECT id_puskesmas
+         FROM pengguna
+         WHERE id_user = ?
+         LIMIT 1"
+    );
+
+    if (!$stmtPuskesmas) {
+        die(
+            "Gagal memeriksa Puskesmas pengguna: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmas,
+        "i",
+        $idUserAktif
+    );
+
+    mysqli_stmt_execute(
+        $stmtPuskesmas
+    );
+
+    $hasilPuskesmas =
+        mysqli_stmt_get_result(
+            $stmtPuskesmas
+        );
+
+    $dataPuskesmas =
+        mysqli_fetch_assoc(
+            $hasilPuskesmas
+        );
+
+    mysqli_stmt_close(
+        $stmtPuskesmas
+    );
+
+    if (
+        !$dataPuskesmas
+        || empty(
+            $dataPuskesmas["id_puskesmas"]
+        )
+    ) {
+        http_response_code(403);
+
+        echo "
+            <h2>Akses Ditolak</h2>
+            <p>Akun ini belum terhubung dengan Puskesmas.</p>
+            <a href='laporan_stunting.php'>Kembali ke Laporan</a>
+        ";
+
+        exit;
+    }
+
+    $idPuskesmasAktif =
+        (int) $dataPuskesmas[
+            "id_puskesmas"
+        ];
+}
+
 /*
 |--------------------------------------------------------------------------
 | Fungsi bantuan
@@ -147,8 +240,15 @@ if (!$idDeteksi || $idDeteksi < 1) {
 |--------------------------------------------------------------------------
 |
 | Skrining yang dipakai adalah skrining terakhir milik balita.
+| Untuk Petugas Gizi dan Kepala Puskesmas, detail juga dibatasi
+| berdasarkan Puskesmas akun aktif.
 |
 */
+
+$filterPuskesmasDetail =
+    $aksesPuskesmasTerbatas
+        ? " AND b.id_puskesmas = ? "
+        : "";
 
 $stmtDetail = mysqli_prepare(
     $conn,
@@ -206,7 +306,9 @@ $stmtDetail = mysqli_prepare(
         )
 
      WHERE hd.id_deteksi = ?
-
+     "
+     . $filterPuskesmasDetail
+     . "
      LIMIT 1"
 );
 
@@ -217,11 +319,23 @@ if (!$stmtDetail) {
     );
 }
 
-mysqli_stmt_bind_param(
-    $stmtDetail,
-    "i",
-    $idDeteksi
-);
+if ($aksesPuskesmasTerbatas) {
+
+    mysqli_stmt_bind_param(
+        $stmtDetail,
+        "ii",
+        $idDeteksi,
+        $idPuskesmasAktif
+    );
+
+} else {
+
+    mysqli_stmt_bind_param(
+        $stmtDetail,
+        "i",
+        $idDeteksi
+    );
+}
 
 mysqli_stmt_execute($stmtDetail);
 

@@ -246,86 +246,186 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     /*
     |--------------------------------------------------------------------------
-    | Simpan profil
+    | Simpan profil dan sinkronkan data ibu pada balita
     |--------------------------------------------------------------------------
+    |
+    | Profil Orang Tua menjadi sumber data utama untuk nama ibu dan alamat.
+    | Setelah profil disimpan, seluruh balita dengan id_user yang sama ikut
+    | diperbarui agar tidak menyimpan nama/alamat lama.
+    |
     */
 
     if ($pesanError === "") {
 
-        $stmtSimpan = mysqli_prepare(
-            $conn,
-            "INSERT INTO orang_tua (
-                id_user,
-                nik_ibu,
-                nama_ibu,
-                no_hp,
-                alamat,
-                pendidikan_ibu,
-                pekerjaan_ibu
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+        if (!mysqli_begin_transaction($conn)) {
 
-            ON DUPLICATE KEY UPDATE
-                nik_ibu = VALUES(nik_ibu),
-                nama_ibu = VALUES(nama_ibu),
-                no_hp = VALUES(no_hp),
-                alamat = VALUES(alamat),
-                pendidikan_ibu =
-                    VALUES(pendidikan_ibu),
-                pekerjaan_ibu =
-                    VALUES(pekerjaan_ibu)"
-        );
-
-        if (!$stmtSimpan) {
             $pesanError =
-                "Gagal menyiapkan penyimpanan profil ibu: "
+                "Gagal memulai penyimpanan profil ibu: "
                 . mysqli_error($conn);
 
         } else {
 
-            mysqli_stmt_bind_param(
-                $stmtSimpan,
-                "issssss",
-                $idUserAktif,
-                $nikIbu,
-                $namaIbu,
-                $noHp,
-                $alamat,
-                $pendidikanIbu,
-                $pekerjaanIbu
+            $stmtSimpan = mysqli_prepare(
+                $conn,
+                "INSERT INTO orang_tua (
+                    id_user,
+                    nik_ibu,
+                    nama_ibu,
+                    no_hp,
+                    alamat,
+                    pendidikan_ibu,
+                    pekerjaan_ibu
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+
+                ON DUPLICATE KEY UPDATE
+                    nik_ibu = VALUES(nik_ibu),
+                    nama_ibu = VALUES(nama_ibu),
+                    no_hp = VALUES(no_hp),
+                    alamat = VALUES(alamat),
+                    pendidikan_ibu =
+                        VALUES(pendidikan_ibu),
+                    pekerjaan_ibu =
+                        VALUES(pekerjaan_ibu)"
             );
 
-            if (
-                mysqli_stmt_execute(
-                    $stmtSimpan
-                )
-            ) {
-                mysqli_stmt_close(
-                    $stmtSimpan
-                );
+            if (!$stmtSimpan) {
 
-                header(
-                    "Location: profil_orang_tua.php?pesan="
-                    . (
-                        $profilSudahAda
-                            ? "edit_berhasil"
-                            : "simpan_berhasil"
-                    )
-                );
+                mysqli_rollback($conn);
 
-                exit;
+                $pesanError =
+                    "Gagal menyiapkan penyimpanan profil ibu: "
+                    . mysqli_error($conn);
 
             } else {
 
-                $pesanError =
-                    "Profil ibu gagal disimpan: "
-                    . mysqli_stmt_error(
+                mysqli_stmt_bind_param(
+                    $stmtSimpan,
+                    "issssss",
+                    $idUserAktif,
+                    $nikIbu,
+                    $namaIbu,
+                    $noHp,
+                    $alamat,
+                    $pendidikanIbu,
+                    $pekerjaanIbu
+                );
+
+                if (
+                    !mysqli_stmt_execute(
+                        $stmtSimpan
+                    )
+                ) {
+
+                    $errorSimpan =
+                        mysqli_stmt_error(
+                            $stmtSimpan
+                        );
+
+                    mysqli_stmt_close(
                         $stmtSimpan
                     );
 
-                mysqli_stmt_close(
-                    $stmtSimpan
-                );
+                    mysqli_rollback($conn);
+
+                    $pesanError =
+                        "Profil ibu gagal disimpan: "
+                        . $errorSimpan;
+
+                } else {
+
+                    mysqli_stmt_close(
+                        $stmtSimpan
+                    );
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Sinkronisasi nama ibu dan alamat ke seluruh balita milik akun
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $stmtSinkron = mysqli_prepare(
+                        $conn,
+                        "UPDATE balita
+                         SET
+                            nama_ibu = ?,
+                            alamat = ?
+                         WHERE id_user = ?"
+                    );
+
+                    if (!$stmtSinkron) {
+
+                        mysqli_rollback($conn);
+
+                        $pesanError =
+                            "Profil ibu belum dapat disinkronkan ke data balita: "
+                            . mysqli_error($conn);
+
+                    } else {
+
+                        mysqli_stmt_bind_param(
+                            $stmtSinkron,
+                            "ssi",
+                            $namaIbu,
+                            $alamat,
+                            $idUserAktif
+                        );
+
+                        if (
+                            !mysqli_stmt_execute(
+                                $stmtSinkron
+                            )
+                        ) {
+
+                            $errorSinkron =
+                                mysqli_stmt_error(
+                                    $stmtSinkron
+                                );
+
+                            mysqli_stmt_close(
+                                $stmtSinkron
+                            );
+
+                            mysqli_rollback($conn);
+
+                            $pesanError =
+                                "Profil ibu gagal disinkronkan ke data balita: "
+                                . $errorSinkron;
+
+                        } else {
+
+                            mysqli_stmt_close(
+                                $stmtSinkron
+                            );
+
+                            if (
+                                !mysqli_commit(
+                                    $conn
+                                )
+                            ) {
+
+                                mysqli_rollback($conn);
+
+                                $pesanError =
+                                    "Perubahan profil ibu gagal diselesaikan: "
+                                    . mysqli_error($conn);
+
+                            } else {
+
+                                header(
+                                    "Location: profil_orang_tua.php?pesan="
+                                    . (
+                                        $profilSudahAda
+                                            ? "edit_berhasil"
+                                            : "simpan_berhasil"
+                                    )
+                                );
+
+                                exit;
+                            }
+                        }
+                    }
+                }
             }
         }
     }

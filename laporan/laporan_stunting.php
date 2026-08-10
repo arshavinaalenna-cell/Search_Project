@@ -19,6 +19,110 @@ cekRole([
 $judulHalaman =
     "Laporan Stunting | Sistem Deteksi Stunting";
 
+$roleAktif =
+    $_SESSION["role"] ?? "";
+
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+$aksesPuskesmasTerbatas =
+    in_array(
+        $roleAktif,
+        [
+            "petugas_gizi",
+            "kepala_puskesmas"
+        ],
+        true
+    );
+
+$idPuskesmasAkun = 0;
+$namaPuskesmasAkun = "";
+$puskesmasBelumTerhubung = false;
+
+/*
+|--------------------------------------------------------------------------
+| Menentukan Puskesmas akun aktif
+|--------------------------------------------------------------------------
+|
+| Petugas Gizi dan Kepala Puskesmas hanya boleh melihat laporan dari
+| Puskesmas yang terhubung dengan akun mereka. Dinkes dapat melihat semua.
+|
+*/
+
+if ($aksesPuskesmasTerbatas) {
+
+    $stmtPuskesmasAkun = mysqli_prepare(
+        $conn,
+        "SELECT
+            u.id_puskesmas,
+            p.nama_puskesmas
+         FROM pengguna AS u
+         LEFT JOIN puskesmas AS p
+            ON u.id_puskesmas = p.id_puskesmas
+         WHERE u.id_user = ?
+         LIMIT 1"
+    );
+
+    if (!$stmtPuskesmasAkun) {
+        die(
+            "Gagal memeriksa Puskesmas pengguna: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmasAkun,
+        "i",
+        $idUserAktif
+    );
+
+    mysqli_stmt_execute(
+        $stmtPuskesmasAkun
+    );
+
+    $hasilPuskesmasAkun =
+        mysqli_stmt_get_result(
+            $stmtPuskesmasAkun
+        );
+
+    $dataPuskesmasAkun =
+        mysqli_fetch_assoc(
+            $hasilPuskesmasAkun
+        );
+
+    mysqli_stmt_close(
+        $stmtPuskesmasAkun
+    );
+
+    if (
+        !$dataPuskesmasAkun
+        || empty(
+            $dataPuskesmasAkun[
+                "id_puskesmas"
+            ]
+        )
+        || empty(
+            $dataPuskesmasAkun[
+                "nama_puskesmas"
+            ]
+        )
+    ) {
+        $puskesmasBelumTerhubung = true;
+    } else {
+        $idPuskesmasAkun =
+            (int) $dataPuskesmasAkun[
+                "id_puskesmas"
+            ];
+
+        $namaPuskesmasAkun =
+            trim(
+                (string) $dataPuskesmasAkun[
+                    "nama_puskesmas"
+                ]
+            );
+    }
+}
+
 /*
 |--------------------------------------------------------------------------
 | Fungsi keamanan output
@@ -156,30 +260,52 @@ function kelasStatusLaporan($status): string
 |--------------------------------------------------------------------------
 | Mengambil master Puskesmas
 |--------------------------------------------------------------------------
+|
+| Dinkes mendapat seluruh daftar Puskesmas untuk filter.
+| Petugas Gizi dan Kepala Puskesmas hanya mendapat Puskesmas akunnya.
+|
 */
-
-$queryPuskesmas = mysqli_query(
-    $conn,
-    "SELECT
-        id_puskesmas,
-        nama_puskesmas
-     FROM puskesmas
-     ORDER BY nama_puskesmas ASC"
-);
-
-if (!$queryPuskesmas) {
-    die(
-        "Gagal mengambil data Puskesmas: "
-        . mysqli_error($conn)
-    );
-}
 
 $daftarPuskesmas = [];
 
-while (
-    $puskesmas = mysqli_fetch_assoc($queryPuskesmas)
+if ($roleAktif === "dinkes") {
+
+    $queryPuskesmas = mysqli_query(
+        $conn,
+        "SELECT
+            id_puskesmas,
+            nama_puskesmas
+         FROM puskesmas
+         ORDER BY nama_puskesmas ASC"
+    );
+
+    if (!$queryPuskesmas) {
+        die(
+            "Gagal mengambil data Puskesmas: "
+            . mysqli_error($conn)
+        );
+    }
+
+    while (
+        $puskesmas =
+            mysqli_fetch_assoc(
+                $queryPuskesmas
+            )
+    ) {
+        $daftarPuskesmas[] =
+            $puskesmas;
+    }
+
+} elseif (
+    !$puskesmasBelumTerhubung
 ) {
-    $daftarPuskesmas[] = $puskesmas;
+
+    $daftarPuskesmas[] = [
+        "id_puskesmas" =>
+            $idPuskesmasAkun,
+        "nama_puskesmas" =>
+            $namaPuskesmasAkun
+    ];
 }
 
 /*
@@ -205,20 +331,41 @@ $tanggalAkhir = trim(
     ?? $tanggalAkhirDefault
 );
 
-$idPuskesmas = filter_input(
-    INPUT_GET,
-    "id_puskesmas",
-    FILTER_VALIDATE_INT
-);
-
-if ($idPuskesmas === false || $idPuskesmas === null) {
-    $idPuskesmas = 0;
-}
-
-$idPuskesmas = (int) $idPuskesmas;
-
 $pesanError = "";
-$namaPuskesmasDipilih = "Semua Puskesmas";
+
+if ($aksesPuskesmasTerbatas) {
+
+    $idPuskesmas =
+        $puskesmasBelumTerhubung
+            ? 0
+            : $idPuskesmasAkun;
+
+    $namaPuskesmasDipilih =
+        $puskesmasBelumTerhubung
+            ? "Puskesmas belum terhubung"
+            : $namaPuskesmasAkun;
+
+} else {
+
+    $idPuskesmas = filter_input(
+        INPUT_GET,
+        "id_puskesmas",
+        FILTER_VALIDATE_INT
+    );
+
+    if (
+        $idPuskesmas === false
+        || $idPuskesmas === null
+    ) {
+        $idPuskesmas = 0;
+    }
+
+    $idPuskesmas =
+        (int) $idPuskesmas;
+
+    $namaPuskesmasDipilih =
+        "Semua Puskesmas";
+}
 
 if (!tanggalLaporanValid($tanggalAwal)) {
     $pesanError =
@@ -253,7 +400,10 @@ if ($tanggalAwal > $tanggalAkhir) {
 |--------------------------------------------------------------------------
 */
 
-if ($idPuskesmas > 0) {
+if (
+    $roleAktif === "dinkes"
+    && $idPuskesmas > 0
+) {
 
     $puskesmasDitemukan = false;
 
@@ -326,7 +476,14 @@ $sql = "
         BETWEEN ? AND ?
 ";
 
-if ($idPuskesmas > 0) {
+if (
+    $aksesPuskesmasTerbatas
+    && $puskesmasBelumTerhubung
+) {
+    $sql .= "
+        AND 1 = 0
+    ";
+} elseif ($idPuskesmas > 0) {
     $sql .= "
         AND b.id_puskesmas = ?
     ";
@@ -350,7 +507,10 @@ if (!$stmtLaporan) {
     );
 }
 
-if ($idPuskesmas > 0) {
+if (
+    !$puskesmasBelumTerhubung
+    && $idPuskesmas > 0
+) {
 
     mysqli_stmt_bind_param(
         $stmtLaporan,
@@ -625,6 +785,17 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
+        <?php if ($puskesmasBelumTerhubung): ?>
+
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                Akun ini belum terhubung dengan Puskesmas.
+                Laporan wilayah tidak dapat ditampilkan sebelum
+                Puskesmas akun ditentukan.
+            </div>
+
+        <?php endif; ?>
+
         <!-- Header halaman -->
         <div class="page-header">
 
@@ -657,16 +828,20 @@ require_once "../includes/navbar.php";
                     Kembali ke Dashboard
                 </a>
 
-                <a
-                    href="cetak_laporan.php?<?= amanLaporan(
-                        $parameterCetak
-                    ); ?>"
-                    class="btn btn-primary"
-                    target="_blank"
-                >
-                    <i class="bi bi-printer"></i>
-                    Cetak Laporan
-                </a>
+                <?php if (!$puskesmasBelumTerhubung): ?>
+
+                    <a
+                        href="cetak_laporan.php?<?= amanLaporan(
+                            $parameterCetak
+                        ); ?>"
+                        class="btn btn-primary"
+                        target="_blank"
+                    >
+                        <i class="bi bi-printer"></i>
+                        Cetak Laporan
+                    </a>
+
+                <?php endif; ?>
 
             </div>
 
@@ -783,43 +958,89 @@ require_once "../includes/navbar.php";
                                 Puskesmas
                             </label>
 
-                            <select
-                                name="id_puskesmas"
-                                id="id_puskesmas"
-                                class="form-select"
-                            >
+                            <?php if (
+                                $roleAktif === "dinkes"
+                            ): ?>
 
-                                <option value="0">
-                                    Semua Puskesmas
-                                </option>
+                                <select
+                                    name="id_puskesmas"
+                                    id="id_puskesmas"
+                                    class="form-select"
+                                >
 
-                                <?php foreach (
-                                    $daftarPuskesmas
-                                    as $puskesmas
-                                ): ?>
-
-                                    <option
-                                        value="<?= (int)
-                                            $puskesmas[
-                                                "id_puskesmas"
-                                            ]; ?>"
-                                        <?= $idPuskesmas ===
-                                            (int) $puskesmas[
-                                                "id_puskesmas"
-                                            ]
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= amanLaporan(
-                                            $puskesmas[
-                                                "nama_puskesmas"
-                                            ]
-                                        ); ?>
+                                    <option value="0">
+                                        Semua Puskesmas
                                     </option>
 
-                                <?php endforeach; ?>
+                                    <?php foreach (
+                                        $daftarPuskesmas
+                                        as $puskesmas
+                                    ): ?>
 
-                            </select>
+                                        <option
+                                            value="<?= (int)
+                                                $puskesmas[
+                                                    "id_puskesmas"
+                                                ]; ?>"
+                                            <?= $idPuskesmas ===
+                                                (int) $puskesmas[
+                                                    "id_puskesmas"
+                                                ]
+                                                ? "selected"
+                                                : ""; ?>
+                                        >
+                                            <?= amanLaporan(
+                                                $puskesmas[
+                                                    "nama_puskesmas"
+                                                ]
+                                            ); ?>
+                                        </option>
+
+                                    <?php endforeach; ?>
+
+                                </select>
+
+                            <?php else: ?>
+
+                                <div class="detail-item">
+
+                                    <span class="detail-label">
+                                        Puskesmas Akun
+                                    </span>
+
+                                    <div class="detail-value">
+
+                                        <?php if (
+                                            !$puskesmasBelumTerhubung
+                                        ): ?>
+
+                                            <i class="bi bi-hospital me-1"></i>
+
+                                            <?= amanLaporan(
+                                                $namaPuskesmasAkun
+                                            ); ?>
+
+                                        <?php else: ?>
+
+                                            <span
+                                                class="badge
+                                                bg-warning text-dark"
+                                            >
+                                                Belum Terhubung
+                                            </span>
+
+                                        <?php endif; ?>
+
+                                    </div>
+
+                                </div>
+
+                                <small class="text-muted">
+                                    Wilayah laporan mengikuti
+                                    Puskesmas akun dan tidak dapat diubah.
+                                </small>
+
+                            <?php endif; ?>
 
                         </div>
 

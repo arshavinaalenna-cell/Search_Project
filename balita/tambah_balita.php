@@ -11,7 +11,9 @@ $judulHalaman = "Tambah Balita | Sistem Deteksi Stunting";
 $pesanError = "";
 
 $idUser = "";
-$idPuskesmas = "";
+$idPuskesmas = 0;
+$namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
 $nikBalita = "";
 $namaBalita = "";
 $jenisKelamin = "";
@@ -22,27 +24,88 @@ $namaPosyandu = "";
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil master Puskesmas untuk dropdown
+| Mengambil Puskesmas Kader aktif
 |--------------------------------------------------------------------------
+|
+| Puskesmas balita tidak lagi dipilih manual. Setiap balita yang ditambahkan
+| oleh Kader otomatis mengikuti Puskesmas yang terhubung ke akun Kader.
+|
 */
 
-$queryPuskesmas = mysqli_query(
+$idKaderAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+$stmtPuskesmasAktif = mysqli_prepare(
     $conn,
     "SELECT
-        id_puskesmas,
-        nama_puskesmas
-     FROM puskesmas
-     ORDER BY nama_puskesmas ASC"
+        u.id_puskesmas,
+        ps.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS ps
+        ON u.id_puskesmas = ps.id_puskesmas
+     WHERE u.id_user = ?
+     AND u.role = 'kader'
+     LIMIT 1"
 );
 
-if (!$queryPuskesmas) {
+if (!$stmtPuskesmasAktif) {
     die(
-        "Gagal mengambil data Puskesmas: "
+        "Gagal memeriksa Puskesmas Kader: "
         . mysqli_error($conn)
     );
 }
 
-$jumlahPuskesmas = mysqli_num_rows($queryPuskesmas);
+mysqli_stmt_bind_param(
+    $stmtPuskesmasAktif,
+    "i",
+    $idKaderAktif
+);
+
+mysqli_stmt_execute(
+    $stmtPuskesmasAktif
+);
+
+$hasilPuskesmasAktif =
+    mysqli_stmt_get_result(
+        $stmtPuskesmasAktif
+    );
+
+$dataPuskesmasAktif =
+    mysqli_fetch_assoc(
+        $hasilPuskesmasAktif
+    );
+
+mysqli_stmt_close(
+    $stmtPuskesmasAktif
+);
+
+if (
+    !$dataPuskesmasAktif
+    || empty(
+        $dataPuskesmasAktif[
+            "id_puskesmas"
+        ]
+    )
+    || empty(
+        $dataPuskesmasAktif[
+            "nama_puskesmas"
+        ]
+    )
+) {
+    $puskesmasBelumTerhubung = true;
+} else {
+    $idPuskesmas =
+        (int) $dataPuskesmasAktif[
+            "id_puskesmas"
+        ];
+
+    $namaPuskesmasAktif =
+        trim(
+            (string) $dataPuskesmasAktif[
+                "nama_puskesmas"
+            ]
+        );
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -116,7 +179,6 @@ function hitungUmurBulan(string $tanggalLahir): int
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $idUser = trim($_POST["id_user"] ?? "");
-    $idPuskesmas = trim($_POST["id_puskesmas"] ?? "");
     $nikBalita = preg_replace(
         "/\D/",
         "",
@@ -142,17 +204,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     |--------------------------------------------------------------------------
     */
 
-    if ($jumlahPuskesmas === 0) {
+    if ($puskesmasBelumTerhubung) {
         $pesanError =
-            "Master Puskesmas masih kosong. Isi data Puskesmas terlebih dahulu.";
+            "Akun Kader belum terhubung dengan Puskesmas. Hubungkan akun Kader ke Puskesmas terlebih dahulu.";
     } elseif ($jumlahOrangTua === 0) {
         $pesanError =
             "Belum ada profil Ibu yang dapat dipilih. Orang Tua harus melengkapi profil terlebih dahulu.";
     } elseif ($idUser === "" || !ctype_digit($idUser)) {
         $pesanError =
             "Profil Ibu wajib dipilih.";
-    } elseif ($idPuskesmas === "" || !ctype_digit($idPuskesmas)) {
-        $pesanError = "Puskesmas wajib dipilih.";
     } elseif ($nikBalita === "") {
         $pesanError = "NIK balita wajib diisi.";
     } elseif (strlen($nikBalita) !== 16) {
@@ -175,41 +235,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     /*
     |--------------------------------------------------------------------------
-    | Memastikan Puskesmas valid
+    | Memastikan Puskesmas tetap mengikuti akun Kader
     |--------------------------------------------------------------------------
     */
 
-    if ($pesanError === "") {
-        $idPuskesmasInt = (int) $idPuskesmas;
-
-        $stmtPuskesmas = mysqli_prepare(
-            $conn,
-            "SELECT id_puskesmas
-             FROM puskesmas
-             WHERE id_puskesmas = ?
-             LIMIT 1"
-        );
-
-        if (!$stmtPuskesmas) {
-            $pesanError = "Gagal memeriksa data Puskesmas.";
-        } else {
-            mysqli_stmt_bind_param(
-                $stmtPuskesmas,
-                "i",
-                $idPuskesmasInt
-            );
-            mysqli_stmt_execute($stmtPuskesmas);
-
-            $hasilPuskesmas = mysqli_stmt_get_result(
-                $stmtPuskesmas
-            );
-
-            if (mysqli_num_rows($hasilPuskesmas) === 0) {
-                $pesanError = "Puskesmas yang dipilih tidak ditemukan.";
-            }
-
-            mysqli_stmt_close($stmtPuskesmas);
-        }
+    if (
+        $pesanError === ""
+        && $idPuskesmas < 1
+    ) {
+        $pesanError =
+            "Puskesmas akun Kader tidak valid.";
     }
 
     /*
@@ -350,7 +385,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     */
 
     if ($pesanError === "") {
-        $idPuskesmasInt = (int) $idPuskesmas;
+        $idPuskesmasInt = $idPuskesmas;
         $umur = hitungUmurBulan($tanggalLahir);
 
         $stmtSimpan = mysqli_prepare(
@@ -449,13 +484,14 @@ require_once "../includes/navbar.php";
 
         <?php endif; ?>
 
-        <?php if ($jumlahPuskesmas === 0): ?>
+        <?php if ($puskesmasBelumTerhubung): ?>
 
             <div class="alert alert-warning">
                 <i class="bi bi-exclamation-triangle me-1"></i>
-                Belum ada data pada master Puskesmas. Dropdown Puskesmas
-                belum dapat digunakan sampai tabel
-                <strong>puskesmas</strong> diisi.
+                Akun Kader belum terhubung dengan Puskesmas.
+                Hubungkan akun Kader melalui menu
+                <strong>Data Pengguna</strong>
+                sebelum menambahkan balita.
             </div>
 
         <?php endif; ?>
@@ -482,7 +518,8 @@ require_once "../includes/navbar.php";
 
                     <small class="text-muted">
                         Pilih profil Ibu yang sudah terdaftar, lalu
-                        lengkapi identitas balita dan fasilitas pembina.
+                        lengkapi identitas balita. Puskesmas mengikuti
+                        akun Kader secara otomatis.
                     </small>
                 </div>
 
@@ -725,56 +762,52 @@ require_once "../includes/navbar.php";
                         </div>
 
                         <div class="col-12 col-lg-6">
-                            <label
-                                for="id_puskesmas"
-                                class="form-label"
-                            >
+
+                            <label class="form-label">
                                 Puskesmas
-                                <span class="text-danger">*</span>
                             </label>
 
-                            <select
-                                id="id_puskesmas"
-                                name="id_puskesmas"
-                                class="form-select"
-                                <?= $jumlahPuskesmas === 0
-                                    ? "disabled"
-                                    : "required"; ?>
-                            >
-                                <option value="">
-                                    Pilih Puskesmas
-                                </option>
+                            <div class="detail-item">
 
-                                <?php
-                                mysqli_data_seek($queryPuskesmas, 0);
-                                ?>
+                                <span class="detail-label">
+                                    Puskesmas Kader
+                                </span>
 
-                                <?php while (
-                                    $puskesmas = mysqli_fetch_assoc(
-                                        $queryPuskesmas
-                                    )
-                                ): ?>
+                                <div class="detail-value">
 
-                                    <option
-                                        value="<?= (int)
-                                            $puskesmas["id_puskesmas"]; ?>"
-                                        <?= (string) $idPuskesmas ===
-                                            (string) $puskesmas["id_puskesmas"]
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
+                                    <?php if (
+                                        !$puskesmasBelumTerhubung
+                                    ): ?>
+
+                                        <i class="bi bi-hospital me-1"></i>
+
                                         <?= htmlspecialchars(
-                                            $puskesmas["nama_puskesmas"],
+                                            $namaPuskesmasAktif,
                                             ENT_QUOTES,
                                             "UTF-8"
                                         ); ?>
-                                    </option>
 
-                                <?php endwhile; ?>
-                            </select>
+                                    <?php else: ?>
+
+                                        <span
+                                            class="badge
+                                            bg-warning text-dark"
+                                        >
+                                            Belum Terhubung
+                                        </span>
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                            </div>
 
                             <small class="text-muted">
+                                Puskesmas ditentukan otomatis
+                                berdasarkan akun Kader dan tidak
+                                dapat diubah dari form ini.
                             </small>
+
                         </div>
 
                         <div class="col-12">
@@ -808,7 +841,7 @@ require_once "../includes/navbar.php";
                             type="submit"
                             class="btn btn-primary"
                             <?= (
-                                $jumlahPuskesmas === 0
+                                $puskesmasBelumTerhubung
                                 || $jumlahOrangTua === 0
                             )
                                 ? "disabled"
