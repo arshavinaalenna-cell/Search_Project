@@ -56,6 +56,12 @@ switch ($rolePengguna) {
                 "nilai" => $totalPengukuran ?? 0,
                 "ikon" => "bi-rulers",
                 "kelas" => "stat-success"
+            ],
+            [
+                "label" => "Skrining Awal",
+                "nilai" => $totalSkrining ?? 0,
+                "ikon" => "bi-clipboard2-check",
+                "kelas" => "stat-warning"
             ]
         ];
         break;
@@ -243,6 +249,14 @@ switch ($rolePengguna) {
                 "ikon" => "bi-rulers",
                 "url" => "../pengukuran/data_pengukuran.php",
                 "tombol" => "Buka Pengukuran"
+            ],
+            [
+                "judul" => "Skrining Awal",
+                "deskripsi" =>
+                    "Isi dan kelola data skrining awal faktor risiko balita.",
+                "ikon" => "bi-clipboard2-heart",
+                "url" => "../skrining/hasil_skrining.php",
+                "tombol" => "Buka Skrining"
             ]
         ];
         break;
@@ -422,6 +436,7 @@ if ($rolePengguna === "kader" && $filterPuskesmas > 0) {
         if (
             strpos($aksi["url"], "data_balita.php") !== false
             || strpos($aksi["url"], "data_pengukuran.php") !== false
+            || strpos($aksi["url"], "hasil_skrining.php") !== false
         ) {
             $aksi["url"] .= "?puskesmas=" . $filterPuskesmas;
         }
