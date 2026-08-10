@@ -171,79 +171,113 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div
-            class="d-flex flex-column flex-md-row
-            justify-content-between align-items-md-center
-            gap-3 mb-4"
-        >
-            <div>
-                <h2 class="mb-1">
-                    Riwayat Kesehatan Anak
-                </h2>
-
-                <p class="text-muted mb-0">
-                    Data riwayat penyakit, imunisasi,
-                    dan perawatan balita.
-                </p>
-            </div>
-
-            <?php if ($roleAktif === "petugas_kia"): ?>
-
-                <a
-                    href="tambah_kesehatan.php"
-                    class="btn btn-success"
-                >
-                    + Tambah Data
-                </a>
-
-            <?php endif; ?>
-        </div>
-
-        <?php if (isset($_GET["pesan"])): ?>
-
-            <?php if ($_GET["pesan"] === "tambah_berhasil"): ?>
-
-                <div class="alert alert-success">
-                    Riwayat kesehatan berhasil ditambahkan.
-                </div>
-
-            <?php elseif ($_GET["pesan"] === "edit_berhasil"): ?>
-
-                <div class="alert alert-success">
-                    Riwayat kesehatan berhasil diperbarui.
-                </div>
-
-            <?php elseif ($_GET["pesan"] === "hapus_berhasil"): ?>
-
-                <div class="alert alert-success">
-                    Riwayat kesehatan berhasil dihapus.
-                </div>
-
-            <?php elseif ($_GET["pesan"] === "hapus_gagal"): ?>
-
-                <div class="alert alert-danger">
-                    Riwayat kesehatan gagal dihapus.
-                </div>
-
-            <?php elseif ($_GET["pesan"] === "tidak_ditemukan"): ?>
-
-                <div class="alert alert-warning">
-                    Riwayat kesehatan tidak ditemukan.
-                </div>
-
-            <?php endif; ?>
-
-        <?php endif; ?>
-
         <div class="card content-card">
 
-            <div class="card-body p-4">
+            <div class="card-header">
+
+                <div>
+
+                    <h4 class="mb-1">
+                        Riwayat Kesehatan Anak
+                    </h4>
+
+                    <small class="text-muted">
+                        Data riwayat penyakit, imunisasi,
+                        dan perawatan balita.
+                    </small>
+
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+
+                    <a
+                        href="../dashboard/dashboard.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                    <?php if (
+                        $roleAktif === "petugas_kia"
+                    ): ?>
+
+                        <a
+                            href="tambah_kesehatan.php"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-plus-circle"></i>
+                            Tambah Data
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+            <div class="card-body">
+
+                <?php if (isset($_GET["pesan"])): ?>
+
+                    <?php if (
+                        $_GET["pesan"] === "tambah_berhasil"
+                    ): ?>
+
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Riwayat kesehatan berhasil ditambahkan.
+                        </div>
+
+                    <?php elseif (
+                        $_GET["pesan"] === "edit_berhasil"
+                    ): ?>
+
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Riwayat kesehatan berhasil diperbarui.
+                        </div>
+
+                    <?php elseif (
+                        $_GET["pesan"] === "hapus_berhasil"
+                    ): ?>
+
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Riwayat kesehatan berhasil dihapus.
+                        </div>
+
+                    <?php elseif (
+                        $_GET["pesan"] === "hapus_gagal"
+                    ): ?>
+
+                        <div class="alert alert-danger">
+                            <i class="bi bi-x-circle me-1"></i>
+                            Riwayat kesehatan gagal dihapus.
+                        </div>
+
+                    <?php elseif (
+                        $_GET["pesan"] === "tidak_ditemukan"
+                    ): ?>
+
+                        <div class="alert alert-warning">
+                            <i
+                                class="bi
+                                bi-exclamation-triangle me-1"
+                            ></i>
+                            Riwayat kesehatan tidak ditemukan.
+                        </div>
+
+                    <?php endif; ?>
+
+                <?php endif; ?>
 
                 <form
                     method="GET"
-                    class="row g-2 mb-4"
+                    class="row g-2 mb-3"
                 >
-                    <div class="col-12 col-md-7">
+
+                    <div class="col-12 col-md-8">
 
                         <input
                             type="text"
@@ -254,7 +288,7 @@ require_once "../includes/navbar.php";
                                 $cari,
                                 ENT_QUOTES,
                                 "UTF-8"
-                            ) ?>"
+                            ); ?>"
                         >
 
                     </div>
@@ -265,6 +299,7 @@ require_once "../includes/navbar.php";
                             type="submit"
                             class="btn btn-primary w-100"
                         >
+                            <i class="bi bi-search"></i>
                             Cari
                         </button>
 
@@ -276,139 +311,248 @@ require_once "../includes/navbar.php";
                             href="riwayat_kesehatan.php"
                             class="btn btn-outline-secondary w-100"
                         >
+                            <i
+                                class="bi
+                                bi-arrow-counterclockwise"
+                            ></i>
                             Reset
                         </a>
 
                     </div>
+
                 </form>
+
+                <div
+                    class="d-flex flex-wrap
+                    justify-content-between align-items-center
+                    gap-2 mb-3"
+                >
+
+                    <span class="text-muted small">
+                        Total data:
+                        <strong>
+                            <?= mysqli_num_rows($query); ?>
+                        </strong>
+                        riwayat kesehatan
+                    </span>
+
+                    <?php if (
+                        $roleAktif !== "petugas_kia"
+                    ): ?>
+
+                        <span class="badge badge-info">
+                            <i class="bi bi-eye"></i>
+                            Mode lihat
+                        </span>
+
+                    <?php endif; ?>
+
+                </div>
 
                 <div class="table-responsive">
 
-                    <table
-                        class="table table-bordered table-striped
-                        table-hover align-middle"
-                    >
+                    <table class="table table-hover align-middle">
 
-                        <thead class="table-dark">
+                        <thead>
 
                             <tr>
-                                <th>No.</th>
-                                <th>Nama Balita</th>
-                                <th>NIK Balita</th>
-                                <th>Riwayat Penyakit</th>
-                                <th>Riwayat Imunisasi</th>
-                                <th>Riwayat Perawatan</th>
-                                <th style="min-width: 210px;">
+
+                                <th class="text-center">
+                                    No
+                                </th>
+
+                                <th>
+                                    Nama Balita
+                                </th>
+
+                                <th>
+                                    NIK Balita
+                                </th>
+
+                                <th>
+                                    Riwayat Penyakit
+                                </th>
+
+                                <th>
+                                    Riwayat Imunisasi
+                                </th>
+
+                                <th>
+                                    Riwayat Perawatan
+                                </th>
+
+                                <th
+                                    class="text-center"
+                                    style="min-width: 210px;"
+                                >
                                     Aksi
                                 </th>
+
                             </tr>
 
                         </thead>
 
                         <tbody>
 
-                            <?php if (mysqli_num_rows($query) > 0): ?>
+                            <?php if (
+                                mysqli_num_rows($query) > 0
+                            ): ?>
 
                                 <?php
                                 $no = 1;
 
                                 while (
-                                    $d = mysqli_fetch_assoc($query)
+                                    $d = mysqli_fetch_assoc(
+                                        $query
+                                    )
                                 ):
                                 ?>
 
                                     <tr>
 
-                                        <td><?= $no++ ?></td>
+                                        <td class="text-center">
+                                            <?= $no++; ?>
+                                        </td>
 
                                         <td>
-                                            <?= htmlspecialchars(
-                                                $d["nama_balita"],
-                                                ENT_QUOTES,
-                                                "UTF-8"
-                                            ) ?>
+
+                                            <div
+                                                class="d-flex
+                                                align-items-center
+                                                gap-2"
+                                            >
+
+                                                <span
+                                                    class="badge
+                                                    badge-primary"
+                                                >
+                                                    <i
+                                                        class="bi
+                                                        bi-person-heart"
+                                                    ></i>
+                                                </span>
+
+                                                <strong>
+                                                    <?= htmlspecialchars(
+                                                        $d[
+                                                            "nama_balita"
+                                                        ],
+                                                        ENT_QUOTES,
+                                                        "UTF-8"
+                                                    ); ?>
+                                                </strong>
+
+                                            </div>
+
                                         </td>
 
                                         <td>
                                             <?= htmlspecialchars(
-                                                $d["nik_balita"],
+                                                $d[
+                                                    "nik_balita"
+                                                ],
                                                 ENT_QUOTES,
                                                 "UTF-8"
-                                            ) ?>
+                                            ); ?>
                                         </td>
 
                                         <td>
                                             <?= nl2br(
                                                 htmlspecialchars(
-                                                    $d["riwayat_penyakit"],
+                                                    $d[
+                                                        "riwayat_penyakit"
+                                                    ],
                                                     ENT_QUOTES,
                                                     "UTF-8"
                                                 )
-                                            ) ?>
+                                            ); ?>
                                         </td>
 
                                         <td>
                                             <?= nl2br(
                                                 htmlspecialchars(
-                                                    $d["riwayat_imunisasi"],
+                                                    $d[
+                                                        "riwayat_imunisasi"
+                                                    ],
                                                     ENT_QUOTES,
                                                     "UTF-8"
                                                 )
-                                            ) ?>
+                                            ); ?>
                                         </td>
 
                                         <td>
                                             <?= nl2br(
                                                 htmlspecialchars(
-                                                    $d["riwayat_perawatan"],
+                                                    $d[
+                                                        "riwayat_perawatan"
+                                                    ],
                                                     ENT_QUOTES,
                                                     "UTF-8"
                                                 )
-                                            ) ?>
+                                            ); ?>
                                         </td>
 
                                         <td>
 
-                                            <div class="d-flex flex-wrap gap-1">
+                                            <div
+                                                class="table-actions
+                                                justify-content-center"
+                                            >
 
                                                 <a
-                                                    href="detail_kesehatan.php?id=<?= (int) $d["id_riwayat"] ?>"
+                                                    href="detail_kesehatan.php?id=<?= (int) $d["id_riwayat"]; ?>"
                                                     class="btn btn-info btn-sm"
                                                 >
+                                                    <i
+                                                        class="bi
+                                                        bi-eye"
+                                                    ></i>
                                                     Detail
                                                 </a>
 
                                                 <?php if (
-                                                    $roleAktif === "petugas_kia"
+                                                    $roleAktif ===
+                                                    "petugas_kia"
                                                 ): ?>
 
                                                     <a
-                                                        href="edit_kesehatan.php?id=<?= (int) $d["id_riwayat"] ?>"
+                                                        href="edit_kesehatan.php?id=<?= (int) $d["id_riwayat"]; ?>"
                                                         class="btn btn-warning btn-sm"
                                                     >
+                                                        <i
+                                                            class="bi
+                                                            bi-pencil-square"
+                                                        ></i>
                                                         Edit
                                                     </a>
 
                                                     <form
                                                         action="hapus_kesehatan.php"
                                                         method="POST"
-                                                        class="d-inline form-hapus-kesehatan"
+                                                        class="d-inline
+                                                        form-hapus-kesehatan"
                                                         data-nama="<?= htmlspecialchars(
-                                                            $d["nama_balita"],
+                                                            $d[
+                                                                "nama_balita"
+                                                            ],
                                                             ENT_QUOTES,
                                                             "UTF-8"
-                                                        ) ?>"
+                                                        ); ?>"
                                                     >
                                                         <input
                                                             type="hidden"
                                                             name="id_riwayat"
-                                                            value="<?= (int) $d["id_riwayat"] ?>"
+                                                            value="<?= (int) $d["id_riwayat"]; ?>"
                                                         >
 
                                                         <button
                                                             type="submit"
                                                             class="btn btn-danger btn-sm"
                                                         >
+                                                            <i
+                                                                class="bi
+                                                                bi-trash3"
+                                                            ></i>
                                                             Hapus
                                                         </button>
                                                     </form>
@@ -426,12 +570,51 @@ require_once "../includes/navbar.php";
                             <?php else: ?>
 
                                 <tr>
-                                    <td
-                                        colspan="7"
-                                        class="text-center text-muted py-4"
-                                    >
-                                        Data riwayat kesehatan belum tersedia.
+
+                                    <td colspan="7">
+
+                                        <div class="empty-state">
+
+                                            <div
+                                                class="empty-state-icon"
+                                            >
+                                                <i
+                                                    class="bi
+                                                    bi-heart-pulse"
+                                                ></i>
+                                            </div>
+
+                                            <h3>
+                                                Belum ada riwayat kesehatan
+                                            </h3>
+
+                                            <p>
+                                                Data riwayat kesehatan
+                                                balita belum tersedia.
+                                            </p>
+
+                                            <?php if (
+                                                $roleAktif ===
+                                                "petugas_kia"
+                                            ): ?>
+
+                                                <a
+                                                    href="tambah_kesehatan.php"
+                                                    class="btn btn-primary mt-3"
+                                                >
+                                                    <i
+                                                        class="bi
+                                                        bi-plus-circle"
+                                                    ></i>
+                                                    Tambah Data
+                                                </a>
+
+                                            <?php endif; ?>
+
+                                        </div>
+
                                     </td>
+
                                 </tr>
 
                             <?php endif; ?>

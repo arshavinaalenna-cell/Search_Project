@@ -103,306 +103,237 @@ require_once "../includes/navbar.php";
 
 ?>
 
-
 <div class="layout-wrapper">
 
+    <?php require_once "../includes/sidebar.php"; ?>
 
-<?php require_once "../includes/sidebar.php"; ?>
+    <main class="main-content">
 
+        <div class="card content-card">
 
-<main class="main-content">
+            <div class="card-header">
 
+                <div>
 
+                    <h4 class="mb-1">
+                        Tambah Riwayat Kelahiran
+                    </h4>
 
-<div class="d-flex flex-column flex-md-row
-justify-content-between align-items-md-center
-gap-3 mb-4">
+                    <small class="text-muted">
+                        Lengkapi data kelahiran balita untuk
+                        mendukung riwayat pertumbuhan.
+                    </small>
 
+                </div>
 
-<div>
+                <a
+                    href="riwayat_kelahiran.php"
+                    class="btn btn-secondary btn-sm"
+                >
+                    <i class="bi bi-arrow-left"></i>
+                    Kembali
+                </a>
 
-<h2 class="mb-1">
-Tambah Riwayat Kelahiran
-</h2>
+            </div>
 
+            <div class="card-body">
 
-<p class="text-muted mb-0">
-Input data riwayat kelahiran balita.
-</p>
+                <form method="POST">
 
+                    <div class="row g-3">
+
+                        <div class="col-12">
+
+                            <label class="form-label">
+                                Nama Balita
+                            </label>
+
+                            <select
+                                name="id_balita"
+                                class="form-select"
+                                required
+                            >
+
+                                <option value="">
+                                    -- Pilih Balita --
+                                </option>
+
+                                <?php while (
+                                    $b = mysqli_fetch_assoc($balita)
+                                ): ?>
+
+                                    <option
+                                        value="<?= $b[
+                                            "id_balita"
+                                        ]; ?>"
+                                    >
+                                        <?= htmlspecialchars(
+                                            $b["nama_balita"],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+
+                                        (<?= htmlspecialchars(
+                                            $b["nik_balita"],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>)
+                                    </option>
+
+                                <?php endwhile; ?>
+
+                            </select>
+
+                            <div class="form-text">
+                                Pilih balita yang akan dilengkapi
+                                riwayat kelahirannya.
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-6">
+
+                            <label class="form-label">
+                                Berat Lahir
+                            </label>
+
+                            <div class="input-group">
+
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    name="berat_lahir"
+                                    class="form-control"
+                                    placeholder="Contoh: 3.20"
+                                    required
+                                >
+
+                                <span class="input-group-text">
+                                    kg
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-6">
+
+                            <label class="form-label">
+                                Panjang Lahir
+                            </label>
+
+                            <div class="input-group">
+
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    name="panjang_lahir"
+                                    class="form-control"
+                                    placeholder="Contoh: 49"
+                                    required
+                                >
+
+                                <span class="input-group-text">
+                                    cm
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-6">
+
+                            <label class="form-label">
+                                Usia Kehamilan
+                            </label>
+
+                            <div class="input-group">
+
+                                <input
+                                    type="number"
+                                    name="usia_kehamilan"
+                                    class="form-control"
+                                    placeholder="Contoh: 39"
+                                    required
+                                >
+
+                                <span class="input-group-text">
+                                    minggu
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-6">
+
+                            <label class="form-label">
+                                Jenis Persalinan
+                            </label>
+
+                            <select
+                                name="jenis_persalinan"
+                                class="form-select"
+                                required
+                            >
+
+                                <option value="">
+                                    -- Pilih Jenis Persalinan --
+                                </option>
+
+                                <option value="Normal">
+                                    Normal
+                                </option>
+
+                                <option value="Caesar">
+                                    Caesar
+                                </option>
+
+                                <option value="Vakum">
+                                    Vakum
+                                </option>
+
+                                <option value="Forceps">
+                                    Forceps
+                                </option>
+
+                            </select>
+
+                        </div>
+
+                    </div>
+
+                    <hr>
+
+                    <div class="form-actions">
+
+                        <button
+                            type="submit"
+                            name="simpan"
+                            class="btn btn-primary"
+                        >
+                            <i class="bi bi-check-circle"></i>
+                            Simpan Riwayat
+                        </button>
+
+                        <a
+                            href="riwayat_kelahiran.php"
+                            class="btn btn-outline-secondary"
+                        >
+                            <i class="bi bi-x-circle"></i>
+                            Batal
+                        </a>
+
+                    </div>
+
+                </form>
+
+            </div>
+
+        </div>
+
+    </main>
 
 </div>
-
-
-
-<a
-href="riwayat_kelahiran.php"
-class="btn btn-outline-secondary">
-
-<i class="bi bi-arrow-left"></i>
-
-Kembali
-
-</a>
-
-
-
-</div>
-
-
-
-
-<div class="card content-card">
-
-
-<div class="card-body p-4">
-
-
-
-<form method="POST">
-
-
-
-<div class="mb-3">
-
-
-<label class="form-label">
-Nama Balita
-</label>
-
-
-
-<select
-name="id_balita"
-class="form-select"
-required>
-
-
-<option value="">
--- Pilih Balita --
-</option>
-
-
-
-<?php while($b=mysqli_fetch_assoc($balita)){ ?>
-
-
-<option
-value="<?= $b['id_balita']; ?>">
-
-
-<?= $b['nama_balita']; ?>
-
-(<?= $b['nik_balita']; ?>)
-
-
-</option>
-
-
-
-<?php } ?>
-
-
-</select>
-
-
-
-</div>
-
-
-
-
-
-<div class="mb-3">
-
-
-<label class="form-label">
-Berat Lahir (Kg)
-</label>
-
-
-
-<input
-
-type="number"
-
-step="0.01"
-
-name="berat_lahir"
-
-class="form-control"
-
-placeholder="Contoh: 3.20"
-
-required>
-
-
-</div>
-
-
-
-
-
-<div class="mb-3">
-
-
-<label class="form-label">
-Panjang Lahir (cm)
-</label>
-
-
-
-<input
-
-type="number"
-
-step="0.01"
-
-name="panjang_lahir"
-
-class="form-control"
-
-placeholder="Contoh: 49"
-
-required>
-
-
-</div>
-
-
-
-
-
-<div class="mb-3">
-
-
-<label class="form-label">
-Usia Kehamilan (Minggu)
-</label>
-
-
-
-<input
-
-type="number"
-
-name="usia_kehamilan"
-
-class="form-control"
-
-placeholder="Contoh: 39"
-
-required>
-
-
-</div>
-
-
-
-
-
-<div class="mb-3">
-
-
-<label class="form-label">
-Jenis Persalinan
-</label>
-
-
-
-<select
-
-name="jenis_persalinan"
-
-class="form-select"
-
-required>
-
-
-<option value="">
--- Pilih Jenis Persalinan --
-</option>
-
-
-<option value="Normal">
-Normal
-</option>
-
-
-<option value="Caesar">
-Caesar
-</option>
-
-
-<option value="Vakum">
-Vakum
-</option>
-
-
-<option value="Forceps">
-Forceps
-</option>
-
-
-</select>
-
-
-</div>
-
-
-
-
-
-<div class="d-flex gap-2">
-
-
-<button
-
-type="submit"
-
-name="simpan"
-
-class="btn btn-success">
-
-Simpan
-
-</button>
-
-
-
-<a
-
-href="riwayat_kelahiran.php"
-
-class="btn btn-outline-secondary">
-
-<i class="bi bi-arrow-left"></i>
-
-Kembali
-
-</a>
-
-
-
-</div>
-
-
-
-</form>
-
-
-</div>
-
-
-</div>
-
-
-
-</main>
-
-
-</div>
-
-
 
 <?php require_once "../includes/footer.php"; ?>

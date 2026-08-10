@@ -274,95 +274,6 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <!-- Header halaman -->
-        <div class="page-header">
-
-            <div>
-
-                <h1 class="page-title">
-
-                    <i class="bi bi-chat-heart me-2"></i>
-
-                    Data Konsultasi
-
-                </h1>
-
-                <p class="page-subtitle">
-
-                    <?php if ($modeMonitoring): ?>
-                        Pantau riwayat konsultasi gizi dan tindak lanjut balita.
-                    <?php elseif ($roleAktif === "orang_tua"): ?>
-                        Lihat dan ajukan konsultasi gizi untuk balita Anda.
-                    <?php else: ?>
-                        Kelola konsultasi gizi dan tindak lanjut balita.
-                    <?php endif; ?>
-
-                </p>
-
-            </div>
-
-            <div class="d-flex flex-wrap gap-2">
-
-                <a
-                    href="../dashboard/dashboard.php"
-                    class="btn btn-secondary"
-                >
-
-                    <i class="bi bi-arrow-left"></i>
-
-                    Kembali ke Dashboard
-
-                </a>
-
-                <?php if ($bolehTambah): ?>
-
-                    <a
-                        href="tambah_konsultasi.php"
-                        class="btn btn-primary"
-                    >
-
-                        <i class="bi bi-plus-circle"></i>
-
-                        Tambah Konsultasi
-
-                    </a>
-
-                <?php endif; ?>
-
-            </div>
-
-        </div>
-
-        <!-- Pesan -->
-        <?php if ($isiPesan !== ""): ?>
-
-            <div
-                class="alert alert-<?= htmlspecialchars(
-                    $jenisAlert,
-                    ENT_QUOTES,
-                    "UTF-8"
-                ); ?> alert-dismissible fade show"
-                role="alert"
-            >
-
-                <?= htmlspecialchars(
-                    $isiPesan,
-                    ENT_QUOTES,
-                    "UTF-8"
-                ); ?>
-
-                <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Tutup"
-                ></button>
-
-            </div>
-
-        <?php endif; ?>
-
-        <!-- Card konsultasi -->
         <div class="card content-card">
 
             <div class="card-header">
@@ -370,59 +281,91 @@ require_once "../includes/navbar.php";
                 <div>
 
                     <h4 class="mb-1">
-                        Daftar Konsultasi Balita
+                        Data Konsultasi
                     </h4>
 
                     <small class="text-muted">
 
-                        Total data:
-
-                        <?= $totalData; ?>
-
-                        konsultasi
+                        <?php if ($modeMonitoring): ?>
+                            Pantau riwayat konsultasi gizi dan tindak lanjut balita.
+                        <?php elseif ($roleAktif === "orang_tua"): ?>
+                            Lihat dan ajukan konsultasi gizi untuk balita Anda.
+                        <?php else: ?>
+                            Kelola konsultasi gizi dan tindak lanjut balita.
+                        <?php endif; ?>
 
                     </small>
 
                 </div>
 
-                <?php if ($modeMonitoring): ?>
+                <div class="d-flex flex-wrap gap-2">
 
-                    <span class="badge bg-secondary">
+                    <a
+                        href="../dashboard/dashboard.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
 
-                        <i class="bi bi-eye"></i>
+                    <?php if ($bolehTambah): ?>
 
-                        Mode Monitoring
+                        <a
+                            href="tambah_konsultasi.php"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-plus-circle"></i>
+                            Tambah Konsultasi
+                        </a>
 
-                    </span>
+                    <?php endif; ?>
 
-                <?php elseif ($roleAktif === "orang_tua"): ?>
-
-                    <span class="badge badge-info">
-
-                        <i class="bi bi-person-heart"></i>
-
-                        Konsultasi Saya
-
-                    </span>
-
-                <?php else: ?>
-
-                    <span class="badge badge-info">
-
-                        <i class="bi bi-chat-heart"></i>
-
-                        Konsultasi Gizi
-
-                    </span>
-
-                <?php endif; ?>
+                </div>
 
             </div>
 
             <div class="card-body">
 
-                <!-- Pencarian -->
-                <form method="GET" class="row g-2 mb-4">
+                <?php if ($isiPesan !== ""): ?>
+
+                    <div
+                        class="alert alert-<?= htmlspecialchars(
+                            $jenisAlert,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?> alert-dismissible fade show"
+                        role="alert"
+                    >
+
+                        <i
+                            class="bi <?= $jenisAlert === "success"
+                                ? "bi-check-circle"
+                                : ($jenisAlert === "danger"
+                                    ? "bi-x-circle"
+                                    : "bi-exclamation-triangle"); ?> me-1"
+                        ></i>
+
+                        <?= htmlspecialchars(
+                            $isiPesan,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>
+
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="alert"
+                            aria-label="Tutup"
+                        ></button>
+
+                    </div>
+
+                <?php endif; ?>
+
+                <form
+                    method="GET"
+                    class="row g-2 mb-3"
+                >
 
                     <div class="col-12 col-lg-8">
 
@@ -454,11 +397,8 @@ require_once "../includes/navbar.php";
                             type="submit"
                             class="btn btn-primary w-100"
                         >
-
                             <i class="bi bi-search"></i>
-
                             Cari
-
                         </button>
 
                     </div>
@@ -469,16 +409,57 @@ require_once "../includes/navbar.php";
                             href="data_konsultasi.php"
                             class="btn btn-outline-secondary w-100"
                         >
-
-                            <i class="bi bi-arrow-counterclockwise"></i>
-
+                            <i
+                                class="bi
+                                bi-arrow-counterclockwise"
+                            ></i>
                             Reset
-
                         </a>
 
                     </div>
 
                 </form>
+
+                <div
+                    class="d-flex flex-wrap
+                    justify-content-between align-items-center
+                    gap-2 mb-3"
+                >
+
+                    <span class="text-muted small">
+                        Total data:
+                        <strong>
+                            <?= $totalData; ?>
+                        </strong>
+                        konsultasi
+                    </span>
+
+                    <?php if ($modeMonitoring): ?>
+
+                        <span class="badge bg-secondary">
+                            <i class="bi bi-eye"></i>
+                            Mode Monitoring
+                        </span>
+
+                    <?php elseif (
+                        $roleAktif === "orang_tua"
+                    ): ?>
+
+                        <span class="badge badge-info">
+                            <i class="bi bi-person-heart"></i>
+                            Konsultasi Saya
+                        </span>
+
+                    <?php else: ?>
+
+                        <span class="badge badge-info">
+                            <i class="bi bi-chat-heart"></i>
+                            Konsultasi Gizi
+                        </span>
+
+                    <?php endif; ?>
+
+                </div>
 
                 <div class="table-responsive">
 
@@ -528,7 +509,9 @@ require_once "../includes/navbar.php";
 
                             $nomor = 1;
 
-                            while ($data = mysqli_fetch_assoc($query)):
+                            while (
+                                $data = mysqli_fetch_assoc($query)
+                            ):
 
                                 $idKonsultasi =
                                     (int) $data["id_konsultasi"];
@@ -536,10 +519,12 @@ require_once "../includes/navbar.php";
                                 $tanggalTampil = "-";
 
                                 if (!empty($data["tanggal"])) {
+
                                     $waktuTanggal =
                                         strtotime($data["tanggal"]);
 
                                     if ($waktuTanggal !== false) {
+
                                         $tanggalTampil = date(
                                             "d-m-Y",
                                             $waktuTanggal
@@ -555,52 +540,62 @@ require_once "../includes/navbar.php";
                                 <tr>
 
                                     <td class="text-center">
-
                                         <?= $nomor++; ?>
-
                                     </td>
 
                                     <td>
 
                                         <span class="text-nowrap">
-
-                                            <i class="bi bi-calendar3 me-1"></i>
+                                            <i
+                                                class="bi
+                                                bi-calendar3 me-1"
+                                            ></i>
 
                                             <?= amanKonsultasi(
                                                 $tanggalTampil
                                             ); ?>
-
                                         </span>
 
                                     </td>
 
                                     <td>
 
-                                        <div class="d-flex align-items-center gap-2">
+                                        <div
+                                            class="d-flex
+                                            align-items-center gap-2"
+                                        >
 
-                                            <span class="badge badge-primary">
-
-                                                <i class="bi bi-person-heart"></i>
-
+                                            <span
+                                                class="badge
+                                                badge-primary"
+                                            >
+                                                <i
+                                                    class="bi
+                                                    bi-person-heart"
+                                                ></i>
                                             </span>
 
                                             <div>
 
-                                                <strong class="d-block">
-
+                                                <strong
+                                                    class="d-block"
+                                                >
                                                     <?= amanKonsultasi(
-                                                        $data["nama_balita"]
+                                                        $data[
+                                                            "nama_balita"
+                                                        ]
                                                     ); ?>
-
                                                 </strong>
 
-                                                <small class="text-muted">
-
+                                                <small
+                                                    class="text-muted"
+                                                >
                                                     NIK:
                                                     <?= amanKonsultasi(
-                                                        $data["nik_balita"]
+                                                        $data[
+                                                            "nik_balita"
+                                                        ]
                                                     ); ?>
-
                                                 </small>
 
                                             </div>
@@ -611,74 +606,100 @@ require_once "../includes/navbar.php";
 
                                     <td>
 
-                                        <?php if (!$belumDitangani): ?>
+                                        <?php if (
+                                            !$belumDitangani
+                                        ): ?>
 
                                             <?= amanKonsultasi(
-                                                $data["nama_petugas"]
+                                                $data[
+                                                    "nama_petugas"
+                                                ]
                                             ); ?>
 
                                         <?php else: ?>
 
-                                            <span class="badge bg-warning text-dark">
-
-                                                <i class="bi bi-hourglass-split me-1"></i>
-
+                                            <span
+                                                class="badge
+                                                bg-warning text-dark"
+                                            >
+                                                <i
+                                                    class="bi
+                                                    bi-hourglass-split
+                                                    me-1"
+                                                ></i>
                                                 Menunggu Petugas
-
                                             </span>
 
                                         <?php endif; ?>
 
                                     </td>
 
-                                    <td style="min-width: 220px; white-space: normal;">
+                                    <td
+                                        style="
+                                            min-width: 220px;
+                                            white-space: normal;
+                                        "
+                                    >
 
                                         <?php if (
                                             trim(
-                                                $data["hasil_konsultasi"]
-                                                ?? ""
+                                                $data[
+                                                    "hasil_konsultasi"
+                                                ] ?? ""
                                             ) !== ""
                                         ): ?>
 
                                             <?= nl2br(
                                                 amanKonsultasi(
-                                                    $data["hasil_konsultasi"]
+                                                    $data[
+                                                        "hasil_konsultasi"
+                                                    ]
                                                 )
                                             ); ?>
 
                                         <?php else: ?>
 
-                                            <span class="badge bg-warning text-dark">
-
+                                            <span
+                                                class="badge
+                                                bg-warning text-dark"
+                                            >
                                                 Belum diisi
-
                                             </span>
 
                                         <?php endif; ?>
 
                                     </td>
 
-                                    <td style="min-width: 220px; white-space: normal;">
+                                    <td
+                                        style="
+                                            min-width: 220px;
+                                            white-space: normal;
+                                        "
+                                    >
 
                                         <?php if (
                                             trim(
-                                                $data["tindak_lanjut"]
-                                                ?? ""
+                                                $data[
+                                                    "tindak_lanjut"
+                                                ] ?? ""
                                             ) !== ""
                                         ): ?>
 
                                             <?= nl2br(
                                                 amanKonsultasi(
-                                                    $data["tindak_lanjut"]
+                                                    $data[
+                                                        "tindak_lanjut"
+                                                    ]
                                                 )
                                             ); ?>
 
                                         <?php else: ?>
 
-                                            <span class="badge bg-secondary">
-
+                                            <span
+                                                class="badge
+                                                bg-secondary"
+                                            >
                                                 Belum ada
-
                                             </span>
 
                                         <?php endif; ?>
@@ -687,32 +708,38 @@ require_once "../includes/navbar.php";
 
                                     <td>
 
-                                        <div class="table-actions justify-content-center">
+                                        <div
+                                            class="table-actions
+                                            justify-content-center"
+                                        >
 
                                             <a
                                                 href="detail_konsultasi.php?id=<?= $idKonsultasi; ?>"
                                                 class="btn btn-info btn-sm"
                                             >
-
-                                                <i class="bi bi-eye"></i>
-
+                                                <i
+                                                    class="bi
+                                                    bi-eye"
+                                                ></i>
                                                 Detail
-
                                             </a>
 
-                                            <?php if ($bolehMengelola): ?>
+                                            <?php if (
+                                                $bolehMengelola
+                                            ): ?>
 
                                                 <a
                                                     href="edit_konsultasi.php?id=<?= $idKonsultasi; ?>"
                                                     class="btn btn-warning btn-sm"
                                                 >
-
-                                                    <i class="bi bi-chat-left-text"></i>
+                                                    <i
+                                                        class="bi
+                                                        bi-chat-left-text"
+                                                    ></i>
 
                                                     <?= $belumDitangani
                                                         ? "Tanggapi"
                                                         : "Edit"; ?>
-
                                                 </a>
 
                                             <?php endif; ?>
@@ -733,60 +760,72 @@ require_once "../includes/navbar.php";
 
                                     <div class="empty-state">
 
-                                        <div class="empty-state-icon">
-
-                                            <i class="bi bi-chat-heart"></i>
-
+                                        <div
+                                            class="empty-state-icon"
+                                        >
+                                            <i
+                                                class="bi
+                                                bi-chat-heart"
+                                            ></i>
                                         </div>
 
                                         <h3>
-
-                                            <?php if ($cari !== ""): ?>
+                                            <?php if (
+                                                $cari !== ""
+                                            ): ?>
                                                 Data konsultasi tidak ditemukan
                                             <?php else: ?>
                                                 Belum ada data konsultasi
                                             <?php endif; ?>
-
                                         </h3>
 
                                         <p>
-
-                                            <?php if ($cari !== ""): ?>
+                                            <?php if (
+                                                $cari !== ""
+                                            ): ?>
                                                 Coba gunakan kata kunci lain atau reset pencarian.
-                                            <?php elseif ($roleAktif === "orang_tua"): ?>
+                                            <?php elseif (
+                                                $roleAktif ===
+                                                "orang_tua"
+                                            ): ?>
                                                 Ajukan konsultasi untuk mendapatkan arahan dari Petugas Gizi.
-                                            <?php elseif ($modeMonitoring): ?>
+                                            <?php elseif (
+                                                $modeMonitoring
+                                            ): ?>
                                                 Data konsultasi belum tersedia untuk dimonitoring.
                                             <?php else: ?>
                                                 Tambahkan atau tanggapi konsultasi gizi balita.
                                             <?php endif; ?>
-
                                         </p>
 
-                                        <?php if ($cari !== ""): ?>
+                                        <?php if (
+                                            $cari !== ""
+                                        ): ?>
 
                                             <a
                                                 href="data_konsultasi.php"
                                                 class="btn btn-outline-secondary mt-3"
                                             >
-
-                                                <i class="bi bi-arrow-counterclockwise"></i>
-
+                                                <i
+                                                    class="bi
+                                                    bi-arrow-counterclockwise"
+                                                ></i>
                                                 Reset Pencarian
-
                                             </a>
 
-                                        <?php elseif ($bolehTambah): ?>
+                                        <?php elseif (
+                                            $bolehTambah
+                                        ): ?>
 
                                             <a
                                                 href="tambah_konsultasi.php"
                                                 class="btn btn-primary mt-3"
                                             >
-
-                                                <i class="bi bi-plus-circle"></i>
-
+                                                <i
+                                                    class="bi
+                                                    bi-plus-circle"
+                                                ></i>
                                                 Tambah Konsultasi
-
                                             </a>
 
                                         <?php endif; ?>

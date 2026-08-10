@@ -168,21 +168,24 @@ require_once "../includes/navbar.php";
 
 
 
-<div class="d-flex flex-column flex-md-row
-justify-content-between align-items-md-center
-gap-3 mb-4">
+<div class="card content-card">
+
+
+
+<div class="card-header">
 
 
 <div>
 
-<h2 class="mb-1">
+
+<h4 class="mb-1">
 Edit Riwayat Kelahiran
-</h2>
+</h4>
 
 
-<p class="text-muted mb-0">
+<small class="text-muted">
 Perbarui data riwayat kelahiran balita.
-</p>
+</small>
 
 
 </div>
@@ -191,10 +194,14 @@ Perbarui data riwayat kelahiran balita.
 
 <a
 href="riwayat_kelahiran.php"
-class="btn btn-outline-secondary">
+class="btn btn-secondary btn-sm">
+
 
 <i class="bi bi-arrow-left"></i>
+
+
 Kembali
+
 
 </a>
 
@@ -206,10 +213,7 @@ Kembali
 
 
 
-<div class="card content-card">
-
-
-<div class="card-body p-4">
+<div class="card-body">
 
 
 
@@ -217,7 +221,14 @@ Kembali
 
 
 
-<div class="mb-3">
+<div class="row g-3">
+
+
+
+
+
+<div class="col-12">
+
 
 <label class="form-label">
 Nama Balita
@@ -253,16 +264,26 @@ value="<?= $b['id_balita']; ?>"
 </select>
 
 
+<div class="form-text">
+Pilih balita yang riwayat kelahirannya akan diperbarui.
+</div>
+
+
 </div>
 
 
 
 
-<div class="mb-3">
+
+<div class="col-12 col-md-6">
+
 
 <label class="form-label">
-Berat Lahir (Kg)
+Berat Lahir
 </label>
+
+
+<div class="input-group">
 
 
 <input
@@ -280,17 +301,29 @@ value="<?= $data['berat_lahir']; ?>"
 required>
 
 
+<span class="input-group-text">
+kg
+</span>
+
+
+</div>
+
+
 </div>
 
 
 
 
 
-<div class="mb-3">
+<div class="col-12 col-md-6">
+
 
 <label class="form-label">
-Panjang Lahir (cm)
+Panjang Lahir
 </label>
+
+
+<div class="input-group">
 
 
 <input
@@ -308,17 +341,29 @@ value="<?= $data['panjang_lahir']; ?>"
 required>
 
 
+<span class="input-group-text">
+cm
+</span>
+
+
+</div>
+
+
 </div>
 
 
 
 
 
-<div class="mb-3">
+<div class="col-12 col-md-6">
+
 
 <label class="form-label">
-Usia Kehamilan (Minggu)
+Usia Kehamilan
 </label>
+
+
+<div class="input-group">
 
 
 <input
@@ -334,13 +379,22 @@ value="<?= $data['usia_kehamilan']; ?>"
 required>
 
 
+<span class="input-group-text">
+minggu
+</span>
+
+
+</div>
+
+
 </div>
 
 
 
 
 
-<div class="mb-3">
+<div class="col-12 col-md-6">
+
 
 <label class="form-label">
 Jenis Persalinan
@@ -400,7 +454,19 @@ Forceps
 
 
 
-<div class="d-flex gap-2">
+</div>
+
+
+
+
+
+<hr>
+
+
+
+
+
+<div class="form-actions">
 
 
 <button
@@ -409,9 +475,14 @@ type="submit"
 
 name="update"
 
-class="btn btn-warning">
+class="btn btn-primary">
 
-Update
+
+<i class="bi bi-check-circle"></i>
+
+
+Simpan Perubahan
+
 
 </button>
 
@@ -423,9 +494,12 @@ href="riwayat_kelahiran.php"
 
 class="btn btn-outline-secondary">
 
-<i class="bi bi-arrow-left"></i>
 
-Kembali
+<i class="bi bi-x-circle"></i>
+
+
+Batal
+
 
 </a>
 
@@ -439,6 +513,7 @@ Kembali
 
 
 </div>
+
 
 </div>
 

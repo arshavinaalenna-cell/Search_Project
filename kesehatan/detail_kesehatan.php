@@ -109,140 +109,186 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div
-            class="d-flex flex-column flex-md-row
-            justify-content-between align-items-md-center
-            gap-3 mb-4"
-        >
-            <div>
-                <h2 class="mb-1">
-                    Detail Riwayat Kesehatan
-                </h2>
-
-                <p class="text-muted mb-0">
-                    Informasi lengkap riwayat kesehatan balita.
-                </p>
-            </div>
-
-            <a
-                href="riwayat_kesehatan.php"
-                class="btn btn-outline-secondary"
-            >
-                Kembali
-            </a>
-        </div>
-
         <div class="card content-card">
 
-            <div class="card-body p-4">
+            <div class="card-header">
 
-                <div class="table-responsive">
+                <div>
 
-                    <table class="table table-bordered align-middle">
+                    <h4 class="mb-1">
+                        Detail Riwayat Kesehatan
+                    </h4>
 
-                        <tr>
-                            <th width="30%">
+                    <small class="text-muted">
+                        Informasi lengkap riwayat kesehatan balita.
+                    </small>
+
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+
+                    <a
+                        href="riwayat_kesehatan.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                    <?php if ($bolehEdit): ?>
+
+                        <a
+                            href="edit_kesehatan.php?id=<?= (int) $data["id_riwayat"]; ?>"
+                            class="btn btn-warning btn-sm"
+                        >
+                            <i class="bi bi-pencil-square"></i>
+                            Edit
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+            <div class="card-body">
+
+                <div class="row g-3 mb-3">
+
+                    <div class="col-12 col-lg-4">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
                                 Nama Balita
-                            </th>
+                            </span>
 
-                            <td>
+                            <div class="detail-value">
+                                <i
+                                    class="bi bi-person-heart
+                                    me-1"
+                                ></i>
+
                                 <?= htmlspecialchars(
                                     $data["nama_balita"],
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>NIK Balita</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12 col-lg-4">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                NIK Balita
+                            </span>
+
+                            <div class="detail-value">
                                 <?= htmlspecialchars(
                                     $data["nik_balita"],
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>Nama Ibu</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12 col-lg-4">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Nama Ibu
+                            </span>
+
+                            <div class="detail-value">
                                 <?= htmlspecialchars(
                                     $data["nama_ibu"],
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>Riwayat Penyakit</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                </div>
+
+                <div class="row g-3">
+
+                    <div class="col-12 col-lg-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Riwayat Penyakit
+                            </span>
+
+                            <div class="detail-value">
                                 <?= nl2br(
                                     htmlspecialchars(
                                         $data["riwayat_penyakit"],
                                         ENT_QUOTES,
                                         "UTF-8"
                                     )
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>Riwayat Imunisasi</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Riwayat Imunisasi
+                            </span>
+
+                            <div class="detail-value">
                                 <?= nl2br(
                                     htmlspecialchars(
                                         $data["riwayat_imunisasi"],
                                         ENT_QUOTES,
                                         "UTF-8"
                                     )
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                        <tr>
-                            <th>Riwayat Perawatan</th>
+                        </div>
 
-                            <td>
+                    </div>
+
+                    <div class="col-12">
+
+                        <div class="detail-item">
+
+                            <span class="detail-label">
+                                Riwayat Perawatan
+                            </span>
+
+                            <div class="detail-value">
                                 <?= nl2br(
                                     htmlspecialchars(
                                         $data["riwayat_perawatan"],
                                         ENT_QUOTES,
                                         "UTF-8"
                                     )
-                                ) ?>
-                            </td>
-                        </tr>
+                                ); ?>
+                            </div>
 
-                    </table>
+                        </div>
 
-                </div>
-
-                <div class="d-flex flex-wrap gap-2 mt-3">
-
-                    <?php if ($bolehEdit): ?>
-
-                        <a
-                            href="edit_kesehatan.php?id=<?= (int) $data["id_riwayat"] ?>"
-                            class="btn btn-warning"
-                        >
-                            Edit
-                        </a>
-
-                    <?php endif; ?>
-
-                    <a
-                        href="riwayat_kesehatan.php"
-                        class="btn btn-secondary"
-                    >
-                        Kembali
-                    </a>
+                    </div>
 
                 </div>
 
