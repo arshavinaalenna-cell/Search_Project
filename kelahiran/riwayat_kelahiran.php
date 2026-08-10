@@ -11,7 +11,6 @@ require_once "../config/koneksi.php";
 */
 
 cekRole([
-    "kader",
     "petugas_kia"
 ]);
 
@@ -157,72 +156,6 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div class="page-header">
-
-            <div>
-
-                <h1 class="page-title">
-                    <i class="bi bi-balloon-heart me-2"></i>
-                    Riwayat Kelahiran
-                </h1>
-
-                <p class="page-subtitle">
-                    Kelola data kelahiran balita untuk melengkapi
-                    informasi awal pertumbuhan.
-                </p>
-
-            </div>
-
-            <div class="d-flex flex-wrap gap-2">
-
-                <a
-                    href="../dashboard/dashboard.php"
-                    class="btn btn-secondary btn-sm"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali
-                </a>
-
-                <a
-                    href="tambah_kelahiran.php"
-                    class="btn btn-primary btn-sm"
-                >
-                    <i class="bi bi-plus-circle"></i>
-                    Tambah Riwayat
-                </a>
-
-            </div>
-
-        </div>
-
-        <?php if ($isiPesan !== ""): ?>
-
-            <div
-                class="alert alert-<?= amanKelahiran(
-                    $jenisAlert
-                ); ?> alert-dismissible fade show"
-                role="alert"
-            >
-                <i
-                    class="bi <?= $jenisAlert === "success"
-                        ? "bi-check-circle"
-                        : ($jenisAlert === "danger"
-                            ? "bi-x-circle"
-                            : "bi-exclamation-triangle"); ?> me-1"
-                ></i>
-
-                <?= amanKelahiran($isiPesan); ?>
-
-                <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Tutup"
-                ></button>
-            </div>
-
-        <?php endif; ?>
-
         <div class="card content-card">
 
             <div class="card-header">
@@ -230,27 +163,88 @@ require_once "../includes/navbar.php";
                 <div>
 
                     <h4 class="mb-1">
-                        Daftar Riwayat Kelahiran
+                        Riwayat Kelahiran
                     </h4>
 
                     <small class="text-muted">
+                        Kelola data kelahiran, status BBLR,
+                        prematur, dan riwayat maternal balita.
+                    </small>
+
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+
+                    <a
+                        href="../dashboard/dashboard.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                    <a
+                        href="tambah_kelahiran.php"
+                        class="btn btn-primary btn-sm"
+                    >
+                        <i class="bi bi-plus-circle"></i>
+                        Tambah Riwayat
+                    </a>
+
+                </div>
+
+            </div>
+
+            <div class="card-body">
+
+                <?php if ($isiPesan !== ""): ?>
+
+                    <div
+                        class="alert alert-<?= amanKelahiran(
+                            $jenisAlert
+                        ); ?> alert-dismissible fade show"
+                        role="alert"
+                    >
+                        <i
+                            class="bi <?= $jenisAlert === "success"
+                                ? "bi-check-circle"
+                                : ($jenisAlert === "danger"
+                                    ? "bi-x-circle"
+                                    : "bi-exclamation-triangle"); ?> me-1"
+                        ></i>
+
+                        <?= amanKelahiran($isiPesan); ?>
+
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="alert"
+                            aria-label="Tutup"
+                        ></button>
+                    </div>
+
+                <?php endif; ?>
+
+                <div
+                    class="d-flex flex-wrap
+                    justify-content-between align-items-center
+                    gap-2 mb-3"
+                >
+
+                    <span class="text-muted small">
                         Total data:
                         <strong>
                             <?= mysqli_num_rows($query); ?>
                         </strong>
                         riwayat kelahiran
-                    </small>
+                    </span>
+
+                    <span class="badge badge-info">
+                        <i class="bi bi-heart-pulse"></i>
+                        Data KIA
+                    </span>
 
                 </div>
-
-                <span class="badge badge-info">
-                    <i class="bi bi-heart-pulse"></i>
-                    Data Kelahiran
-                </span>
-
-            </div>
-
-            <div class="card-body">
 
                 <div class="table-responsive">
 
@@ -264,27 +258,27 @@ require_once "../includes/navbar.php";
                                 </th>
 
                                 <th>
-                                    Nama Balita
+                                    Balita
+                                </th>
+
+                                <th class="text-center">
+                                    Data Lahir
+                                </th>
+
+                                <th class="text-center">
+                                    Status BBLR
+                                </th>
+
+                                <th class="text-center">
+                                    Status Prematur
                                 </th>
 
                                 <th>
-                                    NIK
+                                    Data Maternal
                                 </th>
 
                                 <th class="text-center">
-                                    Berat Lahir
-                                </th>
-
-                                <th class="text-center">
-                                    Panjang Lahir
-                                </th>
-
-                                <th class="text-center">
-                                    Usia Kehamilan
-                                </th>
-
-                                <th class="text-center">
-                                    Jenis Persalinan
+                                    Persalinan
                                 </th>
 
                                 <th
@@ -310,6 +304,59 @@ require_once "../includes/navbar.php";
 
                                 $idRiwayat =
                                     (int) $data[$kolomPrimaryKey];
+
+                                $beratLahir =
+                                    is_numeric(
+                                        $data["berat_lahir"] ?? null
+                                    )
+                                        ? (float) $data["berat_lahir"]
+                                        : null;
+
+                                $usiaKehamilan =
+                                    is_numeric(
+                                        $data["usia_kehamilan"] ?? null
+                                    )
+                                        ? (int) $data["usia_kehamilan"]
+                                        : null;
+
+                                if ($beratLahir === null) {
+                                    $statusBBLR = "Belum Dinilai";
+                                    $kelasBBLR = "bg-secondary";
+                                } elseif ($beratLahir < 2.5) {
+                                    $statusBBLR = "BBLR";
+                                    $kelasBBLR = "bg-danger";
+                                } else {
+                                    $statusBBLR = "Tidak BBLR";
+                                    $kelasBBLR = "bg-success";
+                                }
+
+                                if ($usiaKehamilan === null) {
+                                    $statusPrematur = "Belum Dinilai";
+                                    $kelasPrematur = "bg-secondary";
+                                } elseif ($usiaKehamilan < 37) {
+                                    $statusPrematur = "Prematur";
+                                    $kelasPrematur =
+                                        "bg-warning text-dark";
+                                } else {
+                                    $statusPrematur =
+                                        "Tidak Prematur";
+                                    $kelasPrematur =
+                                        "bg-success";
+                                }
+
+                                $usiaIbu =
+                                    $data[
+                                        "usia_ibu_melahirkan"
+                                    ] ?? null;
+
+                                $komplikasi =
+                                    trim(
+                                        (string) (
+                                            $data[
+                                                "komplikasi_kehamilan"
+                                            ] ?? ""
+                                        )
+                                    );
                             ?>
 
                                 <tr>
@@ -326,7 +373,8 @@ require_once "../includes/navbar.php";
                                         >
 
                                             <span
-                                                class="badge badge-primary"
+                                                class="badge
+                                                badge-primary"
                                             >
                                                 <i
                                                     class="bi
@@ -334,53 +382,124 @@ require_once "../includes/navbar.php";
                                                 ></i>
                                             </span>
 
-                                            <strong>
-                                                <?= amanKelahiran(
-                                                    $data["nama_balita"]
-                                                ); ?>
-                                            </strong>
+                                            <div>
+
+                                                <strong class="d-block">
+                                                    <?= amanKelahiran(
+                                                        $data[
+                                                            "nama_balita"
+                                                        ]
+                                                    ); ?>
+                                                </strong>
+
+                                                <small
+                                                    class="text-muted"
+                                                >
+                                                    NIK:
+                                                    <?= amanKelahiran(
+                                                        $data[
+                                                            "nik_balita"
+                                                        ]
+                                                    ); ?>
+                                                </small>
+
+                                            </div>
 
                                         </div>
 
                                     </td>
 
-                                    <td>
-                                        <?= amanKelahiran(
-                                            $data["nik_balita"]
-                                        ); ?>
-                                    </td>
-
                                     <td class="text-center">
-                                        <strong>
-                                            <?= amanKelahiran(
-                                                $data["berat_lahir"]
-                                            ); ?>
-                                        </strong>
-                                        <span class="text-muted">
+
+                                        <div class="small">
+                                            <strong>
+                                                <?= amanKelahiran(
+                                                    $data["berat_lahir"]
+                                                ); ?>
+                                            </strong>
                                             kg
-                                        </span>
-                                    </td>
+                                        </div>
 
-                                    <td class="text-center">
-                                        <strong>
+                                        <div class="small text-muted">
                                             <?= amanKelahiran(
                                                 $data["panjang_lahir"]
                                             ); ?>
-                                        </strong>
-                                        <span class="text-muted">
                                             cm
-                                        </span>
-                                    </td>
-
-                                    <td class="text-center">
-                                        <strong>
+                                            &nbsp;•&nbsp;
                                             <?= amanKelahiran(
                                                 $data["usia_kehamilan"]
                                             ); ?>
-                                        </strong>
-                                        <span class="text-muted">
                                             minggu
+                                        </div>
+
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <span
+                                            class="badge
+                                            <?= $kelasBBLR; ?>"
+                                        >
+                                            <?= amanKelahiran(
+                                                $statusBBLR
+                                            ); ?>
                                         </span>
+
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <span
+                                            class="badge
+                                            <?= $kelasPrematur; ?>"
+                                        >
+                                            <?= amanKelahiran(
+                                                $statusPrematur
+                                            ); ?>
+                                        </span>
+
+                                    </td>
+
+                                    <td>
+
+                                        <div>
+                                            <strong>
+                                                <?= amanKelahiran(
+                                                    $usiaIbu
+                                                ); ?>
+                                            </strong>
+                                            <span class="text-muted">
+                                                tahun
+                                            </span>
+                                        </div>
+
+                                        <small class="text-muted">
+
+                                            <?php if (
+                                                $komplikasi === ""
+                                            ): ?>
+
+                                                Komplikasi: -
+
+                                            <?php else: ?>
+
+                                                Komplikasi:
+                                                <?= amanKelahiran(
+                                                    mb_strlen(
+                                                        $komplikasi
+                                                    ) > 45
+                                                        ? mb_substr(
+                                                            $komplikasi,
+                                                            0,
+                                                            45
+                                                        ) . "..."
+                                                        : $komplikasi
+                                                ); ?>
+
+                                            <?php endif; ?>
+
+                                        </small>
+
                                     </td>
 
                                     <td class="text-center">

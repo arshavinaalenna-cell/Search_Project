@@ -38,6 +38,11 @@ $stmt = mysqli_prepare(
         rk.riwayat_penyakit,
         rk.riwayat_imunisasi,
         rk.riwayat_perawatan,
+        rk.penyakit_penyerta,
+        rk.red_flag,
+        rk.status_rujukan,
+        rk.rekomendasi_rujukan,
+        rk.catatan_kia,
         b.nama_balita,
         b.nik_balita,
         b.nama_ibu,
@@ -99,6 +104,71 @@ if (
 
 $bolehEdit = $roleAktif === "petugas_kia";
 
+$redFlag = trim(
+    (string) (
+        $data["red_flag"] ?? ""
+    )
+);
+
+$redFlagNormal = in_array(
+    strtolower($redFlag),
+    [
+        "",
+        "tidak ada",
+        "tidak",
+        "normal"
+    ],
+    true
+);
+
+$statusRujukan = trim(
+    (string) (
+        $data["status_rujukan"] ?? ""
+    )
+);
+
+$statusRujukanLower =
+    strtolower($statusRujukan);
+
+if (
+    $statusRujukanLower === ""
+    || $statusRujukanLower === "tidak perlu"
+) {
+    $kelasRujukan = "bg-success";
+    $labelRujukan =
+        $statusRujukan !== ""
+            ? $statusRujukan
+            : "Tidak Perlu";
+} elseif (
+    str_contains(
+        $statusRujukanLower,
+        "rekomend"
+    )
+) {
+    $kelasRujukan =
+        "bg-warning text-dark";
+
+    $labelRujukan =
+        $statusRujukan;
+} elseif (
+    str_contains(
+        $statusRujukanLower,
+        "rujuk"
+    )
+) {
+    $kelasRujukan =
+        "bg-danger";
+
+    $labelRujukan =
+        $statusRujukan;
+} else {
+    $kelasRujukan =
+        "bg-info";
+
+    $labelRujukan =
+        $statusRujukan;
+}
+
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
 ?>
@@ -120,7 +190,8 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        Informasi lengkap riwayat kesehatan balita.
+                        Informasi lengkap riwayat kesehatan,
+                        evaluasi KIA, red flag, dan rujukan balita.
                     </small>
 
                 </div>
@@ -284,6 +355,232 @@ require_once "../includes/navbar.php";
                                         "UTF-8"
                                     )
                                 ); ?>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <hr>
+
+                <div class="mb-3">
+
+                    <h6 class="mb-1">
+                        Evaluasi KIA
+                    </h6>
+
+                    <small class="text-muted">
+                        Penyakit penyerta, red flag,
+                        kebutuhan rujukan, dan catatan Petugas KIA.
+                    </small>
+
+                </div>
+
+                <div class="row g-3">
+
+                    <div class="col-12 col-lg-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Penyakit Penyerta
+                            </span>
+
+                            <div class="detail-value">
+
+                                <?php if (
+                                    trim(
+                                        (string) (
+                                            $data[
+                                                "penyakit_penyerta"
+                                            ] ?? ""
+                                        )
+                                    ) !== ""
+                                ): ?>
+
+                                    <?= nl2br(
+                                        htmlspecialchars(
+                                            $data[
+                                                "penyakit_penyerta"
+                                            ],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        )
+                                    ); ?>
+
+                                <?php else: ?>
+
+                                    <span class="text-muted">
+                                        Tidak ada
+                                    </span>
+
+                                <?php endif; ?>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Red Flag Kesehatan
+                            </span>
+
+                            <div class="detail-value">
+
+                                <?php if ($redFlagNormal): ?>
+
+                                    <span class="badge bg-success">
+                                        <i
+                                            class="bi
+                                            bi-check-circle"
+                                        ></i>
+                                        Tidak Ada
+                                    </span>
+
+                                <?php else: ?>
+
+                                    <span class="badge bg-danger">
+                                        <i
+                                            class="bi
+                                            bi-exclamation-octagon"
+                                        ></i>
+                                        Ada Red Flag
+                                    </span>
+
+                                    <div class="mt-2">
+                                        <?= nl2br(
+                                            htmlspecialchars(
+                                                $redFlag,
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            )
+                                        ); ?>
+                                    </div>
+
+                                <?php endif; ?>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-lg-4">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Status Rujukan
+                            </span>
+
+                            <div class="detail-value">
+
+                                <span
+                                    class="badge
+                                    <?= $kelasRujukan; ?>"
+                                >
+                                    <?= htmlspecialchars(
+                                        $labelRujukan,
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-lg-8">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Rekomendasi Rujukan
+                            </span>
+
+                            <div class="detail-value">
+
+                                <?php if (
+                                    trim(
+                                        (string) (
+                                            $data[
+                                                "rekomendasi_rujukan"
+                                            ] ?? ""
+                                        )
+                                    ) !== ""
+                                ): ?>
+
+                                    <?= nl2br(
+                                        htmlspecialchars(
+                                            $data[
+                                                "rekomendasi_rujukan"
+                                            ],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        )
+                                    ); ?>
+
+                                <?php else: ?>
+
+                                    <span class="text-muted">
+                                        Tidak ada rekomendasi.
+                                    </span>
+
+                                <?php endif; ?>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12">
+
+                        <div class="detail-item">
+
+                            <span class="detail-label">
+                                Catatan KIA
+                            </span>
+
+                            <div class="detail-value">
+
+                                <?php if (
+                                    trim(
+                                        (string) (
+                                            $data[
+                                                "catatan_kia"
+                                            ] ?? ""
+                                        )
+                                    ) !== ""
+                                ): ?>
+
+                                    <?= nl2br(
+                                        htmlspecialchars(
+                                            $data[
+                                                "catatan_kia"
+                                            ],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        )
+                                    ); ?>
+
+                                <?php else: ?>
+
+                                    <span class="text-muted">
+                                        Belum ada catatan KIA.
+                                    </span>
+
+                                <?php endif; ?>
+
                             </div>
 
                         </div>
