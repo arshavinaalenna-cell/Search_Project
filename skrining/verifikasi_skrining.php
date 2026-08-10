@@ -4,185 +4,100 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+/*
+|--------------------------------------------------------------------------
+| File penghubung verifikasi skrining
+|--------------------------------------------------------------------------
+|
+| Verifikasi utama hanya dilakukan pada hasil_deteksi.
+| File ini dipertahankan agar link lama dari detail_skrining.php
+| tetap berfungsi tanpa membuat sistem verifikasi kedua.
+|
+*/
 
-cekRole([
-"petugas_gizi"
-]);
+cekRole(["petugas_gizi"]);
 
+$idSkrining = (int) ($_GET["id"] ?? 0);
 
-$id =
-(int)($_GET["id"] ?? 0);
+if ($idSkrining <= 0) {
+    header(
+        "Location: hasil_skrining.php?pesan=tidak_ditemukan"
+    );
+    exit;
+}
 
+/*
+|--------------------------------------------------------------------------
+| Cari hasil deteksi terbaru milik balita dari skrining tersebut
+|--------------------------------------------------------------------------
+*/
 
-
-if(
-$_SERVER["REQUEST_METHOD"]=="POST"
-){
-
-
-$status =
-$_POST["status_verifikasi"];
-
-
-$catatan =
-$_POST["catatan_verifikasi"];
-
-
-
-$stmt=mysqli_prepare(
-$conn,
-
-"UPDATE skrining SET
-
-status_verifikasi=?,
-
-catatan_verifikasi=?,
-
-diverifikasi_oleh=?,
-
-tanggal_verifikasi=NOW()
-
-WHERE id_skrining=?"
-
-
+$stmt = mysqli_prepare(
+    $conn,
+    "SELECT
+        hd.id_deteksi
+     FROM skrining_awal s
+     INNER JOIN pengukuran_antropometri pa
+        ON pa.id_balita = s.id_balita
+     INNER JOIN hasil_deteksi hd
+        ON hd.id_pengukuran = pa.id_pengukuran
+     WHERE s.id_skrining = ?
+     ORDER BY
+        hd.tanggal_deteksi DESC,
+        hd.id_deteksi DESC
+     LIMIT 1"
 );
 
-
+if (!$stmt) {
+    die(
+        "Gagal menyiapkan data verifikasi: "
+        . mysqli_error($conn)
+    );
+}
 
 mysqli_stmt_bind_param(
-
-$stmt,
-
-"ssii",
-
-$status,
-
-$catatan,
-
-$_SESSION["id_user"],
-
-$id
-
+    $stmt,
+    "i",
+    $idSkrining
 );
-
-
 
 mysqli_stmt_execute($stmt);
 
+$result =
+    mysqli_stmt_get_result($stmt);
 
+$data =
+    mysqli_fetch_assoc($result);
 
-header(
-"Location:
-detail_skrining.php?id=$id"
-);
+mysqli_stmt_close($stmt);
 
+/*
+|--------------------------------------------------------------------------
+| Jika belum ada hasil deteksi
+|--------------------------------------------------------------------------
+*/
 
-exit;
-
-
+if (!$data) {
+    header(
+        "Location: detail_skrining.php?id="
+        . $idSkrining
+        . "&pesan=belum_ada_deteksi"
+    );
+    exit;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Arahkan ke satu-satunya halaman verifikasi
+|--------------------------------------------------------------------------
+*/
 
-?>
+$idDeteksi =
+    (int) $data["id_deteksi"];
 
+header(
+    "Location: ../deteksi/verifikasi_deteksi.php?id="
+    . $idDeteksi
+);
 
-<?php require "../includes/header.php"; ?>
-
-
-<div class="container mt-4">
-
-
-<div class="card">
-
-
-<div class="card-header">
-
-<h4>
-Verifikasi Skrining
-</h4>
-
-</div>
-
-
-<div class="card-body">
-
-
-<form method="POST">
-
-
-<label>
-Status Verifikasi
-</label>
-
-
-<select
-name="status_verifikasi"
-class="form-control mb-3"
->
-
-
-<option>
-Belum diverifikasi
-</option>
-
-
-<option>
-Sudah diverifikasi
-</option>
-
-
-<option>
-Perlu pemeriksaan ulang
-</option>
-
-
-</select>
-
-
-
-<label>
-Catatan Petugas Gizi
-</label>
-
-
-<textarea
-name="catatan_verifikasi"
-class="form-control mb-3"
-rows="5"
-placeholder="
-Masukkan hasil analisis skrining...
-"></textarea>
-
-
-
-<button
-class="btn btn-success"
->
-
-Simpan Verifikasi
-
-</button>
-
-
-
-<a href="hasil_skrining.php"
-class="btn btn-secondary">
-
-Kembali
-
-</a>
-
-
-</form>
-
-
-</div>
-
-
-</div>
-
-
-</div>
-
-
-<?php require "../includes/footer.php"; ?>
+exit;
