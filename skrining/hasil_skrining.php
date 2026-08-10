@@ -639,34 +639,6 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <?php if ($isiPesan !== ""): ?>
-
-            <div
-                class="alert alert-<?= htmlspecialchars(
-                    $jenisAlert,
-                    ENT_QUOTES,
-                    "UTF-8"
-                ); ?> alert-dismissible fade show"
-                role="alert"
-            >
-
-                <?= htmlspecialchars(
-                    $isiPesan,
-                    ENT_QUOTES,
-                    "UTF-8"
-                ); ?>
-
-                <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Tutup"
-                ></button>
-
-            </div>
-
-        <?php endif; ?>
-
         <!-- =========================================================
              CARD UTAMA
         ========================================================== -->
@@ -753,7 +725,7 @@ require_once "../includes/navbar.php";
 
                     <a
                         href="../dashboard/dashboard.php"
-                        class="btn btn-secondary"
+                        class="btn btn-secondary btn-sm"
                     >
 
                         <i
@@ -773,7 +745,7 @@ require_once "../includes/navbar.php";
 
                         <a
                             href="form_skrining.php"
-                            class="btn btn-primary"
+                            class="btn btn-primary btn-sm"
                         >
 
                             <i
@@ -792,6 +764,34 @@ require_once "../includes/navbar.php";
             </div>
 
             <div class="card-body">
+
+                <?php if ($isiPesan !== ""): ?>
+
+                    <div
+                        class="alert alert-<?= htmlspecialchars(
+                            $jenisAlert,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?> alert-dismissible fade show"
+                        role="alert"
+                    >
+
+                        <?= htmlspecialchars(
+                            $isiPesan,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>
+
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="alert"
+                            aria-label="Tutup"
+                        ></button>
+
+                    </div>
+
+                <?php endif; ?>
 
                 <!-- =================================================
                      INFORMASI DAFTAR

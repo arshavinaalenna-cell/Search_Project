@@ -23,7 +23,9 @@ cekRole([
 $id = (int) ($_GET["id"] ?? 0);
 
 if ($id <= 0) {
-    header("Location: hasil_skrining.php?pesan=tidak_ditemukan");
+    header(
+        "Location: hasil_skrining.php?pesan=tidak_ditemukan"
+    );
     exit;
 }
 
@@ -120,7 +122,9 @@ $data = mysqli_fetch_assoc($query);
 
 
 if (!$data) {
-    header("Location: hasil_skrining.php?pesan=tidak_ditemukan");
+    header(
+        "Location: hasil_skrining.php?pesan=tidak_ditemukan"
+    );
     exit;
 }
 
@@ -153,540 +157,955 @@ function amanDetailSkrining($nilai): string
 
 $roleAktif = $_SESSION["role"] ?? "";
 
+
+/*
+|--------------------------------------------------------------------------
+| Template
+|--------------------------------------------------------------------------
+*/
+
+require_once "../includes/header.php";
+require_once "../includes/navbar.php";
+
 ?>
 
 
-<?php require "../includes/header.php"; ?>
+<div class="layout-wrapper">
+
+    <?php require_once "../includes/sidebar.php"; ?>
 
 
-<div class="container mt-4">
+    <main class="main-content">
 
 
-    <div class="card">
-
-
-        <div class="card-header">
-
-            <h4 class="mb-0">
-
-                <i class="bi bi-clipboard2-heart me-2"></i>
-
-                Detail Skrining Balita
-
-            </h4>
-
-        </div>
-
-
-        <div class="card-body">
+        <div class="card content-card">
 
 
             <!-- =====================================================
-                 IDENTITAS BALITA
+                 HEADER
             ====================================================== -->
 
-            <h5 class="mb-3">
-                Identitas dan Pengukuran Balita
-            </h5>
+            <div class="card-header">
 
+                <div>
 
-            <div class="table-responsive">
+                    <h4 class="mb-1">
 
-                <table class="table table-bordered align-middle">
+                        <i class="bi bi-clipboard2-heart me-2"></i>
 
+                        Detail Skrining Balita
 
-                    <tr>
+                    </h4>
 
-                        <td width="35%">
-                            Nama Balita
-                        </td>
+                    <small class="text-muted">
 
-                        <td>
-                            <strong>
-                                <?= amanDetailSkrining(
-                                    $data["nama_balita"]
-                                ); ?>
-                            </strong>
-                        </td>
+                        Tinjau identitas, data pengukuran,
+                        faktor skrining awal, dan hasil deteksi balita.
 
-                    </tr>
+                    </small>
 
+                </div>
 
-                    <tr>
 
-                        <td>
-                            NIK
-                        </td>
-
-                        <td>
-                            <?= amanDetailSkrining(
-                                $data["nik_balita"]
-                            ); ?>
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Jenis Kelamin
-                        </td>
-
-                        <td>
-                            <?= amanDetailSkrining(
-                                $data["jenis_kelamin"]
-                            ); ?>
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Umur Saat Pengukuran
-                        </td>
-
-                        <td>
-
-                            <?php if (
-                                $data["umur_bulan"] !== null
-                                && $data["umur_bulan"] !== ""
-                            ): ?>
-
-                                <?= amanDetailSkrining(
-                                    $data["umur_bulan"]
-                                ); ?>
-                                bulan
-
-                            <?php else: ?>
-
-                                -
-
-                            <?php endif; ?>
-
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Berat Badan
-                        </td>
-
-                        <td>
-
-                            <?php if (
-                                $data["berat_badan"] !== null
-                                && $data["berat_badan"] !== ""
-                            ): ?>
-
-                                <?= amanDetailSkrining(
-                                    $data["berat_badan"]
-                                ); ?>
-                                kg
-
-                            <?php else: ?>
-
-                                -
-
-                            <?php endif; ?>
-
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Tinggi/Panjang Badan
-                        </td>
-
-                        <td>
-
-                            <?php if (
-                                $data["tinggi_panjang_badan"] !== null
-                                && $data["tinggi_panjang_badan"] !== ""
-                            ): ?>
-
-                                <?= amanDetailSkrining(
-                                    $data["tinggi_panjang_badan"]
-                                ); ?>
-                                cm
-
-                            <?php else: ?>
-
-                                -
-
-                            <?php endif; ?>
-
-                        </td>
-
-                    </tr>
-
-
-                </table>
-
-            </div>
-
-
-            <!-- =====================================================
-                 DATA SKRINING AWAL
-            ====================================================== -->
-
-            <h5 class="mt-4 mb-3">
-                Faktor Skrining Awal
-            </h5>
-
-
-            <div class="table-responsive">
-
-                <table class="table table-bordered align-middle">
-
-
-                    <tr>
-
-                        <td width="35%">
-                            Tinggi Badan Ibu
-                        </td>
-
-                        <td>
-
-                            <?php if (
-                                $data["tinggi_badan_ibu"] !== null
-                                && $data["tinggi_badan_ibu"] !== ""
-                            ): ?>
-
-                                <?= amanDetailSkrining(
-                                    $data["tinggi_badan_ibu"]
-                                ); ?>
-                                cm
-
-                            <?php else: ?>
-
-                                -
-
-                            <?php endif; ?>
-
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Pendidikan Ibu
-                        </td>
-
-                        <td>
-                            <?= amanDetailSkrining(
-                                $data["pendidikan_ibu"]
-                            ); ?>
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Pekerjaan Ibu
-                        </td>
-
-                        <td>
-                            <?= amanDetailSkrining(
-                                $data["pekerjaan_ibu"]
-                            ); ?>
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Lama ASI Eksklusif
-                        </td>
-
-                        <td>
-
-                            <?php if (
-                                $data["lama_asi_eksklusif"] !== null
-                                && $data["lama_asi_eksklusif"] !== ""
-                            ): ?>
-
-                                <?= amanDetailSkrining(
-                                    $data["lama_asi_eksklusif"]
-                                ); ?>
-                                bulan
-
-                            <?php else: ?>
-
-                                -
-
-                            <?php endif; ?>
-
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            MPASI
-                        </td>
-
-                        <td>
-                            <?= amanDetailSkrining(
-                                $data["mpasi"]
-                            ); ?>
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Frekuensi Makan
-                        </td>
-
-                        <td>
-                            <?= amanDetailSkrining(
-                                $data["frekuensi_makan"]
-                            ); ?>
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Protein Hewani
-                        </td>
-
-                        <td>
-                            <?= amanDetailSkrining(
-                                $data["protein_hewani"]
-                            ); ?>
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Status Ekonomi
-                        </td>
-
-                        <td>
-                            <?= amanDetailSkrining(
-                                $data["status_ekonomi"]
-                            ); ?>
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Sanitasi
-                        </td>
-
-                        <td>
-                            <?= amanDetailSkrining(
-                                $data["sanitasi"]
-                            ); ?>
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Air Bersih
-                        </td>
-
-                        <td>
-                            <?= amanDetailSkrining(
-                                $data["air_bersih"]
-                            ); ?>
-                        </td>
-
-                    </tr>
-
-
-                </table>
-
-            </div>
-
-
-            <!-- =====================================================
-                 HASIL DETEKSI
-            ====================================================== -->
-
-            <h5 class="mt-4 mb-3">
-                Hasil Deteksi
-            </h5>
-
-
-            <div class="table-responsive">
-
-                <table class="table table-bordered align-middle">
-
-
-                    <tr>
-
-                        <td width="35%">
-                            Status Gizi
-                        </td>
-
-                        <td>
-
-                            <?php if (
-                                !empty($data["status_gizi"])
-                            ): ?>
-
-                                <span class="badge bg-info">
-
-                                    <?= amanDetailSkrining(
-                                        $data["status_gizi"]
-                                    ); ?>
-
-                                </span>
-
-                            <?php else: ?>
-
-                                <span class="badge bg-secondary">
-                                    Belum dianalisis
-                                </span>
-
-                            <?php endif; ?>
-
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Status Stunting
-                        </td>
-
-                        <td>
-
-                            <?php if (
-                                !empty($data["status_stunting"])
-                            ): ?>
-
-                                <span class="badge bg-warning text-dark">
-
-                                    <?= amanDetailSkrining(
-                                        $data["status_stunting"]
-                                    ); ?>
-
-                                </span>
-
-                            <?php else: ?>
-
-                                <span class="badge bg-secondary">
-                                    Belum dianalisis
-                                </span>
-
-                            <?php endif; ?>
-
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Status Verifikasi
-                        </td>
-
-                        <td>
-
-                            <?= amanDetailSkrining(
-                                $data["status_verifikasi"]
-                                ?? "Belum diverifikasi"
-                            ); ?>
-
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td>
-                            Catatan Verifikasi
-                        </td>
-
-                        <td>
-
-                            <?= amanDetailSkrining(
-                                $data["catatan_verifikasi"]
-                                ?? "-"
-                            ); ?>
-
-                        </td>
-
-                    </tr>
-
-
-                </table>
-
-            </div>
-
-
-            <!-- =====================================================
-                 TOMBOL
-            ====================================================== -->
-
-            <div class="d-flex flex-wrap gap-2 mt-4">
-
-
-                <?php if (
-                    $roleAktif === "petugas_gizi"
-                ): ?>
+                <div class="d-flex flex-wrap gap-2">
 
                     <a
-                        href="verifikasi_skrining.php?id=<?= $id; ?>"
-                        class="btn btn-success"
+                        href="hasil_skrining.php"
+                        class="btn btn-secondary btn-sm"
                     >
 
-                        <i class="bi bi-check-circle"></i>
+                        <i class="bi bi-arrow-left"></i>
 
-                        Verifikasi Skrining
+                        Kembali
 
                     </a>
 
-                <?php endif; ?>
+
+                    <?php if (
+                        $roleAktif === "petugas_gizi"
+                    ): ?>
+
+                        <a
+                            href="verifikasi_skrining.php?id=<?= $id; ?>"
+                            class="btn btn-success btn-sm"
+                        >
+
+                            <i class="bi bi-check-circle"></i>
+
+                            Verifikasi Skrining
+
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
 
 
-                <a
-                    href="hasil_skrining.php"
-                    class="btn btn-secondary"
-                >
+            <div class="card-body">
 
-                    <i class="bi bi-arrow-left"></i>
 
-                    Kembali
+                <!-- =================================================
+                     IDENTITAS BALITA
+                ================================================== -->
 
-                </a>
+                <div class="mb-4">
+
+                    <div
+                        class="d-flex
+                        align-items-center
+                        gap-2
+                        mb-3"
+                    >
+
+                        <span class="badge badge-primary">
+
+                            <i class="bi bi-person-heart"></i>
+
+                        </span>
+
+                        <div>
+
+                            <h5 class="mb-0">
+                                Identitas Balita
+                            </h5>
+
+                            <small class="text-muted">
+                                Informasi dasar balita yang diskrining.
+                            </small>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="row g-3">
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Nama Balita
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <strong>
+
+                                        <?= amanDetailSkrining(
+                                            $data["nama_balita"]
+                                        ); ?>
+
+                                    </strong>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    NIK Balita
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data["nik_balita"]
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Jenis Kelamin
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data["jenis_kelamin"]
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Umur Saat Pengukuran
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?php if (
+                                        $data["umur_bulan"] !== null
+                                        && $data["umur_bulan"] !== ""
+                                    ): ?>
+
+                                        <?= amanDetailSkrining(
+                                            $data["umur_bulan"]
+                                        ); ?>
+
+                                        bulan
+
+                                    <?php else: ?>
+
+                                        -
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                    </div>
+
+                </div>
+
+
+                <hr class="my-4">
+
+
+                <!-- =================================================
+                     DATA ANTROPOMETRI
+                ================================================== -->
+
+                <div class="mb-4">
+
+                    <div
+                        class="d-flex
+                        align-items-center
+                        gap-2
+                        mb-3"
+                    >
+
+                        <span class="badge badge-info">
+
+                            <i class="bi bi-rulers"></i>
+
+                        </span>
+
+                        <div>
+
+                            <h5 class="mb-0">
+                                Pengukuran Antropometri
+                            </h5>
+
+                            <small class="text-muted">
+                                Data pengukuran terbaru balita.
+                            </small>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="row g-3">
+
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Berat Badan
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?php if (
+                                        $data["berat_badan"] !== null
+                                        && $data["berat_badan"] !== ""
+                                    ): ?>
+
+                                        <?= amanDetailSkrining(
+                                            $data["berat_badan"]
+                                        ); ?>
+
+                                        kg
+
+                                    <?php else: ?>
+
+                                        -
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Tinggi/Panjang Badan
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?php if (
+                                        $data[
+                                            "tinggi_panjang_badan"
+                                        ] !== null
+                                        &&
+                                        $data[
+                                            "tinggi_panjang_badan"
+                                        ] !== ""
+                                    ): ?>
+
+                                        <?= amanDetailSkrining(
+                                            $data[
+                                                "tinggi_panjang_badan"
+                                            ]
+                                        ); ?>
+
+                                        cm
+
+                                    <?php else: ?>
+
+                                        -
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Tanggal Pengukuran
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data[
+                                            "tanggal_pengukuran"
+                                        ]
+                                        ?? null
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                    </div>
+
+                </div>
+
+
+                <hr class="my-4">
+
+
+                <!-- =================================================
+                     INFORMASI IBU
+                ================================================== -->
+
+                <div class="mb-4">
+
+                    <div
+                        class="d-flex
+                        align-items-center
+                        gap-2
+                        mb-3"
+                    >
+
+                        <span class="badge badge-primary">
+
+                            <i class="bi bi-person-hearts"></i>
+
+                        </span>
+
+                        <div>
+
+                            <h5 class="mb-0">
+                                Informasi Ibu
+                            </h5>
+
+                            <small class="text-muted">
+                                Faktor maternal yang tercatat saat skrining.
+                            </small>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="row g-3">
+
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Tinggi Badan Ibu
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?php if (
+                                        $data[
+                                            "tinggi_badan_ibu"
+                                        ] !== null
+                                        &&
+                                        $data[
+                                            "tinggi_badan_ibu"
+                                        ] !== ""
+                                    ): ?>
+
+                                        <?= amanDetailSkrining(
+                                            $data[
+                                                "tinggi_badan_ibu"
+                                            ]
+                                        ); ?>
+
+                                        cm
+
+                                    <?php else: ?>
+
+                                        -
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Pendidikan Ibu
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data["pendidikan_ibu"]
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Pekerjaan Ibu
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data["pekerjaan_ibu"]
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                    </div>
+
+                </div>
+
+
+                <hr class="my-4">
+
+
+                <!-- =================================================
+                     POLA PEMBERIAN MAKAN
+                ================================================== -->
+
+                <div class="mb-4">
+
+                    <div
+                        class="d-flex
+                        align-items-center
+                        gap-2
+                        mb-3"
+                    >
+
+                        <span class="badge badge-info">
+
+                            <i class="bi bi-cup-straw"></i>
+
+                        </span>
+
+                        <div>
+
+                            <h5 class="mb-0">
+                                Pola Pemberian Makan
+                            </h5>
+
+                            <small class="text-muted">
+                                Riwayat ASI, MPASI, dan pola konsumsi balita.
+                            </small>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="row g-3">
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Lama ASI Eksklusif
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?php if (
+                                        $data[
+                                            "lama_asi_eksklusif"
+                                        ] !== null
+                                        &&
+                                        $data[
+                                            "lama_asi_eksklusif"
+                                        ] !== ""
+                                    ): ?>
+
+                                        <?= amanDetailSkrining(
+                                            $data[
+                                                "lama_asi_eksklusif"
+                                            ]
+                                        ); ?>
+
+                                        bulan
+
+                                    <?php else: ?>
+
+                                        -
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Pemberian MPASI
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data["mpasi"]
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Frekuensi Makan
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data["frekuensi_makan"]
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Protein Hewani
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data["protein_hewani"]
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                    </div>
+
+                </div>
+
+
+                <hr class="my-4">
+
+
+                <!-- =================================================
+                     KONDISI LINGKUNGAN
+                ================================================== -->
+
+                <div class="mb-4">
+
+                    <div
+                        class="d-flex
+                        align-items-center
+                        gap-2
+                        mb-3"
+                    >
+
+                        <span class="badge badge-primary">
+
+                            <i class="bi bi-house-heart"></i>
+
+                        </span>
+
+                        <div>
+
+                            <h5 class="mb-0">
+                                Kondisi Lingkungan
+                            </h5>
+
+                            <small class="text-muted">
+                                Kondisi ekonomi dan lingkungan rumah balita.
+                            </small>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="row g-3">
+
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Status Ekonomi
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data["status_ekonomi"]
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Sanitasi
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data["sanitasi"]
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Air Bersih
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data["air_bersih"]
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                    </div>
+
+                </div>
+
+
+                <hr class="my-4">
+
+
+                <!-- =================================================
+                     HASIL DETEKSI
+                ================================================== -->
+
+                <div>
+
+                    <div
+                        class="d-flex
+                        align-items-center
+                        gap-2
+                        mb-3"
+                    >
+
+                        <span class="badge badge-info">
+
+                            <i class="bi bi-activity"></i>
+
+                        </span>
+
+                        <div>
+
+                            <h5 class="mb-0">
+                                Hasil Deteksi
+                            </h5>
+
+                            <small class="text-muted">
+                                Hasil deteksi dan status verifikasi terbaru.
+                            </small>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="row g-3">
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Status Gizi
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?php if (
+                                        !empty(
+                                            $data["status_gizi"]
+                                        )
+                                    ): ?>
+
+                                        <span
+                                            class="badge
+                                            rounded-pill
+                                            bg-info"
+                                        >
+
+                                            <?= amanDetailSkrining(
+                                                $data["status_gizi"]
+                                            ); ?>
+
+                                        </span>
+
+                                    <?php else: ?>
+
+                                        <span
+                                            class="badge
+                                            rounded-pill
+                                            bg-secondary"
+                                        >
+                                            Belum dianalisis
+                                        </span>
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Status Stunting
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?php if (
+                                        !empty(
+                                            $data["status_stunting"]
+                                        )
+                                    ): ?>
+
+                                        <span
+                                            class="badge
+                                            rounded-pill
+                                            bg-warning
+                                            text-dark"
+                                        >
+
+                                            <?= amanDetailSkrining(
+                                                $data[
+                                                    "status_stunting"
+                                                ]
+                                            ); ?>
+
+                                        </span>
+
+                                    <?php else: ?>
+
+                                        <span
+                                            class="badge
+                                            rounded-pill
+                                            bg-secondary"
+                                        >
+                                            Belum dianalisis
+                                        </span>
+
+                                    <?php endif; ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Status Verifikasi
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data[
+                                            "status_verifikasi"
+                                        ]
+                                        ?? "Belum diverifikasi"
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Catatan Verifikasi
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <?= amanDetailSkrining(
+                                        $data[
+                                            "catatan_verifikasi"
+                                        ]
+                                        ?? "-"
+                                    ); ?>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                    </div>
+
+                </div>
 
 
             </div>
@@ -695,10 +1114,10 @@ $roleAktif = $_SESSION["role"] ?? "";
         </div>
 
 
-    </div>
+    </main>
 
 
 </div>
 
 
-<?php require "../includes/footer.php"; ?>
+<?php require_once "../includes/footer.php"; ?>

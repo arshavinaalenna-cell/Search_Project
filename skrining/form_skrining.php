@@ -626,80 +626,78 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <!-- Header halaman -->
-        <div class="page-header">
-
-            <div>
-
-                <h1 class="page-title">
-                    <i class="bi bi-clipboard2-heart me-2"></i>
-                    Tambah Skrining Awal
-                </h1>
-
-                <p class="page-subtitle">
-                    Pilih data balita, lalu sistem akan membaca
-                    Profil Ibu yang terhubung secara otomatis.
-                </p>
-
-            </div>
-
-            <a
-                href="hasil_skrining.php"
-                class="btn btn-secondary"
-            >
-                <i class="bi bi-arrow-left"></i>
-                Kembali ke Hasil Skrining
-            </a>
-
-        </div>
-
-        <!-- Pesan error -->
-        <?php if ($error !== ""): ?>
-
-            <div
-                class="alert alert-danger alert-dismissible fade show"
-                role="alert"
-            >
-                <i class="bi bi-exclamation-circle me-1"></i>
-
-                <?= amanFormSkrining($error); ?>
-
-                <button
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Tutup"
-                ></button>
-            </div>
-
-        <?php endif; ?>
-
-        <?php if (
-            $jumlahBalitaBelumTerhubung > 0
-        ): ?>
-
-            <div class="alert alert-warning">
-
-                <i class="bi bi-exclamation-triangle me-1"></i>
-
-                Ada
-                <strong>
-                    <?= $jumlahBalitaBelumTerhubung; ?>
-                </strong>
-                data balita yang belum terhubung dengan
-                Profil Ibu. Data balita tetap ditampilkan
-                pada pilihan, tetapi skrining hanya dapat
-                disimpan setelah Profil Ibu dihubungkan.
-
-            </div>
-
-        <?php endif; ?>
-
         <?php if ($jumlahBalita < 1): ?>
 
             <div class="card content-card">
 
+                <div class="card-header">
+
+                    <div>
+
+                        <h4 class="mb-1">
+                            <i class="bi bi-clipboard2-heart me-2"></i>
+                            Tambah Skrining Awal
+                        </h4>
+
+                        <small class="text-muted">
+                            Pilih data balita, lalu sistem akan membaca
+                            Profil Ibu yang terhubung secara otomatis.
+                        </small>
+
+                    </div>
+
+                    <a
+                        href="hasil_skrining.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                </div>
+
                 <div class="card-body">
+
+                    <?php if ($error !== ""): ?>
+
+                        <div
+                            class="alert alert-danger alert-dismissible fade show"
+                            role="alert"
+                        >
+                            <i class="bi bi-exclamation-circle me-1"></i>
+
+                            <?= amanFormSkrining($error); ?>
+
+                            <button
+                                type="button"
+                                class="btn-close"
+                                data-bs-dismiss="alert"
+                                aria-label="Tutup"
+                            ></button>
+                        </div>
+
+                    <?php endif; ?>
+
+                    <?php if (
+                        $jumlahBalitaBelumTerhubung > 0
+                    ): ?>
+
+                        <div class="alert alert-warning">
+
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+
+                            Ada
+                            <strong>
+                                <?= $jumlahBalitaBelumTerhubung; ?>
+                            </strong>
+                            data balita yang belum terhubung dengan
+                            Profil Ibu. Data balita tetap ditampilkan
+                            pada pilihan, tetapi skrining hanya dapat
+                            disimpan setelah Profil Ibu dihubungkan.
+
+                        </div>
+
+                    <?php endif; ?>
 
                     <div class="empty-state">
 
@@ -740,23 +738,69 @@ require_once "../includes/navbar.php";
                     <div>
 
                         <h4 class="mb-1">
-                            Form Skrining Awal Stunting
+                            <i class="bi bi-clipboard2-heart me-2"></i>
+                            Tambah Skrining Awal
                         </h4>
 
                         <small class="text-muted">
-                            Data identitas Ibu diambil otomatis dari Profil Ibu.
+                            Pilih data balita, lalu sistem akan membaca
+                            Profil Ibu yang terhubung secara otomatis.
                         </small>
 
                     </div>
 
-                    <span class="badge badge-info">
-                        <i class="bi bi-heart-pulse"></i>
-                        Skrining
-                    </span>
+                    <a
+                        href="hasil_skrining.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
 
                 </div>
 
                 <div class="card-body">
+
+                    <?php if ($error !== ""): ?>
+
+                        <div
+                            class="alert alert-danger alert-dismissible fade show"
+                            role="alert"
+                        >
+                            <i class="bi bi-exclamation-circle me-1"></i>
+
+                            <?= amanFormSkrining($error); ?>
+
+                            <button
+                                type="button"
+                                class="btn-close"
+                                data-bs-dismiss="alert"
+                                aria-label="Tutup"
+                            ></button>
+                        </div>
+
+                    <?php endif; ?>
+
+                    <?php if (
+                        $jumlahBalitaBelumTerhubung > 0
+                    ): ?>
+
+                        <div class="alert alert-warning">
+
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+
+                            Ada
+                            <strong>
+                                <?= $jumlahBalitaBelumTerhubung; ?>
+                            </strong>
+                            data balita yang belum terhubung dengan
+                            Profil Ibu. Data balita tetap ditampilkan
+                            pada pilihan, tetapi skrining hanya dapat
+                            disimpan setelah Profil Ibu dihubungkan.
+
+                        </div>
+
+                    <?php endif; ?>
 
                     <form
                         method="POST"
