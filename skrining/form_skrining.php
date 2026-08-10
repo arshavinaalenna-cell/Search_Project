@@ -528,8 +528,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 */
 
                 header(
-                    "Location: hasil_skrining.php"
-                    . "?pesan=tambah_berhasil"
+                    "Location: ../deteksi/analisis_deteksi.php"
+                    . "?id_balita=" . (int) $idBalita
+                    . "&sumber=form_skrining"
                 );
 
                 exit;

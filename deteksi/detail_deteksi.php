@@ -48,6 +48,9 @@ if ($roleAktif === "orang_tua") {
             hd.status_gizi,
             hd.status_stunting,
             hd.tanggal_deteksi,
+            hd.status_verifikasi,
+            hd.catatan_verifikasi,
+            hd.tanggal_verifikasi,
 
             pa.tanggal_pengukuran,
             pa.umur_bulan,
@@ -99,6 +102,9 @@ if ($roleAktif === "orang_tua") {
             hd.status_gizi,
             hd.status_stunting,
             hd.tanggal_deteksi,
+            hd.status_verifikasi,
+            hd.catatan_verifikasi,
+            hd.tanggal_verifikasi,
 
             pa.tanggal_pengukuran,
             pa.umur_bulan,
@@ -208,6 +214,41 @@ if (
     $kelasStunting = "bg-dark text-white";
 }
 
+/*
+|--------------------------------------------------------------------------
+| Menentukan warna status verifikasi
+|--------------------------------------------------------------------------
+*/
+
+$statusVerifikasi = trim(
+    (string) (
+        $data["status_verifikasi"]
+        ?? ""
+    )
+);
+
+if ($statusVerifikasi === "") {
+    $statusVerifikasi = "Belum diverifikasi";
+}
+
+$statusVerifikasiNormal =
+    strtolower($statusVerifikasi);
+
+$kelasVerifikasi = "bg-secondary";
+
+if (
+    $statusVerifikasiNormal
+    === "sudah diverifikasi"
+) {
+    $kelasVerifikasi = "bg-success";
+
+} elseif (
+    $statusVerifikasiNormal
+    === "perlu pemeriksaan ulang"
+) {
+    $kelasVerifikasi = "bg-warning text-dark";
+}
+
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
 
@@ -219,142 +260,188 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div
-            class="d-flex flex-column flex-md-row
-            justify-content-between align-items-md-center
-            gap-3 mb-4"
-        >
+        <div class="card content-card">
 
-            <div>
-                <h2 class="mb-1">
-                    Detail Hasil Deteksi
-                </h2>
+            <div class="card-header">
 
-                <p class="text-muted mb-0">
-                    Informasi lengkap hasil deteksi stunting balita.
-                </p>
+                <div>
+
+                    <h4 class="mb-1">
+                        <i class="bi bi-clipboard2-pulse me-2"></i>
+                        Detail Hasil Deteksi
+                    </h4>
+
+                    <small class="text-muted">
+                        Tinjau identitas balita, pengukuran antropometri,
+                        hasil deteksi, dan status verifikasi.
+                    </small>
+
+                </div>
+
+                <a
+                    href="hasil_deteksi.php"
+                    class="btn btn-secondary btn-sm"
+                >
+                    <i class="bi bi-arrow-left"></i>
+                    Kembali
+                </a>
+
             </div>
 
-            <a
-                href="hasil_deteksi.php"
-                class="btn btn-secondary"
-            >
-                ← Kembali ke Hasil Deteksi
-            </a>
+            <div class="card-body">
 
-        </div>
+                <!-- =================================================
+                     IDENTITAS BALITA
+                ================================================== -->
 
-        <div class="row g-4">
+                <div class="mb-4">
 
-            <!-- Data Balita -->
-            <div class="col-12 col-lg-6">
+                    <div class="d-flex align-items-center gap-2 mb-3">
 
-                <div class="card content-card h-100">
+                        <span class="badge badge-primary">
+                            <i class="bi bi-person-heart"></i>
+                        </span>
 
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0">
-                            Data Balita
-                        </h5>
+                        <div>
+
+                            <h5 class="mb-0">
+                                Identitas Balita
+                            </h5>
+
+                            <small class="text-muted">
+                                Informasi balita yang dianalisis.
+                            </small>
+
+                        </div>
+
                     </div>
 
-                    <div class="card-body p-4">
+                    <div class="row g-3">
 
-                        <table class="table table-bordered mb-0">
+                        <div class="col-12 col-md-6">
 
-                            <tr>
-                                <th width="40%">
-                                    ID Balita
-                                </th>
+                            <div class="detail-item h-100">
 
-                                <td>
-                                    <?= (int) $data["id_balita"] ?>
-                                </td>
-                            </tr>
-
-                            <tr>
-                                <th>
+                                <span class="detail-label">
                                     Nama Balita
-                                </th>
+                                </span>
 
-                                <td>
-                                    <?= htmlspecialchars(
-                                        $data["nama_balita"] ?? "-",
-                                        ENT_QUOTES,
-                                        "UTF-8"
-                                    ) ?>
-                                </td>
-                            </tr>
+                                <div class="detail-value">
+                                    <strong>
+                                        <?= htmlspecialchars(
+                                            $data["nama_balita"] ?? "-",
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </strong>
+                                </div>
 
-                            <tr>
-                                <th>
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
                                     NIK Balita
-                                </th>
+                                </span>
 
-                                <td>
+                                <div class="detail-value">
                                     <?= htmlspecialchars(
                                         $data["nik_balita"] ?? "-",
                                         ENT_QUOTES,
                                         "UTF-8"
-                                    ) ?>
-                                </td>
-                            </tr>
+                                    ); ?>
+                                </div>
 
-                            <tr>
-                                <th>
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
                                     Jenis Kelamin
-                                </th>
+                                </span>
 
-                                <td>
+                                <div class="detail-value">
                                     <?= htmlspecialchars(
                                         $data["jenis_kelamin"] ?? "-",
                                         ENT_QUOTES,
                                         "UTF-8"
-                                    ) ?>
-                                </td>
-                            </tr>
+                                    ); ?>
+                                </div>
 
-                            <tr>
-                                <th>
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
                                     Umur Saat Pengukuran
-                                </th>
+                                </span>
 
-                                <td>
+                                <div class="detail-value">
                                     <?= (int) (
                                         $data["umur_bulan"] ?? 0
-                                    ) ?>
+                                    ); ?>
                                     bulan
-                                </td>
-                            </tr>
+                                </div>
 
-                        </table>
+                            </div>
+
+                        </div>
 
                     </div>
 
                 </div>
 
-            </div>
+                <hr class="my-4">
 
-            <!-- Data Pengukuran -->
-            <div class="col-12 col-lg-6">
+                <!-- =================================================
+                     PENGUKURAN ANTROPOMETRI
+                ================================================== -->
 
-                <div class="card content-card h-100">
+                <div class="mb-4">
 
-                    <div class="card-header bg-info text-dark">
-                        <h5 class="mb-0">
-                            Data Pengukuran Antropometri
-                        </h5>
+                    <div class="d-flex align-items-center gap-2 mb-3">
+
+                        <span class="badge badge-info">
+                            <i class="bi bi-rulers"></i>
+                        </span>
+
+                        <div>
+
+                            <h5 class="mb-0">
+                                Pengukuran Antropometri
+                            </h5>
+
+                            <small class="text-muted">
+                                Data pengukuran yang digunakan dalam deteksi.
+                            </small>
+
+                        </div>
+
                     </div>
 
-                    <div class="card-body p-4">
+                    <div class="row g-3">
 
-                        <table class="table table-bordered mb-0">
+                        <div class="col-12 col-md-4">
 
-                            <tr>
-                                <th width="45%">
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
                                     Tanggal Pengukuran
-                                </th>
+                                </span>
 
-                                <td>
+                                <div class="detail-value">
                                     <?= !empty(
                                         $data["tanggal_pengukuran"]
                                     )
@@ -364,195 +451,330 @@ require_once "../includes/navbar.php";
                                                 $data["tanggal_pengukuran"]
                                             )
                                         )
-                                        : "-" ?>
-                                </td>
-                            </tr>
+                                        : "-"; ?>
+                                </div>
 
-                            <tr>
-                                <th>
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
                                     Berat Badan
-                                </th>
+                                </span>
 
-                                <td>
+                                <div class="detail-value">
                                     <?= htmlspecialchars(
                                         $data["berat_badan"] ?? "-",
                                         ENT_QUOTES,
                                         "UTF-8"
-                                    ) ?>
+                                    ); ?>
                                     kg
-                                </td>
-                            </tr>
+                                </div>
 
-                            <tr>
-                                <th>
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
                                     Tinggi/Panjang Badan
-                                </th>
+                                </span>
 
-                                <td>
+                                <div class="detail-value">
                                     <?= htmlspecialchars(
                                         $data[
                                             "tinggi_panjang_badan"
                                         ] ?? "-",
                                         ENT_QUOTES,
                                         "UTF-8"
-                                    ) ?>
+                                    ); ?>
                                     cm
-                                </td>
-                            </tr>
+                                </div>
 
-                            <tr>
-                                <th>
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
                                     Lingkar Kepala
-                                </th>
+                                </span>
 
-                                <td>
+                                <div class="detail-value">
                                     <?= htmlspecialchars(
                                         $data["lingkar_kepala"] ?? "-",
                                         ENT_QUOTES,
                                         "UTF-8"
-                                    ) ?>
+                                    ); ?>
                                     cm
-                                </td>
-                            </tr>
+                                </div>
 
-                            <tr>
-                                <th>
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-6">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
                                     LILA
-                                </th>
+                                </span>
 
-                                <td>
+                                <div class="detail-value">
                                     <?= htmlspecialchars(
                                         $data["lila"] ?? "-",
                                         ENT_QUOTES,
                                         "UTF-8"
-                                    ) ?>
+                                    ); ?>
                                     cm
-                                </td>
-                            </tr>
+                                </div>
 
-                        </table>
+                            </div>
+
+                        </div>
 
                     </div>
 
                 </div>
 
-            </div>
+                <hr class="my-4">
 
-            <!-- Hasil Deteksi -->
-            <div class="col-12">
+                <!-- =================================================
+                     HASIL DETEKSI
+                ================================================== -->
 
-                <div class="card content-card">
+                <div class="mb-4">
 
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">
-                            Hasil Deteksi Stunting
-                        </h5>
-                    </div>
+                    <div class="d-flex align-items-center gap-2 mb-3">
 
-                    <div class="card-body p-4">
+                        <span class="badge badge-primary">
+                            <i class="bi bi-activity"></i>
+                        </span>
 
-                        <div
-                            class="d-flex flex-wrap
-                            align-items-center gap-2 mb-4"
-                        >
-                            <span class="text-muted small me-1">
-                                Keterangan status:
-                            </span>
+                        <div>
 
-                            <span class="badge bg-success">
-                                Normal
-                            </span>
+                            <h5 class="mb-0">
+                                Hasil Deteksi
+                            </h5>
 
-                            <span class="badge bg-warning text-dark">
-                                Risiko Stunting
-                            </span>
+                            <small class="text-muted">
+                                Status gizi dan status stunting hasil analisis.
+                            </small>
 
-                            <span class="badge bg-danger">
-                                Stunting
-                            </span>
-
-                            <span class="badge bg-dark text-white">
-                                Stunting Berat
-                            </span>
                         </div>
 
-                        <div class="row g-4">
+                    </div>
 
-                            <div class="col-12 col-md-4">
+                    <div class="status-legend d-flex flex-wrap align-items-center gap-2 mb-3">
 
-                                <div
-                                    class="border rounded p-3
-                                    text-center h-100"
-                                >
+                        <span class="text-muted small me-1">
+                            Keterangan status:
+                        </span>
 
-                                    <p class="text-muted mb-2">
-                                        Tanggal Deteksi
-                                    </p>
+                        <span class="badge bg-success">
+                            Normal
+                        </span>
 
-                                    <h5 class="mb-0">
-                                        <?= !empty(
-                                            $data["tanggal_deteksi"]
-                                        )
-                                            ? date(
-                                                "d-m-Y",
-                                                strtotime(
-                                                    $data["tanggal_deteksi"]
-                                                )
+                        <span class="badge bg-warning text-dark">
+                            Risiko Stunting
+                        </span>
+
+                        <span class="badge bg-danger">
+                            Stunting
+                        </span>
+
+                        <span class="badge bg-dark text-white">
+                            Stunting Berat
+                        </span>
+
+                    </div>
+
+                    <div class="row g-3">
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Tanggal Deteksi
+                                </span>
+
+                                <div class="detail-value">
+                                    <?= !empty(
+                                        $data["tanggal_deteksi"]
+                                    )
+                                        ? date(
+                                            "d-m-Y",
+                                            strtotime(
+                                                $data["tanggal_deteksi"]
                                             )
-                                            : "-" ?>
-                                    </h5>
-
+                                        )
+                                        : "-"; ?>
                                 </div>
 
                             </div>
 
-                            <div class="col-12 col-md-4">
+                        </div>
 
-                                <div
-                                    class="border rounded p-3
-                                    text-center h-100"
-                                >
+                        <div class="col-12 col-md-4">
 
-                                    <p class="text-muted mb-2">
-                                        Status Gizi
-                                    </p>
+                            <div class="detail-item h-100">
 
-                                    <h5 class="mb-0">
-                                        <?= htmlspecialchars(
-                                            $data["status_gizi"]
-                                                ?? "Belum tersedia",
-                                            ENT_QUOTES,
-                                            "UTF-8"
-                                        ) ?>
-                                    </h5>
+                                <span class="detail-label">
+                                    Status Gizi
+                                </span>
 
+                                <div class="detail-value">
+                                    <?= htmlspecialchars(
+                                        $data["status_gizi"]
+                                            ?? "Belum tersedia",
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
                                 </div>
 
                             </div>
 
-                            <div class="col-12 col-md-4">
+                        </div>
 
-                                <div
-                                    class="border rounded p-3
-                                    text-center h-100"
-                                >
+                        <div class="col-12 col-md-4">
 
-                                    <p class="text-muted mb-2">
-                                        Status Stunting
-                                    </p>
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Status Stunting
+                                </span>
+
+                                <div class="detail-value">
 
                                     <span
-                                        class="badge <?= $kelasStunting ?>
-                                        fs-6 px-3 py-2"
+                                        class="badge <?= $kelasStunting; ?>"
                                     >
                                         <?= htmlspecialchars(
                                             $data["status_stunting"]
                                                 ?? "Belum tersedia",
                                             ENT_QUOTES,
                                             "UTF-8"
-                                        ) ?>
+                                        ); ?>
                                     </span>
 
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <hr class="my-4">
+
+                <!-- =================================================
+                     STATUS VERIFIKASI
+                ================================================== -->
+
+                <div>
+
+                    <div class="d-flex align-items-center gap-2 mb-3">
+
+                        <span class="badge badge-info">
+                            <i class="bi bi-check2-circle"></i>
+                        </span>
+
+                        <div>
+
+                            <h5 class="mb-0">
+                                Verifikasi
+                            </h5>
+
+                            <small class="text-muted">
+                                Status dan catatan verifikasi hasil deteksi.
+                            </small>
+
+                        </div>
+
+                    </div>
+
+                    <div class="row g-3">
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Status Verifikasi
+                                </span>
+
+                                <div class="detail-value">
+
+                                    <span
+                                        class="badge <?= $kelasVerifikasi; ?>"
+                                    >
+                                        <?= htmlspecialchars(
+                                            $statusVerifikasi,
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </span>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Tanggal Verifikasi
+                                </span>
+
+                                <div class="detail-value">
+                                    <?= !empty(
+                                        $data["tanggal_verifikasi"]
+                                    )
+                                        ? date(
+                                            "d-m-Y",
+                                            strtotime(
+                                                $data["tanggal_verifikasi"]
+                                            )
+                                        )
+                                        : "-"; ?>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-4">
+
+                            <div class="detail-item h-100">
+
+                                <span class="detail-label">
+                                    Catatan Verifikasi
+                                </span>
+
+                                <div class="detail-value">
+                                    <?= htmlspecialchars(
+                                        $data["catatan_verifikasi"]
+                                            ?? "-",
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
                                 </div>
 
                             </div>

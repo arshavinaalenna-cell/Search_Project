@@ -895,7 +895,7 @@ if ($sumberAnalisis === "form_skrining") {
     ];
 
     header(
-        "Location: ../skrining/form_skrining.php"
+        "Location: ../skrining/hasil_skrining.php?pesan=tambah_berhasil"
     );
 
     exit;
