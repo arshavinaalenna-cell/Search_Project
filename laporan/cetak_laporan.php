@@ -401,6 +401,7 @@ $sqlLaporan = "
         hd.status_gizi,
         hd.status_stunting,
         hd.tanggal_deteksi,
+        hd.status_verifikasi,
 
         pa.umur_bulan,
         pa.berat_badan,
@@ -486,6 +487,10 @@ $totalRisikoRendah = 0;
 $totalRisikoSedang = 0;
 $totalRisikoTinggi = 0;
 
+$totalSudahDiverifikasi = 0;
+$totalPerluPemeriksaanUlang = 0;
+$totalBelumDiverifikasi = 0;
+
 /*
 |--------------------------------------------------------------------------
 | Data agregasi grafik
@@ -550,6 +555,30 @@ while (
         )
     ) {
         $totalRisikoTinggi++;
+    }
+
+    $statusVerifikasi =
+        strtolower(
+            trim(
+                (string) (
+                    $data["status_verifikasi"]
+                    ?? "Belum diverifikasi"
+                )
+            )
+        );
+
+    if (
+        $statusVerifikasi ===
+        "sudah diverifikasi"
+    ) {
+        $totalSudahDiverifikasi++;
+    } elseif (
+        $statusVerifikasi ===
+        "perlu pemeriksaan ulang"
+    ) {
+        $totalPerluPemeriksaanUlang++;
+    } else {
+        $totalBelumDiverifikasi++;
     }
 
     /*
@@ -1522,6 +1551,21 @@ $logoCetakAda =
 
         </section>
 
+        <div
+            class="report-meta"
+            style="margin-top: 10px;"
+        >
+            <strong>Status Verifikasi:</strong>
+            Sudah diverifikasi
+            <?= $totalSudahDiverifikasi; ?>
+            &nbsp;|&nbsp;
+            Perlu pemeriksaan ulang
+            <?= $totalPerluPemeriksaanUlang; ?>
+            &nbsp;|&nbsp;
+            Belum diverifikasi
+            <?= $totalBelumDiverifikasi; ?>
+        </div>
+
         <?php if ($totalDeteksi > 0): ?>
 
             <section class="chart-section">
@@ -1642,6 +1686,10 @@ $logoCetakAda =
                         <th>
                             Status Risiko
                         </th>
+
+                        <th>
+                            Verifikasi
+                        </th>
                     </tr>
 
                 </thead>
@@ -1738,6 +1786,15 @@ $logoCetakAda =
 
                             </td>
 
+                            <td class="text-center">
+                                <?= amanCetak(
+                                    $data[
+                                        "status_verifikasi"
+                                    ]
+                                    ?? "Belum diverifikasi"
+                                ); ?>
+                            </td>
+
                         </tr>
 
                     <?php endforeach; ?>
@@ -1746,7 +1803,7 @@ $logoCetakAda =
 
                     <tr>
                         <td
-                            colspan="11"
+                            colspan="12"
                             class="empty-row"
                         >
                             Tidak ada hasil deteksi pada periode

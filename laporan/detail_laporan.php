@@ -215,6 +215,41 @@ function kelasStatusDetail($status): string
     return "badge-info";
 }
 
+
+function kelasVerifikasiDetail($status): string
+{
+    $status = strtolower(
+        trim((string) $status)
+    );
+
+    if ($status === "sudah diverifikasi") {
+        return "badge-success";
+    }
+
+    if ($status === "perlu pemeriksaan ulang") {
+        return "badge-warning";
+    }
+
+    return "badge-secondary";
+}
+
+function kelasRedFlagDetail($status): string
+{
+    $status = strtolower(
+        trim((string) $status)
+    );
+
+    if ($status === "ada") {
+        return "badge-danger";
+    }
+
+    if ($status === "tidak ada") {
+        return "badge-success";
+    }
+
+    return "badge-warning";
+}
+
 /*
 |--------------------------------------------------------------------------
 | Validasi ID deteksi
@@ -258,6 +293,10 @@ $stmtDetail = mysqli_prepare(
         hd.status_gizi,
         hd.status_stunting,
         hd.tanggal_deteksi,
+        hd.status_verifikasi,
+        hd.catatan_verifikasi,
+        hd.diverifikasi_oleh,
+        hd.tanggal_verifikasi,
 
         pa.tanggal_pengukuran,
         pa.umur_bulan,
@@ -285,7 +324,18 @@ $stmtDetail = mysqli_prepare(
         s.protein_hewani,
         s.status_ekonomi,
         s.sanitasi,
-        s.air_bersih
+        s.air_bersih,
+
+        rk.status_red_flag,
+        rk.catatan_red_flag,
+        rk.penilai_red_flag,
+        rk.tanggal_penilaian,
+        rk.status_rujukan,
+        rk.rekomendasi_rujukan,
+        rk.catatan_kia,
+
+        verifikator.nama AS nama_verifikator,
+        penilai_rf.nama AS nama_penilai_red_flag
 
      FROM hasil_deteksi AS hd
 
@@ -304,6 +354,21 @@ $stmtDetail = mysqli_prepare(
             FROM skrining_awal AS s2
             WHERE s2.id_balita = b.id_balita
         )
+
+     LEFT JOIN riwayat_kesehatan AS rk
+        ON rk.id_riwayat = (
+            SELECT MAX(rk2.id_riwayat)
+            FROM riwayat_kesehatan AS rk2
+            WHERE rk2.id_balita = b.id_balita
+        )
+
+     LEFT JOIN pengguna AS verifikator
+        ON hd.diverifikasi_oleh =
+            verifikator.id_user
+
+     LEFT JOIN pengguna AS penilai_rf
+        ON rk.penilai_red_flag =
+            penilai_rf.id_user
 
      WHERE hd.id_deteksi = ?
      "
@@ -416,40 +481,60 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <div class="page-header">
+        <div class="card content-card">
 
-            <div>
+            <div class="card-header">
 
-                <h1 class="page-title">
-                    <i class="bi bi-file-earmark-medical me-2"></i>
-                    Detail Laporan Stunting
-                </h1>
+                <div>
 
-                <p class="page-subtitle">
-                    Informasi lengkap hasil deteksi, pengukuran,
-                    faktor risiko, Posyandu, dan Puskesmas balita.
-                </p>
+                    <h4 class="mb-1">
+                        <i class="bi bi-file-earmark-medical me-2"></i>
+                        Detail Laporan Stunting
+                    </h4>
 
-            </div>
+                    <small class="text-muted">
+                        Hasil deteksi, verifikasi Gizi,
+                        skrining, dan evaluasi KIA balita.
+                    </small>
 
-            <div class="d-flex flex-wrap gap-2">
+                </div>
 
-                <a
-                    href="laporan_stunting.php"
-                    class="btn btn-secondary"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali ke Laporan
-                </a>
+                <div class="d-flex flex-wrap gap-2">
 
-                <button
-                    type="button"
-                    class="btn btn-primary"
-                    onclick="window.print();"
-                >
-                    <i class="bi bi-printer"></i>
-                    Cetak Detail
-                </button>
+                    <?php if (
+                        !empty($data["nama_puskesmas"])
+                    ): ?>
+
+                        <span
+                            class="badge badge-info
+                            d-inline-flex align-items-center px-3"
+                        >
+                            <i class="bi bi-hospital me-1"></i>
+                            <?= amanDetailLaporan(
+                                $data["nama_puskesmas"]
+                            ); ?>
+                        </span>
+
+                    <?php endif; ?>
+
+                    <a
+                        href="laporan_stunting.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                    <button
+                        type="button"
+                        class="btn btn-primary btn-sm"
+                        onclick="window.print();"
+                    >
+                        <i class="bi bi-printer"></i>
+                        Cetak Detail
+                    </button>
+
+                </div>
 
             </div>
 
@@ -851,6 +936,84 @@ require_once "../includes/navbar.php";
                                 </span>
                             </div>
 
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Status Verifikasi
+                                </span>
+
+                                <span
+                                    class="badge
+                                    <?= kelasVerifikasiDetail(
+                                        $data[
+                                            "status_verifikasi"
+                                        ]
+                                        ?? "Belum diverifikasi"
+                                    ); ?>"
+                                >
+                                    <?= amanDetailLaporan(
+                                        $data[
+                                            "status_verifikasi"
+                                        ]
+                                        ?? "Belum diverifikasi"
+                                    ); ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Diverifikasi Oleh
+                                </span>
+
+                                <span class="detail-value">
+                                    <?= amanDetailLaporan(
+                                        $data[
+                                            "nama_verifikator"
+                                        ]
+                                        ?? null
+                                    ); ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Tanggal Verifikasi
+                                </span>
+
+                                <span class="detail-value">
+                                    <?= !empty(
+                                        $data[
+                                            "tanggal_verifikasi"
+                                        ]
+                                    )
+                                        ? amanDetailLaporan(
+                                            date(
+                                                "d-m-Y H:i",
+                                                strtotime(
+                                                    $data[
+                                                        "tanggal_verifikasi"
+                                                    ]
+                                                )
+                                            )
+                                        )
+                                        : "-"; ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Catatan Verifikasi
+                                </span>
+
+                                <span class="detail-value">
+                                    <?= amanDetailLaporan(
+                                        $data[
+                                            "catatan_verifikasi"
+                                        ]
+                                        ?? null
+                                    ); ?>
+                                </span>
+                            </div>
+
                         </div>
 
                     </div>
@@ -1006,6 +1169,164 @@ require_once "../includes/navbar.php";
                                 <span class="detail-value">
                                     <?= amanDetailLaporan(
                                         $data["air_bersih"]
+                                    ); ?>
+                                </span>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="col-12 col-lg-6">
+
+                <div class="card content-card h-100">
+
+                    <div class="card-header">
+
+                        <div>
+                            <h4 class="mb-1">
+                                Evaluasi KIA & Rujukan
+                            </h4>
+
+                            <small class="text-muted">
+                                Penilaian klinis terbaru dari Petugas KIA
+                            </small>
+                        </div>
+
+                        <span class="badge badge-info">
+                            <i class="bi bi-heart-pulse"></i>
+                            KIA
+                        </span>
+
+                    </div>
+
+                    <div class="card-body">
+
+                        <div class="detail-grid">
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Status Red Flag
+                                </span>
+
+                                <span
+                                    class="badge
+                                    <?= kelasRedFlagDetail(
+                                        $data[
+                                            "status_red_flag"
+                                        ]
+                                        ?? "Belum dinilai"
+                                    ); ?>"
+                                >
+                                    <?= amanDetailLaporan(
+                                        $data[
+                                            "status_red_flag"
+                                        ]
+                                        ?? "Belum dinilai"
+                                    ); ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Catatan Red Flag
+                                </span>
+
+                                <span class="detail-value">
+                                    <?= amanDetailLaporan(
+                                        $data[
+                                            "catatan_red_flag"
+                                        ]
+                                        ?? null
+                                    ); ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Penilai Red Flag
+                                </span>
+
+                                <span class="detail-value">
+                                    <?= amanDetailLaporan(
+                                        $data[
+                                            "nama_penilai_red_flag"
+                                        ]
+                                        ?? null
+                                    ); ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Tanggal Penilaian
+                                </span>
+
+                                <span class="detail-value">
+                                    <?= !empty(
+                                        $data[
+                                            "tanggal_penilaian"
+                                        ]
+                                    )
+                                        ? amanDetailLaporan(
+                                            date(
+                                                "d-m-Y H:i",
+                                                strtotime(
+                                                    $data[
+                                                        "tanggal_penilaian"
+                                                    ]
+                                                )
+                                            )
+                                        )
+                                        : "-"; ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Status Rujukan
+                                </span>
+
+                                <span class="detail-value">
+                                    <?= amanDetailLaporan(
+                                        $data[
+                                            "status_rujukan"
+                                        ]
+                                        ?? null
+                                    ); ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Rekomendasi Rujukan
+                                </span>
+
+                                <span class="detail-value">
+                                    <?= amanDetailLaporan(
+                                        $data[
+                                            "rekomendasi_rujukan"
+                                        ]
+                                        ?? null
+                                    ); ?>
+                                </span>
+                            </div>
+
+                            <div class="detail-item">
+                                <span class="detail-label">
+                                    Catatan KIA
+                                </span>
+
+                                <span class="detail-value">
+                                    <?= amanDetailLaporan(
+                                        $data[
+                                            "catatan_kia"
+                                        ]
+                                        ?? null
                                     ); ?>
                                 </span>
                             </div>

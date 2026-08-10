@@ -256,6 +256,24 @@ function kelasStatusLaporan($status): string
     return "badge-info";
 }
 
+
+function kelasVerifikasiLaporan($status): string
+{
+    $status = strtolower(
+        trim((string) $status)
+    );
+
+    if ($status === "sudah diverifikasi") {
+        return "badge-success";
+    }
+
+    if ($status === "perlu pemeriksaan ulang") {
+        return "badge-warning";
+    }
+
+    return "badge-secondary";
+}
+
 /*
 |--------------------------------------------------------------------------
 | Mengambil master Puskesmas
@@ -447,6 +465,7 @@ $sql = "
         hd.status_gizi,
         hd.status_stunting,
         hd.tanggal_deteksi,
+        hd.status_verifikasi,
 
         pa.umur_bulan,
         pa.berat_badan,
@@ -548,6 +567,10 @@ $totalRisikoRendah = 0;
 $totalRisikoSedang = 0;
 $totalRisikoTinggi = 0;
 
+$totalSudahDiverifikasi = 0;
+$totalPerluPemeriksaanUlang = 0;
+$totalBelumDiverifikasi = 0;
+
 /*
 |--------------------------------------------------------------------------
 | Data agregasi untuk grafik
@@ -615,6 +638,30 @@ while (
         )
     ) {
         $totalRisikoTinggi++;
+    }
+
+    $statusVerifikasi =
+        strtolower(
+            trim(
+                (string) (
+                    $data["status_verifikasi"]
+                    ?? "Belum diverifikasi"
+                )
+            )
+        );
+
+    if (
+        $statusVerifikasi ===
+        "sudah diverifikasi"
+    ) {
+        $totalSudahDiverifikasi++;
+    } elseif (
+        $statusVerifikasi ===
+        "perlu pemeriksaan ulang"
+    ) {
+        $totalPerluPemeriksaanUlang++;
+    } else {
+        $totalBelumDiverifikasi++;
     }
 
     /*
@@ -796,52 +843,80 @@ require_once "../includes/navbar.php";
 
         <?php endif; ?>
 
-        <!-- Header halaman -->
-        <div class="page-header">
+        <!-- Header laporan -->
+        <div class="card content-card">
 
-            <div>
+            <div class="card-header">
 
-                <h1 class="page-title">
+                <div>
 
-                    <i class="bi bi-file-earmark-medical me-2"></i>
+                    <h4 class="mb-1">
+                        <i class="bi bi-file-earmark-medical me-2"></i>
+                        Laporan Stunting
+                    </h4>
 
-                    Laporan Stunting
+                    <small class="text-muted">
+                        Rekap hasil deteksi, status verifikasi,
+                        periode, dan Puskesmas.
+                    </small>
 
-                </h1>
+                </div>
 
-                <p class="page-subtitle">
+                <div class="d-flex flex-wrap gap-2">
 
-                    Rekap hasil deteksi risiko stunting berdasarkan
-                    periode dan Puskesmas yang dipilih.
+                    <?php if (
+                        $aksesPuskesmasTerbatas
+                        && !$puskesmasBelumTerhubung
+                    ): ?>
 
-                </p>
+                        <span
+                            class="badge badge-info
+                            d-inline-flex align-items-center px-3"
+                        >
+                            <i class="bi bi-hospital me-1"></i>
+                            <?= amanLaporan(
+                                $namaPuskesmasAkun
+                            ); ?>
+                        </span>
 
-            </div>
+                    <?php elseif (
+                        $roleAktif === "dinkes"
+                    ): ?>
 
-            <div class="d-flex flex-wrap gap-2">
+                        <span
+                            class="badge badge-info
+                            d-inline-flex align-items-center px-3"
+                        >
+                            <i class="bi bi-buildings me-1"></i>
+                            Monitoring Dinkes
+                        </span>
 
-                <a
-                    href="../dashboard/dashboard.php"
-                    class="btn btn-secondary"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali ke Dashboard
-                </a>
-
-                <?php if (!$puskesmasBelumTerhubung): ?>
+                    <?php endif; ?>
 
                     <a
-                        href="cetak_laporan.php?<?= amanLaporan(
-                            $parameterCetak
-                        ); ?>"
-                        class="btn btn-primary"
-                        target="_blank"
+                        href="../dashboard/dashboard.php"
+                        class="btn btn-secondary btn-sm"
                     >
-                        <i class="bi bi-printer"></i>
-                        Cetak Laporan
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
                     </a>
 
-                <?php endif; ?>
+                    <?php if (!$puskesmasBelumTerhubung): ?>
+
+                        <a
+                            href="cetak_laporan.php?<?= amanLaporan(
+                                $parameterCetak
+                            ); ?>"
+                            class="btn btn-primary btn-sm"
+                            target="_blank"
+                        >
+                            <i class="bi bi-printer"></i>
+                            Cetak Laporan
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
 
             </div>
 
@@ -1345,6 +1420,28 @@ require_once "../includes/navbar.php";
 
             <div class="card-body">
 
+                <div class="d-flex flex-wrap gap-2 mb-3">
+
+                    <span class="badge badge-success">
+                        <i class="bi bi-check2-circle"></i>
+                        Sudah diverifikasi:
+                        <?= $totalSudahDiverifikasi; ?>
+                    </span>
+
+                    <span class="badge badge-warning">
+                        <i class="bi bi-arrow-repeat"></i>
+                        Perlu pemeriksaan ulang:
+                        <?= $totalPerluPemeriksaanUlang; ?>
+                    </span>
+
+                    <span class="badge badge-secondary">
+                        <i class="bi bi-clock-history"></i>
+                        Belum diverifikasi:
+                        <?= $totalBelumDiverifikasi; ?>
+                    </span>
+
+                </div>
+
                 <div class="table-responsive">
 
                     <table class="table table-hover align-middle">
@@ -1391,6 +1488,10 @@ require_once "../includes/navbar.php";
 
                                 <th class="text-center">
                                     Status Risiko
+                                </th>
+
+                                <th class="text-center">
+                                    Verifikasi
                                 </th>
 
                                 <th class="text-center">
@@ -1540,6 +1641,27 @@ require_once "../includes/navbar.php";
 
                                     <td class="text-center">
 
+                                        <span
+                                            class="badge
+                                            <?= kelasVerifikasiLaporan(
+                                                $data[
+                                                    "status_verifikasi"
+                                                ]
+                                                ?? "Belum diverifikasi"
+                                            ); ?>"
+                                        >
+                                            <?= amanLaporan(
+                                                $data[
+                                                    "status_verifikasi"
+                                                ]
+                                                ?? "Belum diverifikasi"
+                                            ); ?>
+                                        </span>
+
+                                    </td>
+
+                                    <td class="text-center">
+
                                         <?= formatTanggalLaporan(
                                             $data["tanggal_deteksi"]
                                         ); ?>
@@ -1573,7 +1695,7 @@ require_once "../includes/navbar.php";
 
                             <tr>
 
-                                <td colspan="12">
+                                <td colspan="13">
 
                                     <div class="empty-state">
 
