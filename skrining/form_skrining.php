@@ -1,7 +1,10 @@
 <?php
 
 require_once "../auth/session.php";
+require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
+
+cekRole(["petugas_gizi"]);
 
 /*
 |--------------------------------------------------------------------------
@@ -11,6 +14,39 @@ require_once "../config/koneksi.php";
 
 $judulHalaman =
     "Tambah Skrining Awal | Sistem Deteksi Stunting";
+
+/*
+|--------------------------------------------------------------------------
+| Flash hasil analisis
+|--------------------------------------------------------------------------
+|
+| Setelah skrining disimpan, analisis_deteksi.php akan menghitung
+| hasil menggunakan rumus yang sudah ada, lalu mengembalikan hasil
+| ke halaman form ini melalui session.
+|
+| Data popup hanya ditampilkan satu kali.
+|
+*/
+
+$hasilAnalisisPopup =
+    $_SESSION["hasil_analisis_form"] ?? null;
+
+if ($hasilAnalisisPopup !== null) {
+    unset($_SESSION["hasil_analisis_form"]);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Flash data skrining baru
+|--------------------------------------------------------------------------
+*/
+
+$skriningBaru =
+    $_SESSION["skrining_baru"] ?? null;
+
+if ($hasilAnalisisPopup !== null && $skriningBaru !== null) {
+    unset($_SESSION["skrining_baru"]);
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -280,7 +316,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $stmtCekBalita = mysqli_prepare(
             $conn,
-            "SELECT id_balita
+            "SELECT
+                id_balita,
+                nama_balita
              FROM balita
              WHERE id_balita = ?
              LIMIT 1"
@@ -393,10 +431,55 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             if ($berhasil) {
 
+                $idSkriningBaru =
+                    (int) mysqli_insert_id($conn);
+
+                $_SESSION["skrining_baru"] = [
+                    "id_skrining" => $idSkriningBaru,
+                    "id_balita" => (int) $idBalita,
+                    "nama_balita" =>
+                        $dataBalita["nama_balita"]
+                        ?? "Balita",
+                    "tinggi_badan_ibu" =>
+                        $tinggiBadanIbu,
+                    "pendidikan_ibu" =>
+                        $pendidikanIbu,
+                    "pekerjaan_ibu" =>
+                        $pekerjaanIbu,
+                    "lama_asi_eksklusif" =>
+                        $lamaAsiEksklusif,
+                    "mpasi" =>
+                        $mpasi,
+                    "frekuensi_makan" =>
+                        $frekuensiMakan,
+                    "protein_hewani" =>
+                        $proteinHewani,
+                    "status_ekonomi" =>
+                        $statusEkonomi,
+                    "sanitasi" =>
+                        $sanitasi,
+                    "air_bersih" =>
+                        $airBersih
+                ];
+
                 mysqli_stmt_close($stmtSimpan);
 
+                /*
+                |--------------------------------------------------------------------------
+                | Jalankan analisis lalu kembali ke form
+                |--------------------------------------------------------------------------
+                |
+                | Parameter sumber=form_skrining dipakai agar
+                | analisis_deteksi.php tahu bahwa hasil harus
+                | dikembalikan ke halaman ini untuk popup.
+                |
+                */
+
                 header(
-                    "Location: hasil_skrining.php?pesan=tambah_berhasil"
+                    "Location: ../deteksi/analisis_deteksi.php"
+                    . "?id_balita="
+                    . (int) $idBalita
+                    . "&sumber=form_skrining"
                 );
 
                 exit;
@@ -1170,5 +1253,301 @@ require_once "../includes/navbar.php";
     </main>
 
 </div>
+
+<?php if (is_array($hasilAnalisisPopup)): ?>
+
+    <?php
+    $popupNamaBalita =
+        amanFormSkrining(
+            $hasilAnalisisPopup["nama_balita"]
+            ?? "Balita"
+        );
+
+    $popupIdBalita =
+        (int) (
+            $hasilAnalisisPopup["id_balita"]
+            ?? 0
+        );
+
+    $popupZScoreTbu =
+        $hasilAnalisisPopup["z_score_tbu"]
+        ?? null;
+
+    $popupZScoreBbu =
+        $hasilAnalisisPopup["z_score_bbu"]
+        ?? null;
+
+    $popupStatusStunting =
+        amanFormSkrining(
+            $hasilAnalisisPopup["status_stunting"]
+            ?? "-"
+        );
+
+    $popupStatusGizi =
+        amanFormSkrining(
+            $hasilAnalisisPopup["status_gizi"]
+            ?? "-"
+        );
+
+    $kelasStunting =
+        amanFormSkrining(
+            $hasilAnalisisPopup["kelas_status_stunting"]
+            ?? "badge-secondary"
+        );
+
+    $kelasGizi =
+        amanFormSkrining(
+            $hasilAnalisisPopup["kelas_status_gizi"]
+            ?? "badge-secondary"
+        );
+
+    $keteranganStunting =
+        amanFormSkrining(
+            $hasilAnalisisPopup["keterangan_stunting"]
+            ?? ""
+        );
+
+    $keteranganGizi =
+        amanFormSkrining(
+            $hasilAnalisisPopup["keterangan_gizi"]
+            ?? ""
+        );
+    ?>
+
+    <div
+        class="modal fade"
+        id="modalHasilSkrining"
+        tabindex="-1"
+        aria-labelledby="modalHasilSkriningLabel"
+        aria-hidden="true"
+        data-bs-backdrop="static"
+    >
+        <div
+            class="modal-dialog
+            modal-dialog-centered
+            modal-lg"
+        >
+
+            <div class="modal-content">
+
+                <div class="modal-header">
+
+                    <div>
+
+                        <h5
+                            class="modal-title"
+                            id="modalHasilSkriningLabel"
+                        >
+                            <i class="bi bi-clipboard2-pulse me-2"></i>
+                            Hasil Analisis
+                        </h5>
+
+                        <small class="text-muted">
+                            Skrining berhasil disimpan dan
+                            analisis pertumbuhan telah selesai.
+                        </small>
+
+                    </div>
+
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Tutup"
+                    ></button>
+
+                </div>
+
+                <div class="modal-body">
+
+                    <div class="text-center mb-4">
+
+                        <div
+                            class="empty-state-icon
+                            mx-auto mb-2"
+                            style="
+                                width: 64px;
+                                height: 64px;
+                            "
+                        >
+                            <i class="bi bi-person-heart"></i>
+                        </div>
+
+                        <h4 class="mb-1">
+                            <?= $popupNamaBalita; ?>
+                        </h4>
+
+                        <p class="text-muted mb-0">
+                            Hasil berdasarkan data antropometri
+                            terbaru balita.
+                        </p>
+
+                    </div>
+
+                    <div class="row g-3">
+
+                        <div class="col-12 col-md-6">
+
+                            <div
+                                class="card h-100
+                                border-0 bg-light"
+                            >
+                                <div class="card-body">
+
+                                    <small class="text-muted">
+                                        Z-Score TB/U
+                                    </small>
+
+                                    <h2 class="mb-2">
+                                        <?= $popupZScoreTbu !== null
+                                            ? amanFormSkrining(
+                                                number_format(
+                                                    (float) $popupZScoreTbu,
+                                                    2,
+                                                    ".",
+                                                    ""
+                                                )
+                                            )
+                                            : "-"; ?>
+                                    </h2>
+
+                                    <span
+                                        class="badge
+                                        <?= $kelasStunting; ?>"
+                                    >
+                                        <?= $popupStatusStunting; ?>
+                                    </span>
+
+                                    <?php if (
+                                        $keteranganStunting !== ""
+                                    ): ?>
+
+                                        <p
+                                            class="small
+                                            text-muted mt-3 mb-0"
+                                        >
+                                            <?= $keteranganStunting; ?>
+                                        </p>
+
+                                    <?php endif; ?>
+
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <div class="col-12 col-md-6">
+
+                            <div
+                                class="card h-100
+                                border-0 bg-light"
+                            >
+                                <div class="card-body">
+
+                                    <small class="text-muted">
+                                        Z-Score BB/U
+                                    </small>
+
+                                    <h2 class="mb-2">
+                                        <?= $popupZScoreBbu !== null
+                                            ? amanFormSkrining(
+                                                number_format(
+                                                    (float) $popupZScoreBbu,
+                                                    2,
+                                                    ".",
+                                                    ""
+                                                )
+                                            )
+                                            : "-"; ?>
+                                    </h2>
+
+                                    <span
+                                        class="badge
+                                        <?= $kelasGizi; ?>"
+                                    >
+                                        <?= $popupStatusGizi; ?>
+                                    </span>
+
+                                    <?php if (
+                                        $keteranganGizi !== ""
+                                    ): ?>
+
+                                        <p
+                                            class="small
+                                            text-muted mt-3 mb-0"
+                                        >
+                                            <?= $keteranganGizi; ?>
+                                        </p>
+
+                                    <?php endif; ?>
+
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div
+                        class="alert alert-info
+                        mt-3 mb-0"
+                    >
+                        <i class="bi bi-info-circle me-1"></i>
+                        Hasil ini berasal dari proses analisis
+                        antropometri yang digunakan sistem.
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+
+                    <a
+                        href="hasil_skrining.php"
+                        class="btn btn-light"
+                    >
+                        <i class="bi bi-table"></i>
+                        Lihat Daftar Skrining
+                    </a>
+
+                    <a
+                        href="../deteksi/hasil_deteksi.php"
+                        class="btn btn-primary"
+                    >
+                        <i class="bi bi-clipboard2-data"></i>
+                        Lihat Hasil Deteksi
+                    </a>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener(
+            "load",
+            function () {
+                const elemenModal =
+                    document.getElementById(
+                        "modalHasilSkrining"
+                    );
+
+                if (
+                    elemenModal
+                    && typeof bootstrap !== "undefined"
+                ) {
+                    const modalHasil =
+                        new bootstrap.Modal(
+                            elemenModal
+                        );
+
+                    modalHasil.show();
+                }
+            }
+        );
+    </script>
+
+<?php endif; ?>
 
 <?php require_once "../includes/footer.php"; ?>

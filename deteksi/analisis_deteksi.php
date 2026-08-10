@@ -842,8 +842,72 @@ mysqli_stmt_close($stmtSimpan);
 
 /*
 |--------------------------------------------------------------------------
-| Berhasil disimpan -> kembali ke halaman Hasil Deteksi
+| Berhasil disimpan
 |--------------------------------------------------------------------------
+|
+| Jika analisis dipanggil otomatis setelah pengisian skrining,
+| hasil perhitungan dikirim melalui session flash agar dapat
+| ditampilkan sebagai modal pada halaman hasil skrining.
+|
+| Jika analisis dipanggil dari tombol Analisis biasa, alur lama
+| tetap dipertahankan menuju halaman hasil deteksi.
+|
+*/
+
+$sumberAnalisis = trim($_GET["sumber"] ?? "");
+
+if ($sumberAnalisis === "form_skrining") {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Kirim hasil kembali ke form skrining
+    |--------------------------------------------------------------------------
+    |
+    | Seluruh nilai di bawah ini merupakan OUTPUT dari rumus analisis
+    | yang sudah dijalankan di atas. Tidak ada perhitungan ulang di sini.
+    |
+    */
+
+    $_SESSION["hasil_analisis_form"] = [
+        "id_balita" => (int) $idBalita,
+        "id_pengukuran" => (int) $idPengukuran,
+        "nama_balita" =>
+            $balita["nama_balita"] ?? "Balita",
+        "z_score_tbu" =>
+            $zScoreTbu,
+        "status_stunting" =>
+            $statusStunting,
+        "kelas_status_stunting" =>
+            $kelasStatus,
+        "keterangan_stunting" =>
+            $keteranganStunting,
+        "z_score_bbu" =>
+            $zScoreBbu,
+        "status_gizi" =>
+            $statusGizi,
+        "kelas_status_gizi" =>
+            $hasilKlasifikasiGizi["badge"]
+            ?? "badge-secondary",
+        "keterangan_gizi" =>
+            $hasilKlasifikasiGizi["keterangan"]
+            ?? ""
+    ];
+
+    header(
+        "Location: ../skrining/form_skrining.php"
+    );
+
+    exit;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Analisis manual dari tabel skrining
+|--------------------------------------------------------------------------
+|
+| Jika analisis dijalankan dari tombol Analisis pada daftar skrining,
+| alur lama tetap dipertahankan.
+|
 */
 
 header(

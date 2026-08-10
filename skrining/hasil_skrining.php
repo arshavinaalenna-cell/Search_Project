@@ -14,6 +14,23 @@ $judulHalaman =
 
 /*
 |--------------------------------------------------------------------------
+| Flash data skrining baru
+|--------------------------------------------------------------------------
+|
+| Data ini dikirim oleh form_skrining.php setelah INSERT berhasil.
+| Modal hanya tampil satu kali, lalu session langsung dihapus agar
+| tidak muncul lagi ketika halaman direfresh.
+|
+*/
+
+$skriningBaru = $_SESSION["skrining_baru"] ?? null;
+
+if ($skriningBaru !== null) {
+    unset($_SESSION["skrining_baru"]);
+}
+
+/*
+|--------------------------------------------------------------------------
 | Mengambil data skrining beserta nama balita
 |--------------------------------------------------------------------------
 */
@@ -612,5 +629,265 @@ require_once "../includes/navbar.php";
     </main>
 
 </div>
+
+<?php if (is_array($skriningBaru)): ?>
+
+    <?php
+    $popupIdBalita =
+        (int) ($skriningBaru["id_balita"] ?? 0);
+
+    $popupNamaBalita =
+        amanSkrining(
+            $skriningBaru["nama_balita"]
+            ?? "Balita"
+        );
+    ?>
+
+    <div
+        class="modal fade"
+        id="modalSkriningBerhasil"
+        tabindex="-1"
+        aria-labelledby="modalSkriningBerhasilLabel"
+        aria-hidden="true"
+        data-bs-backdrop="static"
+    >
+        <div class="modal-dialog modal-dialog-centered">
+
+            <div class="modal-content">
+
+                <div class="modal-header">
+
+                    <div>
+                        <h5
+                            class="modal-title"
+                            id="modalSkriningBerhasilLabel"
+                        >
+                            <i class="bi bi-clipboard2-check me-2"></i>
+                            Skrining Berhasil Disimpan
+                        </h5>
+
+                        <small class="text-muted">
+                            Ringkasan data skrining awal yang baru diisi.
+                        </small>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Tutup"
+                    ></button>
+
+                </div>
+
+                <div class="modal-body">
+
+                    <div class="text-center mb-4">
+
+                        <div
+                            class="empty-state-icon mx-auto mb-2"
+                            style="width: 58px; height: 58px;"
+                        >
+                            <i class="bi bi-person-heart"></i>
+                        </div>
+
+                        <h4 class="mb-1">
+                            <?= $popupNamaBalita; ?>
+                        </h4>
+
+                        <p class="text-muted mb-0">
+                            Data skrining awal berhasil direkam.
+                        </p>
+
+                    </div>
+
+                    <div class="table-responsive">
+
+                        <table
+                            class="table table-bordered
+                            align-middle mb-0"
+                        >
+                            <tbody>
+
+                                <tr>
+                                    <th width="48%">
+                                        Tinggi Badan Ibu
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "tinggi_badan_ibu"
+                                            ] ?? null
+                                        ); ?>
+                                        cm
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        ASI Eksklusif
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "lama_asi_eksklusif"
+                                            ] ?? null
+                                        ); ?>
+                                        bulan
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        MPASI
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru["mpasi"]
+                                            ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        Frekuensi Makan
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "frekuensi_makan"
+                                            ] ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        Protein Hewani
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "protein_hewani"
+                                            ] ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        Status Ekonomi
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "status_ekonomi"
+                                            ] ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        Sanitasi
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru["sanitasi"]
+                                            ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        Air Bersih
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "air_bersih"
+                                            ] ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                            </tbody>
+                        </table>
+
+                    </div>
+
+                    <div class="alert alert-info mt-3 mb-0">
+
+                        <i class="bi bi-info-circle me-1"></i>
+
+                        Skrining awal mencatat faktor risiko.
+                        Untuk menghitung status pertumbuhan
+                        berdasarkan pengukuran antropometri,
+                        lanjutkan ke proses analisis.
+
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+
+                    <button
+                        type="button"
+                        class="btn btn-light"
+                        data-bs-dismiss="modal"
+                    >
+                        <i class="bi bi-table"></i>
+                        Lihat Daftar
+                    </button>
+
+                    <?php if (
+                        $bolehKelolaSkrining
+                        && $popupIdBalita > 0
+                    ): ?>
+
+                        <a
+                            href="../deteksi/analisis_deteksi.php?id_balita=<?= $popupIdBalita; ?>"
+                            class="btn btn-primary"
+                        >
+                            <i class="bi bi-search-heart"></i>
+                            Lanjut Analisis
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener(
+            "load",
+            function () {
+                const elemenModal =
+                    document.getElementById(
+                        "modalSkriningBerhasil"
+                    );
+
+                if (
+                    elemenModal
+                    && typeof bootstrap !== "undefined"
+                ) {
+                    const modalSkrining =
+                        new bootstrap.Modal(
+                            elemenModal
+                        );
+
+                    modalSkrining.show();
+                }
+            }
+        );
+    </script>
+
+<?php endif; ?>
 
 <?php require_once "../includes/footer.php"; ?>
