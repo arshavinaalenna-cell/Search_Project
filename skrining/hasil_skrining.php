@@ -644,57 +644,77 @@ require_once "../includes/navbar.php";
 
                                         <td>
 
-                                            <div
-                                                class="table-actions
-                                                justify-content-center"
-                                            >
+                                           <div
+    class="table-actions
+    justify-content-center
+    d-flex
+    gap-1"
+>
 
-                                                <a
-                                                    href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
-                                                    class="btn btn-info btn-sm"
-                                                >
 
-                                                    <i
-                                                        class="bi
-                                                        bi-search-heart"
-                                                    ></i>
+    <!-- DETAIL SKRINING -->
 
-                                                    Analisis
+    <a
+        href="detail_skrining.php?id=<?= $idSkrining; ?>"
+        class="btn btn-info btn-sm"
+    >
 
-                                                </a>
+        <i class="bi bi-eye"></i>
 
-                                                <a
-                                                    href="edit_skrining.php?id=<?= $idSkrining; ?>"
-                                                    class="btn btn-warning btn-sm"
-                                                >
+        Detail
 
-                                                    <i
-                                                        class="bi
-                                                        bi-pencil-square"
-                                                    ></i>
+    </a>
 
-                                                    Edit
 
-                                                </a>
 
-                                                <a
-                                                    href="hapus_skrining.php?id=<?= $idSkrining; ?>"
-                                                    class="btn btn-danger btn-sm"
-                                                    onclick="return confirm(
-                                                        'Yakin ingin menghapus data skrining ini?'
-                                                    );"
-                                                >
+    <!-- ANALISIS DETEKSI -->
 
-                                                    <i
-                                                        class="bi
-                                                        bi-trash3"
-                                                    ></i>
+    <a
+        href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
+        class="btn btn-primary btn-sm"
+    >
 
-                                                    Hapus
+        <i class="bi bi-search-heart"></i>
 
-                                                </a>
+        Analisis
 
-                                            </div>
+    </a>
+
+
+
+    <!-- EDIT SKRINING -->
+
+    <a
+        href="edit_skrining.php?id=<?= $idSkrining; ?>"
+        class="btn btn-warning btn-sm"
+    >
+
+        <i class="bi bi-pencil-square"></i>
+
+        Edit
+
+    </a>
+
+
+
+    <!-- HAPUS SKRINING -->
+
+    <a
+        href="hapus_skrining.php?id=<?= $idSkrining; ?>"
+        class="btn btn-danger btn-sm"
+        onclick="return confirm(
+            'Yakin ingin menghapus data skrining ini?'
+        );"
+    >
+
+        <i class="bi bi-trash3"></i>
+
+        Hapus
+
+    </a>
+
+
+</div>
 
                                         </td>
 

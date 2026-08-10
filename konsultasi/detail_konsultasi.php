@@ -112,6 +112,42 @@ $bolehEdit = (
     && (int) $data["id_petugas"] === $idUserAktif
 );
 
+$hasilKosong = (
+    trim(
+        (string) (
+            $data["hasil_konsultasi"] ?? ""
+        )
+    ) === ""
+);
+
+$tindakLanjutKosong = (
+    trim(
+        (string) (
+            $data["tindak_lanjut"] ?? ""
+        )
+    ) === ""
+);
+
+if ($hasilKosong) {
+    $statusKonsultasi =
+        "Menunggu Tanggapan";
+
+    $kelasStatusKonsultasi =
+        "bg-warning text-dark";
+
+    $ikonStatusKonsultasi =
+        "bi-hourglass-split";
+} else {
+    $statusKonsultasi =
+        "Sudah Ditanggapi";
+
+    $kelasStatusKonsultasi =
+        "bg-success";
+
+    $ikonStatusKonsultasi =
+        "bi-check-circle";
+}
+
 $tanggalTampil = "-";
 
 if (!empty($data["tanggal"])) {
@@ -164,7 +200,10 @@ require_once "../includes/navbar.php";
                             class="btn btn-warning btn-sm"
                         >
                             <i class="bi bi-chat-left-text"></i>
-                            Isi Hasil Konsultasi
+
+                            <?= $hasilKosong
+                                ? "Tanggapi"
+                                : "Edit Hasil"; ?>
                         </a>
 
                     <?php endif; ?>
@@ -177,7 +216,7 @@ require_once "../includes/navbar.php";
 
                 <div class="row g-3 mb-3">
 
-                    <div class="col-12 col-lg-4">
+                    <div class="col-12 col-lg-3">
 
                         <div class="detail-item h-100">
 
@@ -201,7 +240,7 @@ require_once "../includes/navbar.php";
 
                     </div>
 
-                    <div class="col-12 col-lg-4">
+                    <div class="col-12 col-lg-3">
 
                         <div class="detail-item h-100">
 
@@ -225,7 +264,7 @@ require_once "../includes/navbar.php";
 
                     </div>
 
-                    <div class="col-12 col-lg-4">
+                    <div class="col-12 col-lg-3">
 
                         <div class="detail-item h-100">
 
@@ -239,6 +278,38 @@ require_once "../includes/navbar.php";
                                     ENT_QUOTES,
                                     "UTF-8"
                                 ); ?>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="col-12 col-lg-3">
+
+                        <div class="detail-item h-100">
+
+                            <span class="detail-label">
+                                Status Konsultasi
+                            </span>
+
+                            <div class="detail-value">
+
+                                <span
+                                    class="badge
+                                    <?= $kelasStatusKonsultasi; ?>"
+                                >
+                                    <i
+                                        class="bi
+                                        <?= $ikonStatusKonsultasi; ?>"
+                                    ></i>
+
+                                    <?= htmlspecialchars(
+                                        $statusKonsultasi,
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
+                                </span>
+
                             </div>
 
                         </div>
@@ -369,13 +440,7 @@ require_once "../includes/navbar.php";
                             <div class="detail-value">
 
                                 <?php if (
-                                    !empty(
-                                        trim(
-                                            $data[
-                                                "hasil_konsultasi"
-                                            ] ?? ""
-                                        )
-                                    )
+                                    !$hasilKosong
                                 ): ?>
 
                                     <?= nl2br(
@@ -398,7 +463,7 @@ require_once "../includes/navbar.php";
                                             class="bi
                                             bi-hourglass-split"
                                         ></i>
-                                        Belum Diisi
+                                        Menunggu Tanggapan
                                     </span>
 
                                 <?php endif; ?>
@@ -420,13 +485,7 @@ require_once "../includes/navbar.php";
                             <div class="detail-value">
 
                                 <?php if (
-                                    !empty(
-                                        trim(
-                                            $data[
-                                                "tindak_lanjut"
-                                            ] ?? ""
-                                        )
-                                    )
+                                    !$tindakLanjutKosong
                                 ): ?>
 
                                     <?= nl2br(

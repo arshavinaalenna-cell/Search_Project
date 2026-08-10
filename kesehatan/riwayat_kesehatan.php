@@ -40,6 +40,11 @@ if ($roleAktif === "orang_tua") {
                 rk.riwayat_penyakit,
                 rk.riwayat_imunisasi,
                 rk.riwayat_perawatan,
+                rk.penyakit_penyerta,
+                rk.red_flag,
+                rk.status_rujukan,
+                rk.rekomendasi_rujukan,
+                rk.catatan_kia,
                 b.nama_balita,
                 b.nik_balita
              FROM riwayat_kesehatan rk
@@ -52,6 +57,11 @@ if ($roleAktif === "orang_tua") {
                 OR rk.riwayat_penyakit LIKE ?
                 OR rk.riwayat_imunisasi LIKE ?
                 OR rk.riwayat_perawatan LIKE ?
+                OR rk.penyakit_penyerta LIKE ?
+                OR rk.red_flag LIKE ?
+                OR rk.status_rujukan LIKE ?
+                OR rk.rekomendasi_rujukan LIKE ?
+                OR rk.catatan_kia LIKE ?
              )
              ORDER BY rk.id_riwayat DESC"
         );
@@ -62,8 +72,13 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "isssss",
+            "issssssssss",
             $idUserAktif,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -79,6 +94,11 @@ if ($roleAktif === "orang_tua") {
                 rk.riwayat_penyakit,
                 rk.riwayat_imunisasi,
                 rk.riwayat_perawatan,
+                rk.penyakit_penyerta,
+                rk.red_flag,
+                rk.status_rujukan,
+                rk.rekomendasi_rujukan,
+                rk.catatan_kia,
                 b.nama_balita,
                 b.nik_balita
              FROM riwayat_kesehatan rk
@@ -108,6 +128,11 @@ if ($roleAktif === "orang_tua") {
                 rk.riwayat_penyakit,
                 rk.riwayat_imunisasi,
                 rk.riwayat_perawatan,
+                rk.penyakit_penyerta,
+                rk.red_flag,
+                rk.status_rujukan,
+                rk.rekomendasi_rujukan,
+                rk.catatan_kia,
                 b.nama_balita,
                 b.nik_balita
              FROM riwayat_kesehatan rk
@@ -119,6 +144,11 @@ if ($roleAktif === "orang_tua") {
                 OR rk.riwayat_penyakit LIKE ?
                 OR rk.riwayat_imunisasi LIKE ?
                 OR rk.riwayat_perawatan LIKE ?
+                OR rk.penyakit_penyerta LIKE ?
+                OR rk.red_flag LIKE ?
+                OR rk.status_rujukan LIKE ?
+                OR rk.rekomendasi_rujukan LIKE ?
+                OR rk.catatan_kia LIKE ?
              ORDER BY rk.id_riwayat DESC"
         );
 
@@ -128,7 +158,12 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "sssss",
+            "ssssssssss",
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -144,6 +179,11 @@ if ($roleAktif === "orang_tua") {
                 rk.riwayat_penyakit,
                 rk.riwayat_imunisasi,
                 rk.riwayat_perawatan,
+                rk.penyakit_penyerta,
+                rk.red_flag,
+                rk.status_rujukan,
+                rk.rekomendasi_rujukan,
+                rk.catatan_kia,
                 b.nama_balita,
                 b.nik_balita
              FROM riwayat_kesehatan rk
@@ -182,8 +222,8 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        Data riwayat penyakit, imunisasi,
-                        dan perawatan balita.
+                        Kelola riwayat kesehatan, penyakit penyerta,
+                        red flag, rujukan, dan catatan KIA balita.
                     </small>
 
                 </div>
@@ -283,7 +323,7 @@ require_once "../includes/navbar.php";
                             type="text"
                             name="cari"
                             class="form-control"
-                            placeholder="Cari nama balita, NIK, penyakit, imunisasi, atau perawatan"
+                            placeholder="Cari balita, NIK, penyakit, red flag, rujukan, atau catatan KIA"
                             value="<?= htmlspecialchars(
                                 $cari,
                                 ENT_QUOTES,
@@ -362,23 +402,23 @@ require_once "../includes/navbar.php";
                                 </th>
 
                                 <th>
-                                    Nama Balita
+                                    Balita
                                 </th>
 
                                 <th>
-                                    NIK Balita
+                                    Riwayat Kesehatan
                                 </th>
 
                                 <th>
-                                    Riwayat Penyakit
+                                    Penyakit Penyerta
                                 </th>
 
-                                <th>
-                                    Riwayat Imunisasi
+                                <th class="text-center">
+                                    Red Flag
                                 </th>
 
-                                <th>
-                                    Riwayat Perawatan
+                                <th class="text-center">
+                                    Status Rujukan
                                 </th>
 
                                 <th
@@ -414,6 +454,79 @@ require_once "../includes/navbar.php";
                                             <?= $no++; ?>
                                         </td>
 
+                                        <?php
+
+                                        $redFlag =
+                                            trim(
+                                                (string) (
+                                                    $d["red_flag"] ?? ""
+                                                )
+                                            );
+
+                                        $redFlagNormal =
+                                            in_array(
+                                                strtolower($redFlag),
+                                                [
+                                                    "",
+                                                    "tidak ada",
+                                                    "tidak",
+                                                    "normal"
+                                                ],
+                                                true
+                                            );
+
+                                        $statusRujukan =
+                                            trim(
+                                                (string) (
+                                                    $d[
+                                                        "status_rujukan"
+                                                    ] ?? ""
+                                                )
+                                            );
+
+                                        $statusRujukanLower =
+                                            strtolower($statusRujukan);
+
+                                        if (
+                                            $statusRujukanLower === ""
+                                            || $statusRujukanLower ===
+                                                "tidak perlu"
+                                        ) {
+                                            $kelasRujukan =
+                                                "bg-success";
+                                            $labelRujukan =
+                                                $statusRujukan !== ""
+                                                    ? $statusRujukan
+                                                    : "Tidak Perlu";
+                                        } elseif (
+                                            str_contains(
+                                                $statusRujukanLower,
+                                                "rekomend"
+                                            )
+                                        ) {
+                                            $kelasRujukan =
+                                                "bg-warning text-dark";
+                                            $labelRujukan =
+                                                $statusRujukan;
+                                        } elseif (
+                                            str_contains(
+                                                $statusRujukanLower,
+                                                "rujuk"
+                                            )
+                                        ) {
+                                            $kelasRujukan =
+                                                "bg-danger";
+                                            $labelRujukan =
+                                                $statusRujukan;
+                                        } else {
+                                            $kelasRujukan =
+                                                "bg-info";
+                                            $labelRujukan =
+                                                $statusRujukan;
+                                        }
+
+                                        ?>
+
                                         <td>
 
                                             <div
@@ -432,64 +545,163 @@ require_once "../includes/navbar.php";
                                                     ></i>
                                                 </span>
 
-                                                <strong>
-                                                    <?= htmlspecialchars(
-                                                        $d[
-                                                            "nama_balita"
-                                                        ],
-                                                        ENT_QUOTES,
-                                                        "UTF-8"
-                                                    ); ?>
-                                                </strong>
+                                                <div>
+
+                                                    <strong
+                                                        class="d-block"
+                                                    >
+                                                        <?= htmlspecialchars(
+                                                            $d[
+                                                                "nama_balita"
+                                                            ],
+                                                            ENT_QUOTES,
+                                                            "UTF-8"
+                                                        ); ?>
+                                                    </strong>
+
+                                                    <small
+                                                        class="text-muted"
+                                                    >
+                                                        NIK:
+                                                        <?= htmlspecialchars(
+                                                            $d[
+                                                                "nik_balita"
+                                                            ],
+                                                            ENT_QUOTES,
+                                                            "UTF-8"
+                                                        ); ?>
+                                                    </small>
+
+                                                </div>
 
                                             </div>
 
                                         </td>
 
                                         <td>
-                                            <?= htmlspecialchars(
-                                                $d[
-                                                    "nik_balita"
-                                                ],
-                                                ENT_QUOTES,
-                                                "UTF-8"
-                                            ); ?>
+
+                                            <small
+                                                class="text-muted
+                                                d-block"
+                                            >
+                                                Penyakit:
+                                            </small>
+
+                                            <span class="d-block mb-1">
+                                                <?= htmlspecialchars(
+                                                    mb_strlen(
+                                                        $d[
+                                                            "riwayat_penyakit"
+                                                        ]
+                                                    ) > 45
+                                                        ? mb_substr(
+                                                            $d[
+                                                                "riwayat_penyakit"
+                                                            ],
+                                                            0,
+                                                            45
+                                                        ) . "..."
+                                                        : $d[
+                                                            "riwayat_penyakit"
+                                                        ],
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                ); ?>
+                                            </span>
+
+                                            <small class="text-muted">
+                                                Imunisasi dan perawatan
+                                                tersedia di Detail.
+                                            </small>
+
                                         </td>
 
                                         <td>
-                                            <?= nl2br(
-                                                htmlspecialchars(
-                                                    $d[
-                                                        "riwayat_penyakit"
-                                                    ],
-                                                    ENT_QUOTES,
-                                                    "UTF-8"
-                                                )
-                                            ); ?>
+
+                                            <?php if (
+                                                trim(
+                                                    (string) (
+                                                        $d[
+                                                            "penyakit_penyerta"
+                                                        ] ?? ""
+                                                    )
+                                                ) !== ""
+                                            ): ?>
+
+                                                <?= nl2br(
+                                                    htmlspecialchars(
+                                                        $d[
+                                                            "penyakit_penyerta"
+                                                        ],
+                                                        ENT_QUOTES,
+                                                        "UTF-8"
+                                                    )
+                                                ); ?>
+
+                                            <?php else: ?>
+
+                                                <span
+                                                    class="text-muted"
+                                                >
+                                                    Tidak ada
+                                                </span>
+
+                                            <?php endif; ?>
+
                                         </td>
 
-                                        <td>
-                                            <?= nl2br(
-                                                htmlspecialchars(
-                                                    $d[
-                                                        "riwayat_imunisasi"
-                                                    ],
-                                                    ENT_QUOTES,
-                                                    "UTF-8"
-                                                )
-                                            ); ?>
+                                        <td class="text-center">
+
+                                            <?php if (
+                                                $redFlagNormal
+                                            ): ?>
+
+                                                <span
+                                                    class="badge
+                                                    bg-success"
+                                                >
+                                                    <i
+                                                        class="bi
+                                                        bi-check-circle"
+                                                    ></i>
+                                                    Tidak Ada
+                                                </span>
+
+                                            <?php else: ?>
+
+                                                <span
+                                                    class="badge
+                                                    bg-danger"
+                                                    title="<?= htmlspecialchars(
+                                                        $redFlag,
+                                                        ENT_QUOTES,
+                                                        "UTF-8"
+                                                    ); ?>"
+                                                >
+                                                    <i
+                                                        class="bi
+                                                        bi-exclamation-octagon"
+                                                    ></i>
+                                                    Ada Red Flag
+                                                </span>
+
+                                            <?php endif; ?>
+
                                         </td>
 
-                                        <td>
-                                            <?= nl2br(
-                                                htmlspecialchars(
-                                                    $d[
-                                                        "riwayat_perawatan"
-                                                    ],
+                                        <td class="text-center">
+
+                                            <span
+                                                class="badge
+                                                <?= $kelasRujukan; ?>"
+                                            >
+                                                <?= htmlspecialchars(
+                                                    $labelRujukan,
                                                     ENT_QUOTES,
                                                     "UTF-8"
-                                                )
-                                            ); ?>
+                                                ); ?>
+                                            </span>
+
                                         </td>
 
                                         <td>
