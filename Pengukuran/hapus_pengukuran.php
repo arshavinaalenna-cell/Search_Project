@@ -114,38 +114,58 @@ mysqli_stmt_bind_param(
     $idPengukuran
 );
 
-$berhasil = mysqli_stmt_execute($stmtHapus);
-
-$kodeError = mysqli_stmt_errno($stmtHapus);
-
-mysqli_stmt_close($stmtHapus);
-
 /*
 |--------------------------------------------------------------------------
-| Redirect berdasarkan hasil
+| Menjalankan proses hapus dengan penanganan foreign key
 |--------------------------------------------------------------------------
+|
+| Jika pengukuran sudah dipakai oleh tabel hasil_deteksi, MySQL akan
+| menghasilkan error 1451. Pada project ini mysqli menggunakan mode
+| exception, jadi error harus ditangkap agar tidak menjadi Fatal Error.
+|
 */
 
-if ($berhasil) {
+try {
+
+    $berhasil = mysqli_stmt_execute($stmtHapus);
+
+    mysqli_stmt_close($stmtHapus);
+
+    if ($berhasil) {
+        header(
+            "Location: data_pengukuran.php?pesan=hapus_berhasil"
+        );
+        exit;
+    }
+
     header(
-        "Location: data_pengukuran.php?pesan=hapus_berhasil"
+        "Location: data_pengukuran.php?pesan=gagal_hapus"
+    );
+    exit;
+
+} catch (mysqli_sql_exception $e) {
+
+    $kodeError = (int) $e->getCode();
+
+    mysqli_stmt_close($stmtHapus);
+
+    /*
+     * Error 1451 berarti data pengukuran masih digunakan
+     * oleh tabel lain, khususnya hasil_deteksi.
+     *
+     * Data sengaja tidak ikut dihapus agar hasil deteksi
+     * dan riwayat pemeriksaan tetap konsisten.
+     */
+
+    if ($kodeError === 1451) {
+        header(
+            "Location: data_pengukuran.php?pesan=data_digunakan"
+        );
+        exit;
+    }
+
+    header(
+        "Location: data_pengukuran.php?pesan=gagal_hapus"
     );
     exit;
 }
-
-/*
- * Error 1451 berarti data masih digunakan tabel lain,
- * misalnya tabel hasil_deteksi.
- */
-
-if ($kodeError === 1451) {
-    header(
-        "Location: data_pengukuran.php?pesan=data_digunakan"
-    );
-    exit;
-}
-
-header(
-    "Location: data_pengukuran.php?pesan=gagal_hapus"
-);
-exit;
