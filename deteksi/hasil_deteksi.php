@@ -331,6 +331,31 @@ require_once "../includes/navbar.php";
                     </div>
                 </form>
 
+                <div
+                    class="d-flex flex-wrap
+                    align-items-center gap-2 mb-3"
+                >
+                    <span class="text-muted small me-1">
+                        Keterangan status:
+                    </span>
+
+                    <span class="badge bg-success">
+                        Normal
+                    </span>
+
+                    <span class="badge bg-warning text-dark">
+                        Risiko Stunting
+                    </span>
+
+                    <span class="badge bg-danger">
+                        Stunting
+                    </span>
+
+                    <span class="badge bg-dark text-white">
+                        Stunting Berat
+                    </span>
+                </div>
+
                 <div class="table-responsive">
 
                     <table
@@ -377,7 +402,8 @@ $kelasStunting = "bg-secondary";
 
 if (
     $statusStunting === "normal" ||
-    $statusStunting === "normal/sehat"
+    $statusStunting === "normal/sehat" ||
+    $statusStunting === "tidak stunting"
 ) {
 
     $kelasStunting = "bg-success";
@@ -389,16 +415,19 @@ if (
     $kelasStunting = "bg-warning text-dark";
 
 } elseif (
-    $statusStunting === "stunting"
+    $statusStunting === "stunting" ||
+    $statusStunting === "pendek"
 ) {
 
     $kelasStunting = "bg-danger";
 
 } elseif (
-    $statusStunting === "stunting berat"
+    $statusStunting === "stunting berat" ||
+    $statusStunting === "severely stunted" ||
+    $statusStunting === "sangat pendek"
 ) {
 
-    $kelasStunting = "bg-danger";
+    $kelasStunting = "bg-dark text-white";
 }
                                     ?>
 

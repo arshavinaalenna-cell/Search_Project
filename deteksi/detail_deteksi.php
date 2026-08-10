@@ -168,12 +168,18 @@ if (
         $statusStunting,
         [
             "normal",
+            "normal/sehat",
             "tidak stunting"
         ],
         true
     )
 ) {
     $kelasStunting = "bg-success";
+
+} elseif (
+    $statusStunting === "risiko stunting"
+) {
+    $kelasStunting = "bg-warning text-dark";
 
 } elseif (
     in_array(
@@ -185,19 +191,20 @@ if (
         true
     )
 ) {
-    $kelasStunting = "bg-warning text-dark";
+    $kelasStunting = "bg-danger";
 
 } elseif (
     in_array(
         $statusStunting,
         [
+            "stunting berat",
             "severely stunted",
             "sangat pendek"
         ],
         true
     )
 ) {
-    $kelasStunting = "bg-danger";
+    $kelasStunting = "bg-dark text-white";
 }
 
 require_once "../includes/header.php";
@@ -442,6 +449,31 @@ require_once "../includes/navbar.php";
                     </div>
 
                     <div class="card-body p-4">
+
+                        <div
+                            class="d-flex flex-wrap
+                            align-items-center gap-2 mb-4"
+                        >
+                            <span class="text-muted small me-1">
+                                Keterangan status:
+                            </span>
+
+                            <span class="badge bg-success">
+                                Normal
+                            </span>
+
+                            <span class="badge bg-warning text-dark">
+                                Risiko Stunting
+                            </span>
+
+                            <span class="badge bg-danger">
+                                Stunting
+                            </span>
+
+                            <span class="badge bg-dark text-white">
+                                Stunting Berat
+                            </span>
+                        </div>
 
                         <div class="row g-4">
 
