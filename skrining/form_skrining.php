@@ -297,7 +297,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     ot.pendidikan_ibu,
                     ot.pekerjaan_ibu
                  FROM balita AS b
-                 INNER JOIN orang_tua AS ot
+                 LEFT JOIN orang_tua AS ot
                     ON b.id_user = ot.id_user
                  WHERE b.id_balita = ?
                    AND b.id_puskesmas = ?
@@ -313,7 +313,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     ot.pendidikan_ibu,
                     ot.pekerjaan_ibu
                  FROM balita AS b
-                 INNER JOIN orang_tua AS ot
+                 LEFT JOIN orang_tua AS ot
                     ON b.id_user = ot.id_user
                  WHERE b.id_balita = ?
                  LIMIT 1"
@@ -354,9 +354,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             mysqli_stmt_close($stmtCekBalita);
 
             if (!$dataBalita) {
-                $error = $roleAktif === "kader"
-                    ? "Balita tidak ditemukan pada Puskesmas yang dipilih atau belum terhubung dengan Profil Ibu."
-                    : "Data balita tidak ditemukan atau belum terhubung dengan Profil Ibu.";
+                $error =
+                    "Balita tidak ditemukan pada Puskesmas yang dipilih.";
             } else {
 
                 $namaIbuProfil =
@@ -389,7 +388,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     || $pekerjaanIbuProfil === ""
                 ) {
                     $error =
-                        "Profil Ibu balita belum lengkap. Lengkapi Profil Ibu terlebih dahulu.";
+                        "Balita sudah ditemukan, tetapi Profil Ibu belum terhubung atau belum lengkap. Hubungkan Profil Ibu melalui Edit Data Balita terlebih dahulu.";
                 }
             }
         }
@@ -554,13 +553,16 @@ $queryBalita = mysqli_query(
     $conn,
     "SELECT
         b.id_balita,
+        b.id_user,
         b.id_puskesmas,
         b.nama_balita,
-        ot.nama_ibu,
+        b.nama_ibu AS nama_ibu_lama,
+        ot.id_orang_tua,
+        ot.nama_ibu AS profil_nama_ibu,
         ot.pendidikan_ibu,
         ot.pekerjaan_ibu
      FROM balita AS b
-     INNER JOIN orang_tua AS ot
+     LEFT JOIN orang_tua AS ot
         ON b.id_user = ot.id_user
      ORDER BY b.nama_balita ASC"
 );
@@ -574,6 +576,38 @@ if (!$queryBalita) {
 
 $jumlahBalita =
     mysqli_num_rows($queryBalita);
+
+/*
+|--------------------------------------------------------------------------
+| Menghitung balita yang belum terhubung Profil Ibu
+|--------------------------------------------------------------------------
+*/
+
+$jumlahBalitaBelumTerhubung = 0;
+
+$queryBelumTerhubung = mysqli_query(
+    $conn,
+    "SELECT COUNT(*) AS total
+     FROM balita AS b
+     LEFT JOIN orang_tua AS ot
+        ON b.id_user = ot.id_user
+     WHERE b.id_user IS NULL
+        OR ot.id_orang_tua IS NULL"
+);
+
+if ($queryBelumTerhubung) {
+
+    $dataBelumTerhubung =
+        mysqli_fetch_assoc(
+            $queryBelumTerhubung
+        );
+
+    $jumlahBalitaBelumTerhubung =
+        (int) (
+            $dataBelumTerhubung["total"]
+            ?? 0
+        );
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -603,8 +637,8 @@ require_once "../includes/navbar.php";
                 </h1>
 
                 <p class="page-subtitle">
-                    Pilih balita yang sudah terhubung dengan Profil Ibu,
-                    lalu lengkapi variabel skrining yang diperlukan.
+                    Pilih data balita, lalu sistem akan membaca
+                    Profil Ibu yang terhubung secara otomatis.
                 </p>
 
             </div>
@@ -640,6 +674,27 @@ require_once "../includes/navbar.php";
 
         <?php endif; ?>
 
+        <?php if (
+            $jumlahBalitaBelumTerhubung > 0
+        ): ?>
+
+            <div class="alert alert-warning">
+
+                <i class="bi bi-exclamation-triangle me-1"></i>
+
+                Ada
+                <strong>
+                    <?= $jumlahBalitaBelumTerhubung; ?>
+                </strong>
+                data balita yang belum terhubung dengan
+                Profil Ibu. Data balita tetap ditampilkan
+                pada pilihan, tetapi skrining hanya dapat
+                disimpan setelah Profil Ibu dihubungkan.
+
+            </div>
+
+        <?php endif; ?>
+
         <?php if ($jumlahBalita < 1): ?>
 
             <div class="card content-card">
@@ -657,9 +712,9 @@ require_once "../includes/navbar.php";
                         </h3>
 
                         <p>
-                            Belum ada balita yang sudah terhubung
-                            dengan Profil Ibu. Lengkapi Profil Ibu dan
-                            hubungkan balita terlebih dahulu.
+                            Belum ada data balita di dalam sistem.
+                            Tambahkan data balita terlebih dahulu
+                            sebelum mengisi skrining awal.
                         </p>
 
                         <a
@@ -784,20 +839,78 @@ require_once "../includes/navbar.php";
                                             $queryBalita
                                         )
                                 ):
+
+                                    $namaIbuProfilPilihan =
+                                        trim(
+                                            (string) (
+                                                $balita[
+                                                    "profil_nama_ibu"
+                                                ]
+                                                ?? ""
+                                            )
+                                        );
+
+                                    $namaIbuLamaPilihan =
+                                        trim(
+                                            (string) (
+                                                $balita[
+                                                    "nama_ibu_lama"
+                                                ]
+                                                ?? ""
+                                            )
+                                        );
+
+                                    $namaIbuTampilPilihan =
+                                        $namaIbuProfilPilihan !== ""
+                                            ? $namaIbuProfilPilihan
+                                            : (
+                                                $namaIbuLamaPilihan !== ""
+                                                    ? $namaIbuLamaPilihan
+                                                    : "-"
+                                            );
+
+                                    $profilIbuTerhubungPilihan =
+                                        !empty(
+                                            $balita[
+                                                "id_orang_tua"
+                                            ]
+                                        )
+                                        && $namaIbuProfilPilihan !== ""
+                                        && trim(
+                                            (string) (
+                                                $balita[
+                                                    "pendidikan_ibu"
+                                                ]
+                                                ?? ""
+                                            )
+                                        ) !== ""
+                                        && trim(
+                                            (string) (
+                                                $balita[
+                                                    "pekerjaan_ibu"
+                                                ]
+                                                ?? ""
+                                            )
+                                        ) !== "";
                                 ?>
 
                                     <option
                                         value="<?= (int) $balita["id_balita"]; ?>"
                                         data-puskesmas="<?= (int) $balita["id_puskesmas"]; ?>"
                                         data-nama-ibu="<?= amanFormSkrining(
-                                            $balita["nama_ibu"]
+                                            $namaIbuTampilPilihan
                                         ); ?>"
                                         data-pendidikan-ibu="<?= amanFormSkrining(
                                             $balita["pendidikan_ibu"]
+                                            ?? ""
                                         ); ?>"
                                         data-pekerjaan-ibu="<?= amanFormSkrining(
                                             $balita["pekerjaan_ibu"]
+                                            ?? ""
                                         ); ?>"
+                                        data-profil-terhubung="<?= $profilIbuTerhubungPilihan
+                                            ? "1"
+                                            : "0"; ?>"
                                         <?= (
                                             (string) $old["id_balita"]
                                             ===
@@ -809,6 +922,13 @@ require_once "../includes/navbar.php";
                                         <?= amanFormSkrining(
                                             $balita["nama_balita"]
                                         ); ?>
+
+                                        <?= $profilIbuTerhubungPilihan
+                                            ? " — "
+                                                . amanFormSkrining(
+                                                    $namaIbuTampilPilihan
+                                                )
+                                            : " — Profil Ibu belum terhubung"; ?>
                                     </option>
 
                                 <?php endwhile; ?>
@@ -1381,6 +1501,33 @@ document.addEventListener("DOMContentLoaded", function () {
 
             if (pekerjaanIbu) {
                 pekerjaanIbu.textContent = "-";
+            }
+
+            return;
+        }
+
+        const profilTerhubung =
+            option.dataset.profilTerhubung === "1";
+
+        if (!profilTerhubung) {
+
+            if (namaIbu) {
+                namaIbu.textContent =
+                    option.dataset.namaIbu
+                    && option.dataset.namaIbu !== "-"
+                        ? option.dataset.namaIbu
+                            + " (profil belum terhubung)"
+                        : "Profil Ibu belum terhubung";
+            }
+
+            if (pendidikanIbu) {
+                pendidikanIbu.textContent =
+                    "Belum tersedia";
+            }
+
+            if (pekerjaanIbu) {
+                pekerjaanIbu.textContent =
+                    "Belum tersedia";
             }
 
             return;

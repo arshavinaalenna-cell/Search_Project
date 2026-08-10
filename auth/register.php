@@ -14,8 +14,38 @@ $old   = $_SESSION["register_old"] ?? [];
 unset($_SESSION["register_error"]);
 unset($_SESSION["register_old"]);
 
-$namaLama     = $old["nama"] ?? "";
-$usernameLama = $old["username"] ?? "";
+$namaLama       = $old["nama"] ?? "";
+$usernameLama   = $old["username"] ?? "";
+$nikIbuLama     = $old["nik_ibu"] ?? "";
+$namaIbuLama    = $old["nama_ibu"] ?? "";
+$noHpLama       = $old["no_hp"] ?? "";
+$alamatLama     = $old["alamat"] ?? "";
+$pendidikanLama = $old["pendidikan_ibu"] ?? "";
+$pekerjaanLama  = $old["pekerjaan_ibu"] ?? "";
+
+$daftarPendidikan = [
+    "Tidak Sekolah",
+    "SD",
+    "SMP",
+    "SMA/SMK",
+    "Diploma",
+    "D4/S1",
+    "S2",
+    "S3"
+];
+
+$daftarPekerjaan = [
+    "Ibu Rumah Tangga",
+    "PNS/TNI/POLRI",
+    "Pegawai Swasta",
+    "Wiraswasta",
+    "Buruh",
+    "Petani",
+    "Nelayan",
+    "Tenaga Kesehatan",
+    "Guru/Dosen",
+    "Lainnya"
+];
 
 function aman(string $teks): string
 {
@@ -133,7 +163,7 @@ function aman(string $teks): string
 
         .register-wrapper {
             width: 100%;
-            max-width: 530px;
+            max-width: 760px;
             position: relative;
             z-index: 2;
         }
@@ -246,6 +276,38 @@ function aman(string $teks): string
             border-color: var(--blue-main);
             box-shadow:
                 0 0 0 .22rem rgba(143, 199, 241, .22);
+        }
+
+
+        .form-select,
+        .profile-textarea {
+            min-height: 50px;
+            border: 2px solid #d8e8f6;
+            border-radius: 15px;
+            color: var(--text-dark);
+            background: rgba(255, 255, 255, .94);
+            padding: 11px 14px;
+        }
+
+        .form-select:focus,
+        .profile-textarea:focus {
+            border-color: var(--blue-main);
+            box-shadow:
+                0 0 0 .22rem rgba(143, 199, 241, .22);
+        }
+
+        .profile-textarea {
+            min-height: 105px;
+            resize: vertical;
+        }
+
+        .section-title {
+            margin: 26px 0 16px;
+            padding-bottom: 10px;
+            border-bottom: 2px dashed rgba(143, 199, 241, .45);
+            color: var(--text-dark);
+            font-size: 16px;
+            font-weight: 800;
         }
 
         .password-group .form-control {
@@ -406,8 +468,9 @@ function aman(string $teks): string
             </h1>
 
             <p>
-                Pantau tumbuh kembang buah hati dengan lebih mudah,
-                aman, dan menyenangkan.
+                Buat akun sekaligus lengkapi Profil Ibu agar data
+                dapat langsung digunakan oleh Kader saat
+                pendaftaran balita dan skrining awal.
             </p>
 
         </div>
@@ -437,8 +500,9 @@ function aman(string $teks): string
             <?php endif; ?>
 
             <div class="role-info">
-                🍼 Akun yang dibuat otomatis terdaftar sebagai
-                <strong>orang tua</strong>.
+                🍼 Akun otomatis terdaftar sebagai
+                <strong>orang tua</strong>. Data Profil Ibu di bawah
+                akan terhubung ke akun yang sama.
             </div>
 
             <form
@@ -447,13 +511,17 @@ function aman(string $teks): string
                 autocomplete="off"
             >
 
+                <div class="section-title">
+                    ☁ Data Akun
+                </div>
+
                 <div class="mb-3">
 
                     <label
                         for="nama"
                         class="form-label"
                     >
-                        Nama Lengkap
+                        Nama Akun
                     </label>
 
                     <div class="input-group">
@@ -469,7 +537,7 @@ function aman(string $teks): string
                             class="form-control"
                             maxlength="100"
                             value="<?= aman($namaLama); ?>"
-                            placeholder="Masukkan nama lengkap"
+                            placeholder="Nama yang tampil pada akun"
                             required
                             autofocus
                         >
@@ -590,13 +658,181 @@ function aman(string $teks): string
 
                 </div>
 
+                <div class="section-title">
+                    ♡ Profil Ibu
+                </div>
+
+                <div class="row g-3">
+
+                    <div class="col-12 col-md-6">
+
+                        <label
+                            for="nik_ibu"
+                            class="form-label"
+                        >
+                            NIK Ibu
+                        </label>
+
+                        <input
+                            type="text"
+                            name="nik_ibu"
+                            id="nik_ibu"
+                            class="form-select"
+                            value="<?= aman($nikIbuLama); ?>"
+                            maxlength="16"
+                            inputmode="numeric"
+                            pattern="[0-9]{16}"
+                            placeholder="16 digit NIK Ibu"
+                            required
+                        >
+
+                    </div>
+
+                    <div class="col-12 col-md-6">
+
+                        <label
+                            for="nama_ibu"
+                            class="form-label"
+                        >
+                            Nama Ibu
+                        </label>
+
+                        <input
+                            type="text"
+                            name="nama_ibu"
+                            id="nama_ibu"
+                            class="form-select"
+                            value="<?= aman($namaIbuLama); ?>"
+                            maxlength="100"
+                            placeholder="Nama lengkap Ibu"
+                            required
+                        >
+
+                    </div>
+
+                    <div class="col-12 col-md-6">
+
+                        <label
+                            for="no_hp"
+                            class="form-label"
+                        >
+                            Nomor HP
+                        </label>
+
+                        <input
+                            type="text"
+                            name="no_hp"
+                            id="no_hp"
+                            class="form-select"
+                            value="<?= aman($noHpLama); ?>"
+                            maxlength="20"
+                            placeholder="Contoh: 081234567890"
+                            required
+                        >
+
+                    </div>
+
+                    <div class="col-12 col-md-6">
+
+                        <label
+                            for="pendidikan_ibu"
+                            class="form-label"
+                        >
+                            Pendidikan Ibu
+                        </label>
+
+                        <select
+                            name="pendidikan_ibu"
+                            id="pendidikan_ibu"
+                            class="form-select"
+                            required
+                        >
+                            <option value="">
+                                Pilih pendidikan
+                            </option>
+
+                            <?php foreach ($daftarPendidikan as $pendidikan): ?>
+                                <option
+                                    value="<?= aman($pendidikan); ?>"
+                                    <?= $pendidikanLama === $pendidikan
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    <?= aman($pendidikan); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+
+                    </div>
+
+                    <div class="col-12 col-md-6">
+
+                        <label
+                            for="pekerjaan_ibu"
+                            class="form-label"
+                        >
+                            Pekerjaan Ibu
+                        </label>
+
+                        <select
+                            name="pekerjaan_ibu"
+                            id="pekerjaan_ibu"
+                            class="form-select"
+                            required
+                        >
+                            <option value="">
+                                Pilih pekerjaan
+                            </option>
+
+                            <?php foreach ($daftarPekerjaan as $pekerjaan): ?>
+                                <option
+                                    value="<?= aman($pekerjaan); ?>"
+                                    <?= $pekerjaanLama === $pekerjaan
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    <?= aman($pekerjaan); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+
+                    </div>
+
+                    <div class="col-12">
+
+                        <label
+                            for="alamat"
+                            class="form-label"
+                        >
+                            Alamat
+                        </label>
+
+                        <textarea
+                            name="alamat"
+                            id="alamat"
+                            class="profile-textarea w-100"
+                            rows="3"
+                            placeholder="Alamat tempat tinggal"
+                            required
+                        ><?= aman($alamatLama); ?></textarea>
+
+                    </div>
+
+                </div>
+
+                <div class="role-info mt-4">
+                    Data ini akan tersimpan sebagai
+                    <strong>Profil Ibu</strong> dan nantinya muncul
+                    pada pilihan Kader saat menghubungkan data balita.
+                </div>
+
                 <div class="d-grid">
 
                     <button
                         type="submit"
                         class="btn btn-register"
                     >
-                        ♡ Daftar Sekarang
+                        ♡ Daftar & Simpan Profil
                     </button>
 
                 </div>

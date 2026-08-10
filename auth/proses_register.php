@@ -17,28 +17,129 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil input
+| Pilihan yang diizinkan
 |--------------------------------------------------------------------------
 */
 
-$nama = trim($_POST["nama"] ?? "");
+$daftarPendidikan = [
+    "Tidak Sekolah",
+    "SD",
+    "SMP",
+    "SMA/SMK",
+    "Diploma",
+    "D4/S1",
+    "S2",
+    "S3"
+];
 
-$username = trim($_POST["username"] ?? "");
+$daftarPekerjaan = [
+    "Ibu Rumah Tangga",
+    "PNS/TNI/POLRI",
+    "Pegawai Swasta",
+    "Wiraswasta",
+    "Buruh",
+    "Petani",
+    "Nelayan",
+    "Tenaga Kesehatan",
+    "Guru/Dosen",
+    "Lainnya"
+];
 
-$password = $_POST["password"] ?? "";
+/*
+|--------------------------------------------------------------------------
+| Mengambil input akun
+|--------------------------------------------------------------------------
+*/
+
+$nama =
+    trim(
+        $_POST["nama"] ?? ""
+    );
+
+$username =
+    trim(
+        $_POST["username"] ?? ""
+    );
+
+$password =
+    $_POST["password"] ?? "";
 
 $konfirmasiPassword =
     $_POST["konfirmasi_password"] ?? "";
 
 /*
 |--------------------------------------------------------------------------
-| Menyimpan input lama
+| Mengambil input Profil Ibu
 |--------------------------------------------------------------------------
 */
 
+$nikIbu =
+    preg_replace(
+        "/\D/",
+        "",
+        trim(
+            $_POST["nik_ibu"] ?? ""
+        )
+    );
+
+$namaIbu =
+    trim(
+        $_POST["nama_ibu"] ?? ""
+    );
+
+$noHp =
+    trim(
+        $_POST["no_hp"] ?? ""
+    );
+
+$alamat =
+    trim(
+        $_POST["alamat"] ?? ""
+    );
+
+$pendidikanIbu =
+    trim(
+        $_POST["pendidikan_ibu"] ?? ""
+    );
+
+$pekerjaanIbu =
+    trim(
+        $_POST["pekerjaan_ibu"] ?? ""
+    );
+
+/*
+|--------------------------------------------------------------------------
+| Menyimpan input lama
+|--------------------------------------------------------------------------
+|
+| Password tidak pernah disimpan ke session.
+|
+*/
+
 $_SESSION["register_old"] = [
-    "nama"     => $nama,
-    "username" => $username
+    "nama" =>
+        $nama,
+
+    "username" =>
+        $username,
+
+    "nik_ibu" =>
+        $nikIbu,
+
+    "nama_ibu" =>
+        $namaIbu,
+
+    "no_hp" =>
+        $noHp,
+
+    "alamat" =>
+        $alamat,
+
+    "pendidikan_ibu" =>
+        $pendidikanIbu,
+
+    "pekerjaan_ibu" =>
+        $pekerjaanIbu
 ];
 
 /*
@@ -47,11 +148,17 @@ $_SESSION["register_old"] = [
 |--------------------------------------------------------------------------
 */
 
-function kembaliRegister(string $pesan): void
+function kembaliRegister(
+    string $pesan
+): void
 {
-    $_SESSION["register_error"] = $pesan;
+    $_SESSION["register_error"] =
+        $pesan;
 
-    header("Location: register.php");
+    header(
+        "Location: register.php"
+    );
+
     exit;
 }
 
@@ -66,27 +173,37 @@ if (
     || $username === ""
     || $password === ""
     || $konfirmasiPassword === ""
+    || $nikIbu === ""
+    || $namaIbu === ""
+    || $noHp === ""
+    || $alamat === ""
+    || $pendidikanIbu === ""
+    || $pekerjaanIbu === ""
 ) {
     kembaliRegister(
-        "Semua kolom wajib diisi."
+        "Semua data akun dan Profil Ibu wajib diisi."
     );
 }
 
 /*
 |--------------------------------------------------------------------------
-| Validasi nama
+| Validasi nama akun
 |--------------------------------------------------------------------------
 */
 
-if (strlen($nama) < 3) {
+if (
+    mb_strlen($nama) < 3
+) {
     kembaliRegister(
-        "Nama lengkap minimal 3 karakter."
+        "Nama akun minimal 3 karakter."
     );
 }
 
-if (strlen($nama) > 100) {
+if (
+    mb_strlen($nama) > 100
+) {
     kembaliRegister(
-        "Nama lengkap maksimal 100 karakter."
+        "Nama akun maksimal 100 karakter."
     );
 }
 
@@ -96,13 +213,17 @@ if (strlen($nama) > 100) {
 |--------------------------------------------------------------------------
 */
 
-if (strlen($username) < 4) {
+if (
+    strlen($username) < 4
+) {
     kembaliRegister(
         "Username minimal 4 karakter."
     );
 }
 
-if (strlen($username) > 50) {
+if (
+    strlen($username) > 50
+) {
     kembaliRegister(
         "Username maksimal 50 karakter."
     );
@@ -125,15 +246,81 @@ if (
 |--------------------------------------------------------------------------
 */
 
-if (strlen($password) < 8) {
+if (
+    strlen($password) < 8
+) {
     kembaliRegister(
         "Password minimal 8 karakter."
     );
 }
 
-if ($password !== $konfirmasiPassword) {
+if (
+    $password !==
+    $konfirmasiPassword
+) {
     kembaliRegister(
         "Konfirmasi password tidak sama."
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Validasi Profil Ibu
+|--------------------------------------------------------------------------
+*/
+
+if (
+    !preg_match(
+        "/^[0-9]{16}$/",
+        $nikIbu
+    )
+) {
+    kembaliRegister(
+        "NIK Ibu harus terdiri dari 16 digit angka."
+    );
+}
+
+if (
+    mb_strlen($namaIbu) < 3
+    || mb_strlen($namaIbu) > 100
+) {
+    kembaliRegister(
+        "Nama Ibu harus terdiri dari 3 sampai 100 karakter."
+    );
+}
+
+if (
+    !preg_match(
+        "/^[0-9+\-\s]{8,20}$/",
+        $noHp
+    )
+) {
+    kembaliRegister(
+        "Nomor HP tidak valid."
+    );
+}
+
+if (
+    !in_array(
+        $pendidikanIbu,
+        $daftarPendidikan,
+        true
+    )
+) {
+    kembaliRegister(
+        "Pilihan pendidikan Ibu tidak valid."
+    );
+}
+
+if (
+    !in_array(
+        $pekerjaanIbu,
+        $daftarPekerjaan,
+        true
+    )
+) {
+    kembaliRegister(
+        "Pilihan pekerjaan Ibu tidak valid."
     );
 }
 
@@ -143,33 +330,44 @@ if ($password !== $konfirmasiPassword) {
 |--------------------------------------------------------------------------
 */
 
-$stmtCek = mysqli_prepare(
-    $conn,
-    "SELECT id_user
-     FROM pengguna
-     WHERE username = ?
-     LIMIT 1"
-);
+$stmtCekUsername =
+    mysqli_prepare(
+        $conn,
+        "SELECT id_user
+         FROM pengguna
+         WHERE username = ?
+         LIMIT 1"
+    );
 
-if (!$stmtCek) {
+if (!$stmtCekUsername) {
     kembaliRegister(
         "Sistem gagal memeriksa username."
     );
 }
 
 mysqli_stmt_bind_param(
-    $stmtCek,
+    $stmtCekUsername,
     "s",
     $username
 );
 
-mysqli_stmt_execute($stmtCek);
+mysqli_stmt_execute(
+    $stmtCekUsername
+);
 
-$resultCek = mysqli_stmt_get_result($stmtCek);
+$resultCekUsername =
+    mysqli_stmt_get_result(
+        $stmtCekUsername
+    );
 
-$dataUsername = mysqli_fetch_assoc($resultCek);
+$dataUsername =
+    mysqli_fetch_assoc(
+        $resultCekUsername
+    );
 
-mysqli_stmt_close($stmtCek);
+mysqli_stmt_close(
+    $stmtCekUsername
+);
 
 if ($dataUsername) {
     kembaliRegister(
@@ -179,16 +377,73 @@ if ($dataUsername) {
 
 /*
 |--------------------------------------------------------------------------
+| Memeriksa NIK Ibu
+|--------------------------------------------------------------------------
+|
+| Satu NIK Ibu hanya boleh mempunyai satu Profil Ibu.
+|
+*/
+
+$stmtCekNik =
+    mysqli_prepare(
+        $conn,
+        "SELECT id_orang_tua
+         FROM orang_tua
+         WHERE nik_ibu = ?
+         LIMIT 1"
+    );
+
+if (!$stmtCekNik) {
+    kembaliRegister(
+        "Sistem gagal memeriksa NIK Ibu."
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtCekNik,
+    "s",
+    $nikIbu
+);
+
+mysqli_stmt_execute(
+    $stmtCekNik
+);
+
+$resultCekNik =
+    mysqli_stmt_get_result(
+        $stmtCekNik
+    );
+
+$dataNikIbu =
+    mysqli_fetch_assoc(
+        $resultCekNik
+    );
+
+mysqli_stmt_close(
+    $stmtCekNik
+);
+
+if ($dataNikIbu) {
+    kembaliRegister(
+        "NIK Ibu sudah terdaftar pada akun lain."
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
 | Membuat password hash
 |--------------------------------------------------------------------------
 */
 
-$passwordHash = password_hash(
-    $password,
-    PASSWORD_DEFAULT
-);
+$passwordHash =
+    password_hash(
+        $password,
+        PASSWORD_DEFAULT
+    );
 
-if ($passwordHash === false) {
+if (
+    $passwordHash === false
+) {
     kembaliRegister(
         "Password gagal diproses."
     );
@@ -196,63 +451,207 @@ if ($passwordHash === false) {
 
 /*
 |--------------------------------------------------------------------------
-| Role otomatis orang tua
+| Role otomatis Orang Tua
 |--------------------------------------------------------------------------
 */
 
-$role = "orang_tua";
+$role =
+    "orang_tua";
 
 /*
 |--------------------------------------------------------------------------
-| Menyimpan akun
+| Transaksi registrasi
 |--------------------------------------------------------------------------
+|
+| 1. Buat akun pengguna
+| 2. Ambil id_user baru
+| 3. Buat Profil Ibu dengan id_user yang sama
+|
+| Jika salah satu gagal, seluruh proses dibatalkan.
+|
 */
 
-$stmtInsert = mysqli_prepare(
-    $conn,
-    "INSERT INTO pengguna
-        (
-            nama,
-            username,
-            password,
-            role
-        )
-     VALUES (?, ?, ?, ?)"
+mysqli_begin_transaction(
+    $conn
 );
 
-if (!$stmtInsert) {
-    kembaliRegister(
-        "Sistem gagal menyiapkan registrasi."
-    );
-}
+try {
 
-mysqli_stmt_bind_param(
-    $stmtInsert,
-    "ssss",
-    $nama,
-    $username,
-    $passwordHash,
-    $role
-);
+    /*
+    |--------------------------------------------------------------------------
+    | Menyimpan akun pengguna
+    |--------------------------------------------------------------------------
+    */
 
-if (!mysqli_stmt_execute($stmtInsert)) {
+    $stmtInsertPengguna =
+        mysqli_prepare(
+            $conn,
+            "INSERT INTO pengguna
+            (
+                nama,
+                username,
+                password,
+                role
+            )
+            VALUES (?, ?, ?, ?)"
+        );
 
-    $kodeError = mysqli_stmt_errno($stmtInsert);
-
-    mysqli_stmt_close($stmtInsert);
-
-    if ($kodeError === 1062) {
-        kembaliRegister(
-            "Username sudah digunakan."
+    if (!$stmtInsertPengguna) {
+        throw new Exception(
+            "Sistem gagal menyiapkan data akun."
         );
     }
 
+    mysqli_stmt_bind_param(
+        $stmtInsertPengguna,
+        "ssss",
+        $nama,
+        $username,
+        $passwordHash,
+        $role
+    );
+
+    if (
+        !mysqli_stmt_execute(
+            $stmtInsertPengguna
+        )
+    ) {
+        $kodeErrorPengguna =
+            mysqli_stmt_errno(
+                $stmtInsertPengguna
+            );
+
+        mysqli_stmt_close(
+            $stmtInsertPengguna
+        );
+
+        if (
+            $kodeErrorPengguna === 1062
+        ) {
+            throw new Exception(
+                "Username sudah digunakan."
+            );
+        }
+
+        throw new Exception(
+            "Akun gagal disimpan."
+        );
+    }
+
+    $idUserBaru =
+        (int) mysqli_insert_id(
+            $conn
+        );
+
+    mysqli_stmt_close(
+        $stmtInsertPengguna
+    );
+
+    if (
+        $idUserBaru < 1
+    ) {
+        throw new Exception(
+            "ID akun baru tidak dapat dibuat."
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Menyimpan Profil Ibu
+    |--------------------------------------------------------------------------
+    */
+
+    $stmtInsertOrangTua =
+        mysqli_prepare(
+            $conn,
+            "INSERT INTO orang_tua
+            (
+                id_user,
+                nik_ibu,
+                nama_ibu,
+                no_hp,
+                alamat,
+                pendidikan_ibu,
+                pekerjaan_ibu
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)"
+        );
+
+    if (!$stmtInsertOrangTua) {
+        throw new Exception(
+            "Sistem gagal menyiapkan Profil Ibu."
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtInsertOrangTua,
+        "issssss",
+        $idUserBaru,
+        $nikIbu,
+        $namaIbu,
+        $noHp,
+        $alamat,
+        $pendidikanIbu,
+        $pekerjaanIbu
+    );
+
+    if (
+        !mysqli_stmt_execute(
+            $stmtInsertOrangTua
+        )
+    ) {
+        $kodeErrorProfil =
+            mysqli_stmt_errno(
+                $stmtInsertOrangTua
+            );
+
+        $pesanSqlProfil =
+            mysqli_stmt_error(
+                $stmtInsertOrangTua
+            );
+
+        mysqli_stmt_close(
+            $stmtInsertOrangTua
+        );
+
+        if (
+            $kodeErrorProfil === 1062
+        ) {
+            throw new Exception(
+                "Profil Ibu sudah terdaftar."
+            );
+        }
+
+        throw new Exception(
+            "Profil Ibu gagal disimpan: "
+            . $pesanSqlProfil
+        );
+    }
+
+    mysqli_stmt_close(
+        $stmtInsertOrangTua
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Selesaikan transaksi
+    |--------------------------------------------------------------------------
+    */
+
+    mysqli_commit(
+        $conn
+    );
+
+} catch (Throwable $exception) {
+
+    mysqli_rollback(
+        $conn
+    );
+
     kembaliRegister(
-        "Registrasi gagal disimpan. Silakan coba lagi."
+        $exception->getMessage()
     );
 }
-
-mysqli_stmt_close($stmtInsert);
 
 /*
 |--------------------------------------------------------------------------
@@ -260,17 +659,27 @@ mysqli_stmt_close($stmtInsert);
 |--------------------------------------------------------------------------
 */
 
-unset($_SESSION["register_old"]);
-unset($_SESSION["register_error"]);
+unset(
+    $_SESSION["register_old"]
+);
+
+unset(
+    $_SESSION["register_error"]
+);
 
 /*
 |--------------------------------------------------------------------------
-| Kembali ke login
+| Registrasi selesai
 |--------------------------------------------------------------------------
+|
+| Karena Profil Ibu sudah dibuat dalam proses registrasi yang sama,
+| akun langsung siap dihubungkan oleh Kader ke data balita.
+|
 */
 
 header(
-    "Location: login.php?pesan=registrasi_sukses"
+    "Location: login.php"
+    . "?pesan=registrasi_sukses"
 );
 
 exit;

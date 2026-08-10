@@ -75,16 +75,23 @@ if ($roleAktif === "orang_tua") {
                 b.umur,
                 b.nama_ibu,
                 b.alamat,
+                ot.nama_ibu AS profil_nama_ibu,
+                ot.nik_ibu,
+                ot.pendidikan_ibu,
+                ot.pekerjaan_ibu,
                 b.nama_posyandu,
                 p.nama_puskesmas
              FROM balita b
              LEFT JOIN puskesmas p
                 ON b.id_puskesmas = p.id_puskesmas
+             LEFT JOIN orang_tua ot
+                ON b.id_user = ot.id_user
              WHERE b.id_user = ?
              AND (
                 b.nik_balita LIKE ?
                 OR b.nama_balita LIKE ?
                 OR b.nama_ibu LIKE ?
+                OR ot.nama_ibu LIKE ?
                 OR b.nama_posyandu LIKE ?
                 OR p.nama_puskesmas LIKE ?
              )
@@ -97,8 +104,9 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "isssss",
+            "issssss",
             $idUserAktif,
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -119,11 +127,17 @@ if ($roleAktif === "orang_tua") {
                 b.umur,
                 b.nama_ibu,
                 b.alamat,
+                ot.nama_ibu AS profil_nama_ibu,
+                ot.nik_ibu,
+                ot.pendidikan_ibu,
+                ot.pekerjaan_ibu,
                 b.nama_posyandu,
                 p.nama_puskesmas
              FROM balita b
              LEFT JOIN puskesmas p
                 ON b.id_puskesmas = p.id_puskesmas
+             LEFT JOIN orang_tua ot
+                ON b.id_user = ot.id_user
              WHERE b.id_user = ?
              ORDER BY b.id_balita DESC"
         );
@@ -155,16 +169,23 @@ if ($roleAktif === "orang_tua") {
                 b.umur,
                 b.nama_ibu,
                 b.alamat,
+                ot.nama_ibu AS profil_nama_ibu,
+                ot.nik_ibu,
+                ot.pendidikan_ibu,
+                ot.pekerjaan_ibu,
                 b.nama_posyandu,
                 p.nama_puskesmas
              FROM balita b
              LEFT JOIN puskesmas p
                 ON b.id_puskesmas = p.id_puskesmas
+             LEFT JOIN orang_tua ot
+                ON b.id_user = ot.id_user
              WHERE b.id_puskesmas = ?
              AND (
                 b.nik_balita LIKE ?
                 OR b.nama_balita LIKE ?
                 OR b.nama_ibu LIKE ?
+                OR ot.nama_ibu LIKE ?
                 OR b.nama_posyandu LIKE ?
                 OR p.nama_puskesmas LIKE ?
              )
@@ -177,8 +198,9 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "isssss",
+            "issssss",
             $filterPuskesmas,
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -201,15 +223,22 @@ if ($roleAktif === "orang_tua") {
                 b.umur,
                 b.nama_ibu,
                 b.alamat,
+                ot.nama_ibu AS profil_nama_ibu,
+                ot.nik_ibu,
+                ot.pendidikan_ibu,
+                ot.pekerjaan_ibu,
                 b.nama_posyandu,
                 p.nama_puskesmas
              FROM balita b
              LEFT JOIN puskesmas p
                 ON b.id_puskesmas = p.id_puskesmas
+             LEFT JOIN orang_tua ot
+                ON b.id_user = ot.id_user
              WHERE
                 b.nik_balita LIKE ?
                 OR b.nama_balita LIKE ?
                 OR b.nama_ibu LIKE ?
+                OR ot.nama_ibu LIKE ?
                 OR b.nama_posyandu LIKE ?
                 OR p.nama_puskesmas LIKE ?
              ORDER BY b.id_balita DESC"
@@ -221,7 +250,8 @@ if ($roleAktif === "orang_tua") {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "sssss",
+            "ssssss",
+            $kataKunci,
             $kataKunci,
             $kataKunci,
             $kataKunci,
@@ -242,11 +272,17 @@ if ($roleAktif === "orang_tua") {
                 b.umur,
                 b.nama_ibu,
                 b.alamat,
+                ot.nama_ibu AS profil_nama_ibu,
+                ot.nik_ibu,
+                ot.pendidikan_ibu,
+                ot.pekerjaan_ibu,
                 b.nama_posyandu,
                 p.nama_puskesmas
              FROM balita b
              LEFT JOIN puskesmas p
                 ON b.id_puskesmas = p.id_puskesmas
+             LEFT JOIN orang_tua ot
+                ON b.id_user = ot.id_user
              WHERE b.id_puskesmas = ?
              ORDER BY b.id_balita DESC"
         );
@@ -274,11 +310,17 @@ if ($roleAktif === "orang_tua") {
                 b.umur,
                 b.nama_ibu,
                 b.alamat,
+                ot.nama_ibu AS profil_nama_ibu,
+                ot.nik_ibu,
+                ot.pendidikan_ibu,
+                ot.pekerjaan_ibu,
                 b.nama_posyandu,
                 p.nama_puskesmas
              FROM balita b
              LEFT JOIN puskesmas p
                 ON b.id_puskesmas = p.id_puskesmas
+             LEFT JOIN orang_tua ot
+                ON b.id_user = ot.id_user
              ORDER BY b.id_balita DESC"
         );
 
@@ -293,6 +335,44 @@ if (!mysqli_stmt_execute($stmt)) {
 }
 
 $query = mysqli_stmt_get_result($stmt);
+
+/*
+|--------------------------------------------------------------------------
+| Menghitung balita yang belum terhubung Profil Ibu
+|--------------------------------------------------------------------------
+|
+| Hanya informasi untuk Kader. Data lama tetap ditampilkan karena
+| relasi menggunakan LEFT JOIN.
+|
+*/
+
+$jumlahBelumTerhubung = 0;
+
+if ($roleAktif === "kader") {
+
+    $queryBelumTerhubung = mysqli_query(
+        $conn,
+        "SELECT COUNT(*) AS total
+         FROM balita AS b
+         LEFT JOIN orang_tua AS ot
+            ON b.id_user = ot.id_user
+         WHERE b.id_user IS NULL
+            OR ot.id_orang_tua IS NULL"
+    );
+
+    if ($queryBelumTerhubung) {
+        $dataBelumTerhubung =
+            mysqli_fetch_assoc(
+                $queryBelumTerhubung
+            );
+
+        $jumlahBelumTerhubung =
+            (int) (
+                $dataBelumTerhubung["total"]
+                ?? 0
+            );
+    }
+}
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
@@ -354,6 +434,27 @@ require_once "../includes/navbar.php";
 
         <?php endif; ?>
 
+        <?php if (
+            $roleAktif === "kader"
+            && $jumlahBelumTerhubung > 0
+        ): ?>
+
+            <div class="alert alert-warning">
+
+                <i class="bi bi-exclamation-triangle me-1"></i>
+
+                Ada
+                <strong>
+                    <?= $jumlahBelumTerhubung; ?>
+                </strong>
+                data balita lama yang belum terhubung dengan
+                Profil Ibu. Data tetap dapat dilihat, tetapi
+                sebaiknya hubungkan melalui menu Edit Balita.
+
+            </div>
+
+        <?php endif; ?>
+
         <div class="card content-card">
 
             <div class="card-header">
@@ -365,7 +466,7 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        Gunakan pencarian untuk menemukan data lebih cepat.
+                        Data balita terhubung ke Profil Ibu melalui akun Orang Tua.
                     </small>
 
                 </div>
@@ -423,7 +524,7 @@ require_once "../includes/navbar.php";
                                 type="text"
                                 name="cari"
                                 class="form-control"
-                                placeholder="Cari NIK, nama balita, nama ibu, Posyandu, atau Puskesmas"
+                                placeholder="Cari NIK, nama balita, Profil Ibu, Posyandu, atau Puskesmas"
                                 value="<?= htmlspecialchars(
                                     $cari,
                                     ENT_QUOTES,
@@ -611,6 +712,34 @@ require_once "../includes/navbar.php";
                                 while (
                                     $d = mysqli_fetch_assoc($query)
                                 ):
+
+                                    $namaIbuProfil =
+                                        trim(
+                                            (string) (
+                                                $d["profil_nama_ibu"]
+                                                ?? ""
+                                            )
+                                        );
+
+                                    $namaIbuLama =
+                                        trim(
+                                            (string) (
+                                                $d["nama_ibu"]
+                                                ?? ""
+                                            )
+                                        );
+
+                                    $namaIbuTampil =
+                                        $namaIbuProfil !== ""
+                                            ? $namaIbuProfil
+                                            : (
+                                                $namaIbuLama !== ""
+                                                    ? $namaIbuLama
+                                                    : "-"
+                                            );
+
+                                    $profilIbuTerhubung =
+                                        $namaIbuProfil !== "";
                                 ?>
 
                                     <tr>
@@ -682,11 +811,33 @@ require_once "../includes/navbar.php";
                                         </td>
 
                                         <td>
-                                            <?= htmlspecialchars(
-                                                $d["nama_ibu"],
-                                                ENT_QUOTES,
-                                                "UTF-8"
-                                            ); ?>
+
+                                            <strong class="d-block">
+                                                <?= htmlspecialchars(
+                                                    $namaIbuTampil,
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                ); ?>
+                                            </strong>
+
+                                            <?php if (
+                                                $profilIbuTerhubung
+                                            ): ?>
+
+                                                <small class="text-success">
+                                                    <i class="bi bi-link-45deg"></i>
+                                                    Profil Ibu terhubung
+                                                </small>
+
+                                            <?php else: ?>
+
+                                                <small class="text-warning">
+                                                    <i class="bi bi-exclamation-triangle"></i>
+                                                    Profil Ibu belum terhubung
+                                                </small>
+
+                                            <?php endif; ?>
+
                                         </td>
 
                                         <td>

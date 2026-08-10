@@ -1,7 +1,16 @@
 <?php
 
 require_once "../auth/session.php";
+require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
+
+cekRole([
+    "kader",
+    "petugas_gizi",
+    "petugas_kia",
+    "kepala_puskesmas",
+    "dinkes"
+]);
 
 /*
 |--------------------------------------------------------------------------
@@ -169,19 +178,46 @@ function amanSkrining($nilai): string
 | Pengaturan hak akses berdasarkan role
 |--------------------------------------------------------------------------
 |
-| Hanya Petugas Gizi yang dapat menambah, menganalisis,
-| mengedit, dan menghapus data skrining.
-| Role lain hanya melihat data dalam mode read-only.
+| Kader:
+| - menambah skrining
+| - mengedit skrining
+| - melihat detail
+|
+| Petugas Gizi:
+| - melihat detail
+| - melakukan analisis/deteksi
+|
+| Petugas KIA, Kepala Puskesmas, dan Dinkes:
+| - melihat data/detail dalam mode read-only
 |
 */
 
-$bolehKelolaSkrining = $roleAktif === "petugas_gizi";
+$bolehTambahSkrining =
+    $roleAktif === "kader";
 
-$bolehTambahSkrining = in_array(
-    $roleAktif,
-    ["petugas_gizi", "kader"],
-    true
-);
+$bolehEditSkrining =
+    $roleAktif === "kader";
+
+$bolehAnalisisSkrining =
+    $roleAktif === "petugas_gizi";
+
+$bolehLihatDetail =
+    in_array(
+        $roleAktif,
+        [
+            "kader",
+            "petugas_gizi",
+            "petugas_kia",
+            "kepala_puskesmas",
+            "dinkes"
+        ],
+        true
+    );
+
+$punyaAksiSkrining =
+    $bolehLihatDetail
+    || $bolehEditSkrining
+    || $bolehAnalisisSkrining;
 
 /*
 |--------------------------------------------------------------------------
@@ -259,8 +295,16 @@ require_once "../includes/navbar.php";
 
                 <p class="page-subtitle">
 
-                    Kelola data faktor risiko dan riwayat awal
-                    balita sebagai bagian dari proses deteksi stunting.
+                    <?php if ($roleAktif === "kader"): ?>
+                        Catat dan perbarui faktor risiko awal balita
+                        sebelum ditinjau oleh Petugas Gizi.
+                    <?php elseif ($roleAktif === "petugas_gizi"): ?>
+                        Tinjau hasil skrining awal dari Kader dan
+                        lanjutkan ke proses analisis risiko stunting.
+                    <?php else: ?>
+                        Tinjau data skrining awal balita dalam mode
+                        monitoring.
+                    <?php endif; ?>
 
                 </p>
 
@@ -350,13 +394,28 @@ require_once "../includes/navbar.php";
 
                 </div>
 
-                <span class="badge badge-info">
+                <?php if ($roleAktif === "kader"): ?>
 
-                    <i class="bi bi-person-hearts"></i>
+                    <span class="badge badge-info">
+                        <i class="bi bi-pencil-square"></i>
+                        Input Kader
+                    </span>
 
-                    Skrining Awal
+                <?php elseif ($roleAktif === "petugas_gizi"): ?>
 
-                </span>
+                    <span class="badge badge-info">
+                        <i class="bi bi-search-heart"></i>
+                        Analisis Gizi
+                    </span>
+
+                <?php else: ?>
+
+                    <span class="badge badge-info">
+                        <i class="bi bi-eye"></i>
+                        Mode Monitoring
+                    </span>
+
+                <?php endif; ?>
 
             </div>
 
@@ -485,7 +544,7 @@ require_once "../includes/navbar.php";
                                     Air Bersih
                                 </th>
 
-                                <?php if ($bolehKelolaSkrining): ?>
+                                <?php if ($punyaAksiSkrining): ?>
 
                                     <th class="text-center">
                                         Aksi
@@ -640,81 +699,55 @@ require_once "../includes/navbar.php";
 
                                     </td>
 
-                                    <?php if ($bolehKelolaSkrining): ?>
+                                    <?php if ($punyaAksiSkrining): ?>
 
                                         <td>
 
-                                           <div
-    class="table-actions
-    justify-content-center
-    d-flex
-    gap-1"
->
+                                            <div
+                                                class="table-actions
+                                                justify-content-center
+                                                d-flex
+                                                flex-wrap
+                                                gap-1"
+                                            >
 
+                                                <?php if ($bolehLihatDetail): ?>
 
-    <!-- DETAIL SKRINING -->
+                                                    <a
+                                                        href="detail_skrining.php?id=<?= $idSkrining; ?>"
+                                                        class="btn btn-info btn-sm"
+                                                    >
+                                                        <i class="bi bi-eye"></i>
+                                                        Detail
+                                                    </a>
 
-    <a
-        href="detail_skrining.php?id=<?= $idSkrining; ?>"
-        class="btn btn-info btn-sm"
-    >
+                                                <?php endif; ?>
 
-        <i class="bi bi-eye"></i>
+                                                <?php if ($bolehAnalisisSkrining): ?>
 
-        Detail
+                                                    <a
+                                                        href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
+                                                        class="btn btn-primary btn-sm"
+                                                    >
+                                                        <i class="bi bi-search-heart"></i>
+                                                        Analisis
+                                                    </a>
 
-    </a>
+                                                <?php endif; ?>
 
+                                                <?php if ($bolehEditSkrining): ?>
 
+                                                    <a
+                                                        href="edit_skrining.php?id=<?= $idSkrining; ?>"
+                                                        class="btn btn-warning btn-sm"
+                                                    >
+                                                        <i class="bi bi-pencil-square"></i>
+                                                        Edit
+                                                    </a>
 
-    <!-- ANALISIS DETEKSI -->
+                                                <?php endif; ?>
 
-    <a
-        href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
-        class="btn btn-primary btn-sm"
-    >
-
-        <i class="bi bi-search-heart"></i>
-
-        Analisis
-
-    </a>
-
-
-
-    <!-- EDIT SKRINING -->
-
-    <a
-        href="edit_skrining.php?id=<?= $idSkrining; ?>"
-        class="btn btn-warning btn-sm"
-    >
-
-        <i class="bi bi-pencil-square"></i>
-
-        Edit
-
-    </a>
-
-
-
-    <!-- HAPUS SKRINING -->
-
-    <a
-        href="hapus_skrining.php?id=<?= $idSkrining; ?>"
-        class="btn btn-danger btn-sm"
-        onclick="return confirm(
-            'Yakin ingin menghapus data skrining ini?'
-        );"
-    >
-
-        <i class="bi bi-trash3"></i>
-
-        Hapus
-
-    </a>
-
-
-</div>
+                                            </div>
 
                                         </td>
 
@@ -729,7 +762,7 @@ require_once "../includes/navbar.php";
                             <tr>
 
                                 <td
-                                    colspan="<?= $bolehKelolaSkrining
+                                    colspan="<?= $punyaAksiSkrining
                                         ? "13"
                                         : "12"; ?>"
                                 >
@@ -991,10 +1024,10 @@ require_once "../includes/navbar.php";
 
                         <i class="bi bi-info-circle me-1"></i>
 
-                        Skrining awal mencatat faktor risiko.
-                        Untuk menghitung status pertumbuhan
-                        berdasarkan pengukuran antropometri,
-                        lanjutkan ke proses analisis.
+                        Skrining awal sudah tersimpan.
+                        Tahap analisis selanjutnya dilakukan
+                        oleh Petugas Gizi berdasarkan data
+                        skrining dan antropometri balita.
 
                     </div>
 
@@ -1012,7 +1045,7 @@ require_once "../includes/navbar.php";
                     </button>
 
                     <?php if (
-                        $bolehKelolaSkrining
+                        $bolehAnalisisSkrining
                         && $popupIdBalita > 0
                     ): ?>
 
