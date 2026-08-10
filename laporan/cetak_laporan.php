@@ -16,6 +16,118 @@ cekRole([
     "dinkes"
 ]);
 
+$roleAktif =
+    $_SESSION["role"] ?? "";
+
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+$aksesPuskesmasTerbatas =
+    in_array(
+        $roleAktif,
+        [
+            "petugas_gizi",
+            "kepala_puskesmas"
+        ],
+        true
+    );
+
+$idPuskesmasAkun = 0;
+$namaPuskesmasAkun = "";
+
+/*
+|--------------------------------------------------------------------------
+| Menentukan Puskesmas akun aktif
+|--------------------------------------------------------------------------
+|
+| Petugas Gizi dan Kepala Puskesmas hanya boleh mencetak laporan
+| dari Puskesmas yang terhubung dengan akun mereka.
+| Dinkes tetap dapat mencetak seluruh wilayah.
+|
+*/
+
+if ($aksesPuskesmasTerbatas) {
+
+    $stmtPuskesmasAkun = mysqli_prepare(
+        $conn,
+        "SELECT
+            u.id_puskesmas,
+            p.nama_puskesmas
+         FROM pengguna AS u
+         LEFT JOIN puskesmas AS p
+            ON u.id_puskesmas = p.id_puskesmas
+         WHERE u.id_user = ?
+         LIMIT 1"
+    );
+
+    if (!$stmtPuskesmasAkun) {
+        die(
+            "Gagal memeriksa Puskesmas pengguna: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmasAkun,
+        "i",
+        $idUserAktif
+    );
+
+    mysqli_stmt_execute(
+        $stmtPuskesmasAkun
+    );
+
+    $hasilPuskesmasAkun =
+        mysqli_stmt_get_result(
+            $stmtPuskesmasAkun
+        );
+
+    $dataPuskesmasAkun =
+        mysqli_fetch_assoc(
+            $hasilPuskesmasAkun
+        );
+
+    mysqli_stmt_close(
+        $stmtPuskesmasAkun
+    );
+
+    if (
+        !$dataPuskesmasAkun
+        || empty(
+            $dataPuskesmasAkun[
+                "id_puskesmas"
+            ]
+        )
+        || empty(
+            $dataPuskesmasAkun[
+                "nama_puskesmas"
+            ]
+        )
+    ) {
+        http_response_code(403);
+
+        echo "
+            <h2>Akses Ditolak</h2>
+            <p>Akun ini belum terhubung dengan Puskesmas.</p>
+            <a href='laporan_stunting.php'>Kembali ke Laporan</a>
+        ";
+
+        exit;
+    }
+
+    $idPuskesmasAkun =
+        (int) $dataPuskesmasAkun[
+            "id_puskesmas"
+        ];
+
+    $namaPuskesmasAkun =
+        trim(
+            (string) $dataPuskesmasAkun[
+                "nama_puskesmas"
+            ]
+        );
+}
+
 /*
 |--------------------------------------------------------------------------
 | Fungsi bantuan
@@ -180,62 +292,100 @@ if ($tanggalAwal > $tanggalAkhir) {
 |--------------------------------------------------------------------------
 | Filter Puskesmas
 |--------------------------------------------------------------------------
+|
+| Dinkes boleh menggunakan filter id_puskesmas dari URL.
+| Petugas Gizi dan Kepala Puskesmas selalu dipaksa menggunakan
+| Puskesmas akun aktif, sehingga parameter URL tidak dapat mengubah wilayah.
+|
 */
 
-$idPuskesmas = filter_input(
-    INPUT_GET,
-    "id_puskesmas",
-    FILTER_VALIDATE_INT
-);
+if ($aksesPuskesmasTerbatas) {
 
-if ($idPuskesmas === false || $idPuskesmas === null) {
-    $idPuskesmas = 0;
-}
+    $idPuskesmas =
+        $idPuskesmasAkun;
 
-$idPuskesmas = (int) $idPuskesmas;
+    $namaPuskesmasDipilih =
+        $namaPuskesmasAkun;
 
-$namaPuskesmasDipilih = "Semua Puskesmas";
+} else {
 
-if ($idPuskesmas > 0) {
-
-    $stmtPuskesmas = mysqli_prepare(
-        $conn,
-        "SELECT
-            id_puskesmas,
-            nama_puskesmas
-         FROM puskesmas
-         WHERE id_puskesmas = ?
-         LIMIT 1"
+    $idPuskesmas = filter_input(
+        INPUT_GET,
+        "id_puskesmas",
+        FILTER_VALIDATE_INT
     );
 
-    if ($stmtPuskesmas) {
+    if (
+        $idPuskesmas === false
+        || $idPuskesmas === null
+    ) {
+        $idPuskesmas = 0;
+    }
 
-        mysqli_stmt_bind_param(
-            $stmtPuskesmas,
-            "i",
-            $idPuskesmas
+    $idPuskesmas =
+        (int) $idPuskesmas;
+
+    $namaPuskesmasDipilih =
+        "Semua Puskesmas";
+
+    if ($idPuskesmas > 0) {
+
+        $stmtPuskesmas = mysqli_prepare(
+            $conn,
+            "SELECT
+                id_puskesmas,
+                nama_puskesmas
+             FROM puskesmas
+             WHERE id_puskesmas = ?
+             LIMIT 1"
         );
 
-        mysqli_stmt_execute($stmtPuskesmas);
+        if ($stmtPuskesmas) {
 
-        $hasilPuskesmas =
-            mysqli_stmt_get_result($stmtPuskesmas);
+            mysqli_stmt_bind_param(
+                $stmtPuskesmas,
+                "i",
+                $idPuskesmas
+            );
 
-        $dataPuskesmas =
-            mysqli_fetch_assoc($hasilPuskesmas);
+            mysqli_stmt_execute(
+                $stmtPuskesmas
+            );
 
-        if ($dataPuskesmas) {
-            $namaPuskesmasDipilih =
-                $dataPuskesmas["nama_puskesmas"];
+            $hasilPuskesmas =
+                mysqli_stmt_get_result(
+                    $stmtPuskesmas
+                );
+
+            $dataPuskesmas =
+                mysqli_fetch_assoc(
+                    $hasilPuskesmas
+                );
+
+            if ($dataPuskesmas) {
+
+                $namaPuskesmasDipilih =
+                    $dataPuskesmas[
+                        "nama_puskesmas"
+                    ];
+
+            } else {
+
+                $idPuskesmas = 0;
+                $namaPuskesmasDipilih =
+                    "Semua Puskesmas";
+            }
+
+            mysqli_stmt_close(
+                $stmtPuskesmas
+            );
+
         } else {
+
             $idPuskesmas = 0;
+            $namaPuskesmasDipilih =
+                "Semua Puskesmas";
         }
-
-        mysqli_stmt_close($stmtPuskesmas);
-
-    } else {
-
-        $idPuskesmas = 0;
     }
 }
 
@@ -555,6 +705,83 @@ $parameterKembali = http_build_query([
     "id_puskesmas" => $idPuskesmas
 ]);
 
+/*
+|--------------------------------------------------------------------------
+| Format kop surat berdasarkan role
+|--------------------------------------------------------------------------
+|
+| Dinkes menggunakan identitas Dinas Kesehatan.
+| Kepala Puskesmas dan Petugas Gizi menggunakan identitas Puskesmas.
+| Isi laporan tetap sama; yang dibedakan adalah logo dan kop surat.
+|
+*/
+
+$formatCetakDinkes =
+    $roleAktif === "dinkes";
+
+if ($formatCetakDinkes) {
+
+    $judulKopUtama =
+        "DINAS KESEHATAN";
+
+    $judulKopKedua =
+        "LAPORAN PEMANTAUAN STUNTING";
+
+    $subjudulKop =
+        "Sistem Deteksi dan Pemantauan Stunting";
+
+    $logoCetakSrc =
+        "../assets/img/logo_dinkes.png";
+
+    $logoCetakServer =
+        __DIR__
+        . "/../assets/img/logo_dinkes.png";
+
+    $labelLogoCetak =
+        "LOGO<br>DINAS<br>KESEHATAN";
+
+    $footerInstansi =
+        "Dinas Kesehatan";
+
+} else {
+
+    $judulKopUtama =
+        "PUSKESMAS";
+
+    $judulKopKedua =
+        $namaPuskesmasAkun !== ""
+            ? strtoupper(
+                $namaPuskesmasAkun
+            )
+            : strtoupper(
+                $namaPuskesmasDipilih
+            );
+
+    $subjudulKop =
+        "Sistem Deteksi dan Pemantauan Stunting";
+
+    $logoCetakSrc =
+        "../assets/img/logo_puskesmas.png";
+
+    $logoCetakServer =
+        __DIR__
+        . "/../assets/img/logo_puskesmas.png";
+
+    $labelLogoCetak =
+        "LOGO<br>PUSKESMAS";
+
+    $footerInstansi =
+        $namaPuskesmasAkun !== ""
+            ? "Puskesmas "
+                . $namaPuskesmasAkun
+            : "Puskesmas";
+}
+
+$logoCetakAda =
+    file_exists(
+        $logoCetakServer
+    );
+
 ?>
 
 <!DOCTYPE html>
@@ -658,6 +885,30 @@ $parameterKembali = http_build_query([
         }
 
         .report-logo {
+            width: 78px;
+            height: 78px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            color: #555555;
+
+            font-size: 10px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .report-logo img {
+            display: block;
+
+            width: 72px;
+            height: 72px;
+
+            object-fit: contain;
+        }
+
+        .report-logo-placeholder {
             width: 72px;
             height: 72px;
 
@@ -667,12 +918,6 @@ $parameterKembali = http_build_query([
 
             border: 2px solid #777777;
             border-radius: 50%;
-
-            color: #555555;
-
-            font-size: 11px;
-            font-weight: 700;
-            text-align: center;
         }
 
         .report-heading {
@@ -1113,21 +1358,48 @@ $parameterKembali = http_build_query([
         <header class="report-header">
 
             <div class="report-logo">
-                LOGO<br>PUSKESMAS
+
+                <?php if ($logoCetakAda): ?>
+
+                    <img
+                        src="<?= amanCetak(
+                            $logoCetakSrc
+                        ); ?>"
+                        alt="<?= $formatCetakDinkes
+                            ? "Logo Dinas Kesehatan"
+                            : "Logo Puskesmas"; ?>"
+                    >
+
+                <?php else: ?>
+
+                    <div
+                        class="report-logo-placeholder"
+                    >
+                        <?= $labelLogoCetak; ?>
+                    </div>
+
+                <?php endif; ?>
+
             </div>
 
             <div class="report-heading">
 
                 <h1>
-                    Puskesmas
+                    <?= amanCetak(
+                        $judulKopUtama
+                    ); ?>
                 </h1>
 
                 <h2>
-                    Sistem Deteksi dan Pemantauan Stunting
+                    <?= amanCetak(
+                        $judulKopKedua
+                    ); ?>
                 </h2>
 
                 <p>
-                    Laporan hasil deteksi risiko stunting balita
+                    <?= amanCetak(
+                        $subjudulKop
+                    ); ?>
                 </p>
 
             </div>
@@ -1531,7 +1803,10 @@ $parameterKembali = http_build_query([
         </section>
 
         <footer class="report-footer">
-            Sistem Deteksi dan Pemantauan Stunting
+            <?= amanCetak(
+                $footerInstansi
+            ); ?>
+            · Sistem Deteksi dan Pemantauan Stunting
         </footer>
 
     </main>
