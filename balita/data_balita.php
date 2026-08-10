@@ -22,10 +22,38 @@ $cari = trim($_GET["cari"] ?? "");
 
 /*
 |--------------------------------------------------------------------------
+| Filter Puskesmas khusus Kader
+|--------------------------------------------------------------------------
+*/
+
+$filterPuskesmas = $roleAktif === "kader"
+    ? max(0, (int) ($_GET["puskesmas"] ?? 0))
+    : 0;
+
+$daftarPuskesmas = [];
+
+if ($roleAktif === "kader") {
+    $queryPuskesmas = mysqli_query(
+        $conn,
+        "SELECT id_puskesmas, nama_puskesmas
+         FROM puskesmas
+         ORDER BY nama_puskesmas ASC"
+    );
+
+    if ($queryPuskesmas) {
+        while ($puskesmas = mysqli_fetch_assoc($queryPuskesmas)) {
+            $daftarPuskesmas[] = $puskesmas;
+        }
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
 | Mengambil data balita
 |--------------------------------------------------------------------------
 |
 | Orang tua hanya melihat anak yang terhubung dengan akunnya.
+| Kader dapat memfilter data berdasarkan Puskesmas.
 | Role lain dapat melihat seluruh data balita.
 |
 */
@@ -111,7 +139,53 @@ if ($roleAktif === "orang_tua") {
         );
     }
 } else {
-    if ($cari !== "") {
+    if ($cari !== "" && $filterPuskesmas > 0) {
+        $kataKunci = "%" . $cari . "%";
+
+        $stmt = mysqli_prepare(
+            $conn,
+            "SELECT
+                b.id_balita,
+                b.id_user,
+                b.id_puskesmas,
+                b.nik_balita,
+                b.nama_balita,
+                b.jenis_kelamin,
+                b.tanggal_lahir,
+                b.umur,
+                b.nama_ibu,
+                b.alamat,
+                b.nama_posyandu,
+                p.nama_puskesmas
+             FROM balita b
+             LEFT JOIN puskesmas p
+                ON b.id_puskesmas = p.id_puskesmas
+             WHERE b.id_puskesmas = ?
+             AND (
+                b.nik_balita LIKE ?
+                OR b.nama_balita LIKE ?
+                OR b.nama_ibu LIKE ?
+                OR b.nama_posyandu LIKE ?
+                OR p.nama_puskesmas LIKE ?
+             )
+             ORDER BY b.id_balita DESC"
+        );
+
+        if (!$stmt) {
+            die("Gagal menyiapkan filter data balita.");
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "isssss",
+            $filterPuskesmas,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci
+        );
+    } elseif ($cari !== "") {
         $kataKunci = "%" . $cari . "%";
 
         $stmt = mysqli_prepare(
@@ -154,6 +228,38 @@ if ($roleAktif === "orang_tua") {
             $kataKunci,
             $kataKunci
         );
+    } elseif ($filterPuskesmas > 0) {
+        $stmt = mysqli_prepare(
+            $conn,
+            "SELECT
+                b.id_balita,
+                b.id_user,
+                b.id_puskesmas,
+                b.nik_balita,
+                b.nama_balita,
+                b.jenis_kelamin,
+                b.tanggal_lahir,
+                b.umur,
+                b.nama_ibu,
+                b.alamat,
+                b.nama_posyandu,
+                p.nama_puskesmas
+             FROM balita b
+             LEFT JOIN puskesmas p
+                ON b.id_puskesmas = p.id_puskesmas
+             WHERE b.id_puskesmas = ?
+             ORDER BY b.id_balita DESC"
+        );
+
+        if (!$stmt) {
+            die("Gagal menyiapkan filter data balita.");
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "i",
+            $filterPuskesmas
+        );
     } else {
         $stmt = mysqli_prepare(
             $conn,
@@ -182,7 +288,9 @@ if ($roleAktif === "orang_tua") {
     }
 }
 
-mysqli_stmt_execute($stmt);
+if (!mysqli_stmt_execute($stmt)) {
+    die("Gagal mengambil data balita: " . mysqli_stmt_error($stmt));
+}
 
 $query = mysqli_stmt_get_result($stmt);
 
@@ -292,8 +400,16 @@ require_once "../includes/navbar.php";
 
                 <form
                     method="GET"
-                    class="row g-2 mb-4"
+                    class="row g-2 mb-3"
                 >
+
+                    <?php if ($filterPuskesmas > 0): ?>
+                        <input
+                            type="hidden"
+                            name="puskesmas"
+                            value="<?= $filterPuskesmas; ?>"
+                        >
+                    <?php endif; ?>
 
                     <div class="col-12 col-lg-8">
 
@@ -344,6 +460,87 @@ require_once "../includes/navbar.php";
                     </div>
 
                 </form>
+
+                <?php if ($roleAktif === "kader"): ?>
+
+                    <form
+                        method="GET"
+                        class="row g-2 mb-4 align-items-end"
+                    >
+
+                        <?php if ($cari !== ""): ?>
+                            <input
+                                type="hidden"
+                                name="cari"
+                                value="<?= htmlspecialchars(
+                                    $cari,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                            >
+                        <?php endif; ?>
+
+                        <div class="col-12 col-lg-8">
+
+                            <label
+                                for="filter_puskesmas"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Filter berdasarkan Puskesmas
+                            </label>
+
+                            <select
+                                id="filter_puskesmas"
+                                name="puskesmas"
+                                class="form-select"
+                            >
+                                <option value="0">
+                                    Semua Puskesmas
+                                </option>
+
+                                <?php foreach ($daftarPuskesmas as $puskesmas): ?>
+                                    <option
+                                        value="<?= (int) $puskesmas["id_puskesmas"]; ?>"
+                                        <?= $filterPuskesmas === (int) $puskesmas["id_puskesmas"]
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= htmlspecialchars(
+                                            $puskesmas["nama_puskesmas"],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+
+                        </div>
+
+                        <div class="col-6 col-lg-2">
+                            <button
+                                type="submit"
+                                class="btn btn-primary w-100"
+                            >
+                                <i class="bi bi-funnel"></i>
+                                Filter
+                            </button>
+                        </div>
+
+                        <div class="col-6 col-lg-2">
+                            <a
+                                href="data_balita.php<?= $cari !== ""
+                                    ? "?cari=" . urlencode($cari)
+                                    : ""; ?>"
+                                class="btn btn-light w-100"
+                            >
+                                <i class="bi bi-x-circle"></i>
+                                Hapus Filter
+                            </a>
+                        </div>
+
+                    </form>
+
+                <?php endif; ?>
 
                 <div class="table-responsive">
 

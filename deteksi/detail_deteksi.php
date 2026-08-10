@@ -7,6 +7,7 @@ require_once "../config/koneksi.php";
 cekRole([
     "petugas_gizi",
     "petugas_kia",
+    "kader",
     "orang_tua",
     "kepala_puskesmas",
     "dinkes"

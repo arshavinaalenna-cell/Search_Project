@@ -12,7 +12,8 @@ require_once "../config/koneksi.php";
 */
 
 cekRole([
-    "petugas_gizi"
+    "petugas_gizi",
+    "kader"
 ]);
 
 $judulHalaman =

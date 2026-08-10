@@ -1,226 +1,250 @@
 <?php
 
 require_once "../auth/session.php";
-require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
-
-cekRole([
-    "petugas_gizi",
-    "petugas_kia",
-    "orang_tua",
-    "kepala_puskesmas",
-    "dinkes"
-]);
-
-$judulHalaman = "Hasil Deteksi Stunting | Sistem Deteksi Stunting";
-
-$roleAktif = $_SESSION["role"] ?? "";
-$idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
-$cari = trim($_GET["cari"] ?? "");
-
-$kataKunci = "%" . $cari . "%";
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil data hasil deteksi
+| Judul halaman
+|--------------------------------------------------------------------------
+*/
+
+$judulHalaman =
+    "Data Skrining Awal | Sistem Deteksi Stunting";
+
+/*
+|--------------------------------------------------------------------------
+| Flash data skrining baru
 |--------------------------------------------------------------------------
 |
-| Orang tua hanya melihat hasil deteksi anak miliknya.
-| Role lainnya dapat melihat seluruh hasil deteksi.
+| Data ini dikirim oleh form_skrining.php setelah INSERT berhasil.
+| Modal hanya tampil satu kali, lalu session langsung dihapus agar
+| tidak muncul lagi ketika halaman direfresh.
 |
 */
 
-if ($roleAktif === "orang_tua") {
+$skriningBaru = $_SESSION["skrining_baru"] ?? null;
 
-    if ($cari !== "") {
+if ($skriningBaru !== null) {
+    unset($_SESSION["skrining_baru"]);
+}
 
-        $stmt = mysqli_prepare(
-            $conn,
-            "SELECT
-                hd.id_deteksi,
-                hd.id_pengukuran,
-                hd.status_gizi,
-                hd.status_stunting,
-                hd.tanggal_deteksi,
-                pa.tanggal_pengukuran,
-                pa.umur_bulan,
-                pa.berat_badan,
-                pa.tinggi_panjang_badan,
-                pa.lingkar_kepala,
-                pa.lila,
-                b.id_balita,
-                b.nama_balita,
-                b.nik_balita,
-                b.jenis_kelamin
-             FROM hasil_deteksi hd
-             INNER JOIN pengukuran_antropometri pa
-                ON hd.id_pengukuran = pa.id_pengukuran
-             INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-             WHERE b.id_user = ?
-             AND (
-                b.nama_balita LIKE ?
-                OR b.nik_balita LIKE ?
-                OR hd.status_gizi LIKE ?
-                OR hd.status_stunting LIKE ?
-             )
-             ORDER BY hd.id_deteksi DESC"
-        );
+/*
+|--------------------------------------------------------------------------
+| Mengambil data skrining beserta nama balita
+|--------------------------------------------------------------------------
+*/
 
-        if (!$stmt) {
-            die(
-                "Gagal menyiapkan pencarian hasil deteksi: "
-                . mysqli_error($conn)
-            );
-        }
+$roleAktif = $_SESSION["role"] ?? "";
 
-        mysqli_stmt_bind_param(
-            $stmt,
-            "issss",
-            $idUserAktif,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci
-        );
+/*
+|--------------------------------------------------------------------------
+| Filter Puskesmas khusus Kader
+|--------------------------------------------------------------------------
+*/
 
-    } else {
+$filterPuskesmas = $roleAktif === "kader"
+    ? max(0, (int) ($_GET["puskesmas"] ?? 0))
+    : 0;
 
-        $stmt = mysqli_prepare(
-            $conn,
-            "SELECT
-                hd.id_deteksi,
-                hd.id_pengukuran,
-                hd.status_gizi,
-                hd.status_stunting,
-                hd.tanggal_deteksi,
-                pa.tanggal_pengukuran,
-                pa.umur_bulan,
-                pa.berat_badan,
-                pa.tinggi_panjang_badan,
-                pa.lingkar_kepala,
-                pa.lila,
-                b.id_balita,
-                b.nama_balita,
-                b.nik_balita,
-                b.jenis_kelamin
-             FROM hasil_deteksi hd
-             INNER JOIN pengukuran_antropometri pa
-                ON hd.id_pengukuran = pa.id_pengukuran
-             INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-             WHERE b.id_user = ?
-             ORDER BY hd.id_deteksi DESC"
-        );
+$daftarPuskesmas = [];
 
-        if (!$stmt) {
-            die(
-                "Gagal mengambil hasil deteksi: "
-                . mysqli_error($conn)
-            );
-        }
+if ($roleAktif === "kader") {
+    $queryPuskesmas = mysqli_query(
+        $conn,
+        "SELECT id_puskesmas, nama_puskesmas
+         FROM puskesmas
+         ORDER BY nama_puskesmas ASC"
+    );
 
-        mysqli_stmt_bind_param(
-            $stmt,
-            "i",
-            $idUserAktif
-        );
-    }
-
-} else {
-
-    if ($cari !== "") {
-
-        $stmt = mysqli_prepare(
-            $conn,
-            "SELECT
-                hd.id_deteksi,
-                hd.id_pengukuran,
-                hd.status_gizi,
-                hd.status_stunting,
-                hd.tanggal_deteksi,
-                pa.tanggal_pengukuran,
-                pa.umur_bulan,
-                pa.berat_badan,
-                pa.tinggi_panjang_badan,
-                pa.lingkar_kepala,
-                pa.lila,
-                b.id_balita,
-                b.nama_balita,
-                b.nik_balita,
-                b.jenis_kelamin
-             FROM hasil_deteksi hd
-             INNER JOIN pengukuran_antropometri pa
-                ON hd.id_pengukuran = pa.id_pengukuran
-             INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-             WHERE
-                b.nama_balita LIKE ?
-                OR b.nik_balita LIKE ?
-                OR hd.status_gizi LIKE ?
-                OR hd.status_stunting LIKE ?
-             ORDER BY hd.id_deteksi DESC"
-        );
-
-        if (!$stmt) {
-            die(
-                "Gagal menyiapkan pencarian hasil deteksi: "
-                . mysqli_error($conn)
-            );
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "ssss",
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci
-        );
-
-    } else {
-
-        $stmt = mysqli_prepare(
-            $conn,
-            "SELECT
-                hd.id_deteksi,
-                hd.id_pengukuran,
-                hd.status_gizi,
-                hd.status_stunting,
-                hd.tanggal_deteksi,
-                pa.tanggal_pengukuran,
-                pa.umur_bulan,
-                pa.berat_badan,
-                pa.tinggi_panjang_badan,
-                pa.lingkar_kepala,
-                pa.lila,
-                b.id_balita,
-                b.nama_balita,
-                b.nik_balita,
-                b.jenis_kelamin
-             FROM hasil_deteksi hd
-             INNER JOIN pengukuran_antropometri pa
-                ON hd.id_pengukuran = pa.id_pengukuran
-             INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-             ORDER BY hd.id_deteksi DESC"
-        );
-
-        if (!$stmt) {
-            die(
-                "Gagal mengambil hasil deteksi: "
-                . mysqli_error($conn)
-            );
+    if ($queryPuskesmas) {
+        while ($puskesmas = mysqli_fetch_assoc($queryPuskesmas)) {
+            $daftarPuskesmas[] = $puskesmas;
         }
     }
 }
 
-mysqli_stmt_execute($stmt);
+if ($roleAktif === "kader" && $filterPuskesmas > 0) {
+    $sql = "
+        SELECT
+            s.id_skrining,
+            s.id_balita,
+            s.tinggi_badan_ibu,
+            s.pendidikan_ibu,
+            s.pekerjaan_ibu,
+            s.lama_asi_eksklusif,
+            s.mpasi,
+            s.frekuensi_makan,
+            s.protein_hewani,
+            s.status_ekonomi,
+            s.sanitasi,
+            s.air_bersih,
+            b.nama_balita
+        FROM skrining_awal AS s
+        INNER JOIN balita AS b
+            ON s.id_balita = b.id_balita
+        WHERE b.id_puskesmas = ?
+        ORDER BY s.id_skrining DESC
+    ";
 
-$query = mysqli_stmt_get_result($stmt);
+    $stmtSkrining = mysqli_prepare($conn, $sql);
+
+    if (!$stmtSkrining) {
+        die(
+            "Gagal menyiapkan filter data skrining: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtSkrining,
+        "i",
+        $filterPuskesmas
+    );
+
+    if (!mysqli_stmt_execute($stmtSkrining)) {
+        die(
+            "Gagal mengambil data skrining: "
+            . mysqli_stmt_error($stmtSkrining)
+        );
+    }
+
+    $query = mysqli_stmt_get_result($stmtSkrining);
+} else {
+    $sql = "
+        SELECT
+            s.id_skrining,
+            s.id_balita,
+            s.tinggi_badan_ibu,
+            s.pendidikan_ibu,
+            s.pekerjaan_ibu,
+            s.lama_asi_eksklusif,
+            s.mpasi,
+            s.frekuensi_makan,
+            s.protein_hewani,
+            s.status_ekonomi,
+            s.sanitasi,
+            s.air_bersih,
+            b.nama_balita
+        FROM skrining_awal AS s
+        INNER JOIN balita AS b
+            ON s.id_balita = b.id_balita
+        ORDER BY s.id_skrining DESC
+    ";
+
+    $query = mysqli_query($conn, $sql);
+
+    if (!$query) {
+        die(
+            "Gagal mengambil data skrining: "
+            . mysqli_error($conn)
+        );
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Fungsi mengamankan output
+|--------------------------------------------------------------------------
+*/
+
+function amanSkrining($nilai): string
+{
+    if (
+        $nilai === null
+        || $nilai === ""
+    ) {
+        return "-";
+    }
+
+    return htmlspecialchars(
+        (string) $nilai,
+        ENT_QUOTES,
+        "UTF-8"
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Pengaturan hak akses berdasarkan role
+|--------------------------------------------------------------------------
+|
+| Hanya Petugas Gizi yang dapat menambah, menganalisis,
+| mengedit, dan menghapus data skrining.
+| Role lain hanya melihat data dalam mode read-only.
+|
+*/
+
+$bolehKelolaSkrining = $roleAktif === "petugas_gizi";
+
+/*
+|--------------------------------------------------------------------------
+| Hak akses tambah skrining
+|--------------------------------------------------------------------------
+| Petugas Gizi dan Kader dapat menambah data skrining.
+| Aksi Analisis, Edit, dan Hapus tetap mengikuti $bolehKelolaSkrining.
+|
+*/
+
+$bolehTambahSkrining = in_array(
+    $roleAktif,
+    ["petugas_gizi", "kader"],
+    true
+);
+
+/*
+|--------------------------------------------------------------------------
+| Pesan halaman
+|--------------------------------------------------------------------------
+*/
+
+$pesan = $_GET["pesan"] ?? "";
+
+$jenisAlert = "";
+$isiPesan = "";
+
+switch ($pesan) {
+
+    case "tambah_berhasil":
+        $jenisAlert = "success";
+        $isiPesan =
+            "Data skrining berhasil ditambahkan.";
+        break;
+
+    case "edit_berhasil":
+        $jenisAlert = "success";
+        $isiPesan =
+            "Data skrining berhasil diperbarui.";
+        break;
+
+    case "hapus_berhasil":
+        $jenisAlert = "success";
+        $isiPesan =
+            "Data skrining berhasil dihapus.";
+        break;
+
+    case "gagal_hapus":
+        $jenisAlert = "danger";
+        $isiPesan =
+            "Data skrining gagal dihapus.";
+        break;
+
+    case "tidak_ditemukan":
+        $jenisAlert = "warning";
+        $isiPesan =
+            "Data skrining tidak ditemukan.";
+        break;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Memanggil template aplikasi
+|--------------------------------------------------------------------------
+*/
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
+
 ?>
 
 <div class="layout-wrapper">
@@ -229,6 +253,90 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
+        <!-- Header halaman -->
+        <div class="page-header">
+
+            <div>
+
+                <h1 class="page-title">
+
+                    <i class="bi bi-clipboard2-heart me-2"></i>
+
+                    Data Skrining Awal
+
+                </h1>
+
+                <p class="page-subtitle">
+
+                    Kelola data faktor risiko dan riwayat awal
+                    balita sebagai bagian dari proses deteksi stunting.
+
+                </p>
+
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+
+                <a
+                    href="../dashboard/dashboard.php"
+                    class="btn btn-secondary"
+                >
+
+                    <i class="bi bi-arrow-left"></i>
+
+                    Kembali ke Dashboard
+
+                </a>
+
+                <?php if ($bolehTambahSkrining): ?>
+
+                    <a
+                        href="form_skrining.php"
+                        class="btn btn-primary"
+                    >
+
+                        <i class="bi bi-plus-circle"></i>
+
+                        Tambah Skrining Awal
+
+                    </a>
+
+                <?php endif; ?>
+
+            </div>
+
+        </div>
+
+        <!-- Pesan -->
+        <?php if ($isiPesan !== ""): ?>
+
+            <div
+                class="alert alert-<?= htmlspecialchars(
+                    $jenisAlert,
+                    ENT_QUOTES,
+                    "UTF-8"
+                ); ?> alert-dismissible fade show"
+                role="alert"
+            >
+
+                <?= htmlspecialchars(
+                    $isiPesan,
+                    ENT_QUOTES,
+                    "UTF-8"
+                ); ?>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="alert"
+                    aria-label="Tutup"
+                ></button>
+
+            </div>
+
+        <?php endif; ?>
+
+        <!-- Card skrining -->
         <div class="card content-card">
 
             <div class="card-header">
@@ -236,191 +344,99 @@ require_once "../includes/navbar.php";
                 <div>
 
                     <h4 class="mb-1">
-                        Hasil Deteksi Stunting
+                        Daftar Skrining Balita
                     </h4>
 
                     <small class="text-muted">
-                        Hasil status gizi dan status stunting
-                        berdasarkan data pengukuran antropometri.
+
+                        Total data:
+
+                        <?= mysqli_num_rows($query); ?>
+
+                        skrining
+
                     </small>
 
                 </div>
 
-                <div class="d-flex flex-wrap gap-2">
+                <span class="badge badge-info">
 
-                    <a
-                        href="../dashboard/dashboard.php"
-                        class="btn btn-secondary btn-sm"
-                    >
-                        <i class="bi bi-arrow-left"></i>
-                        Kembali
-                    </a>
+                    <i class="bi bi-person-hearts"></i>
 
-                    <?php if (
-                        $roleAktif === "petugas_gizi"
-                    ): ?>
+                    Skrining Awal
 
-                        <a
-                            href="../skrining/hasil_skrining.php"
-                            class="btn btn-primary btn-sm"
-                        >
-                            <i class="bi bi-activity"></i>
-                            Analisis Pengukuran
-                        </a>
-
-                    <?php endif; ?>
-
-                </div>
+                </span>
 
             </div>
 
             <div class="card-body">
 
-                <?php if (isset($_GET["pesan"])): ?>
+                <?php if ($roleAktif === "kader"): ?>
 
-                    <?php if (
-                        $_GET["pesan"] === "analisis_berhasil"
-                    ): ?>
+                    <form
+                        method="GET"
+                        class="row g-2 mb-4 align-items-end"
+                    >
 
-                        <div class="alert alert-success">
-                            <i class="bi bi-check-circle me-1"></i>
-                            Hasil deteksi berhasil disimpan.
+                        <div class="col-12 col-lg-8">
+
+                            <label
+                                for="filter_puskesmas"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Filter berdasarkan Puskesmas
+                            </label>
+
+                            <select
+                                id="filter_puskesmas"
+                                name="puskesmas"
+                                class="form-select"
+                            >
+                                <option value="0">
+                                    Semua Puskesmas
+                                </option>
+
+                                <?php foreach ($daftarPuskesmas as $puskesmas): ?>
+                                    <option
+                                        value="<?= (int) $puskesmas["id_puskesmas"]; ?>"
+                                        <?= $filterPuskesmas === (int) $puskesmas["id_puskesmas"]
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= htmlspecialchars(
+                                            $puskesmas["nama_puskesmas"],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+
                         </div>
 
-                    <?php elseif (
-                        $_GET["pesan"] === "edit_berhasil"
-                    ): ?>
-
-                        <div class="alert alert-success">
-                            <i class="bi bi-check-circle me-1"></i>
-                            Hasil deteksi berhasil diperbarui.
+                        <div class="col-6 col-lg-2">
+                            <button
+                                type="submit"
+                                class="btn btn-primary w-100"
+                            >
+                                <i class="bi bi-funnel"></i>
+                                Filter
+                            </button>
                         </div>
 
-                    <?php elseif (
-                        $_GET["pesan"] === "tidak_ditemukan"
-                    ): ?>
-
-                        <div class="alert alert-warning">
-                            <i
-                                class="bi
-                                bi-exclamation-triangle me-1"
-                            ></i>
-                            Data hasil deteksi tidak ditemukan.
+                        <div class="col-6 col-lg-2">
+                            <a
+                                href="hasil_skrining.php"
+                                class="btn btn-light w-100"
+                            >
+                                <i class="bi bi-x-circle"></i>
+                                Hapus Filter
+                            </a>
                         </div>
 
-                    <?php elseif (
-                        $_GET["pesan"] === "gagal"
-                    ): ?>
-
-                        <div class="alert alert-danger">
-                            <i class="bi bi-x-circle me-1"></i>
-                            Proses deteksi gagal dilakukan.
-                        </div>
-
-                    <?php endif; ?>
+                    </form>
 
                 <?php endif; ?>
-
-                <form
-                    method="GET"
-                    class="row g-2 mb-3"
-                >
-
-                    <div class="col-12 col-md-8">
-
-                        <input
-                            type="text"
-                            name="cari"
-                            class="form-control"
-                            placeholder="Cari nama, NIK, status gizi, atau status stunting"
-                            value="<?= htmlspecialchars(
-                                $cari,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ); ?>"
-                        >
-
-                    </div>
-
-                    <div class="col-6 col-md-2">
-
-                        <button
-                            type="submit"
-                            class="btn btn-primary w-100"
-                        >
-                            <i class="bi bi-search"></i>
-                            Cari
-                        </button>
-
-                    </div>
-
-                    <div class="col-6 col-md-2">
-
-                        <a
-                            href="hasil_deteksi.php"
-                            class="btn btn-outline-secondary w-100"
-                        >
-                            <i class="bi bi-arrow-counterclockwise"></i>
-                            Reset
-                        </a>
-
-                    </div>
-
-                </form>
-
-                <div
-                    class="d-flex flex-wrap
-                    justify-content-between align-items-center
-                    gap-2 mb-3"
-                >
-
-                    <span class="text-muted small">
-                        Total data:
-                        <strong>
-                            <?= mysqli_num_rows($query); ?>
-                        </strong>
-                        hasil deteksi
-                    </span>
-
-                    <?php if (
-                        $roleAktif !== "petugas_gizi"
-                    ): ?>
-
-                        <span class="badge badge-info">
-                            <i class="bi bi-eye"></i>
-                            Mode lihat
-                        </span>
-
-                    <?php endif; ?>
-
-                </div>
-
-                <div
-                    class="status-legend d-flex flex-wrap
-                    align-items-center gap-2 mb-3"
-                >
-
-                    <span class="text-muted small me-1">
-                        Keterangan status:
-                    </span>
-
-                    <span class="badge bg-success">
-                        Normal
-                    </span>
-
-                    <span class="badge bg-warning text-dark">
-                        Risiko Stunting
-                    </span>
-
-                    <span class="badge bg-danger">
-                        Stunting
-                    </span>
-
-                    <span class="badge bg-dark text-white">
-                        Stunting Berat
-                    </span>
-
-                </div>
 
                 <div class="table-responsive">
 
@@ -434,45 +450,57 @@ require_once "../includes/navbar.php";
                                     No
                                 </th>
 
-                                <th class="text-center">
-                                    Tanggal Deteksi
-                                </th>
-
                                 <th>
                                     Nama Balita
                                 </th>
 
+                                <th class="text-center">
+                                    Tinggi Ibu
+                                </th>
+
                                 <th>
-                                    NIK
+                                    Pendidikan
+                                </th>
+
+                                <th>
+                                    Pekerjaan
                                 </th>
 
                                 <th class="text-center">
-                                    JK
+                                    ASI
                                 </th>
 
                                 <th class="text-center">
-                                    Umur
+                                    MPASI
                                 </th>
 
                                 <th class="text-center">
-                                    BB
+                                    Frekuensi Makan
                                 </th>
 
                                 <th class="text-center">
-                                    TB/PB
+                                    Protein Hewani
                                 </th>
 
                                 <th class="text-center">
-                                    Status Gizi
+                                    Status Ekonomi
                                 </th>
 
                                 <th class="text-center">
-                                    Status Stunting
+                                    Sanitasi
                                 </th>
 
                                 <th class="text-center">
-                                    Aksi
+                                    Air Bersih
                                 </th>
+
+                                <?php if ($bolehKelolaSkrining): ?>
+
+                                    <th class="text-center">
+                                        Aksi
+                                    </th>
+
+                                <?php endif; ?>
 
                             </tr>
 
@@ -480,208 +508,206 @@ require_once "../includes/navbar.php";
 
                         <tbody>
 
-                        <?php if (
-                            mysqli_num_rows($query) > 0
-                        ): ?>
+                        <?php if (mysqli_num_rows($query) > 0): ?>
 
                             <?php
-                            $no = 1;
+
+                            $nomor = 1;
 
                             while (
                                 $data = mysqli_fetch_assoc($query)
                             ):
 
-                                $statusStunting = strtolower(
-                                    trim(
-                                        $data[
-                                            "status_stunting"
-                                        ] ?? ""
-                                    )
-                                );
+                                $idSkrining =
+                                    (int) $data["id_skrining"];
 
-                                $kelasStunting =
-                                    "bg-secondary";
+                                $idBalita =
+                                    (int) $data["id_balita"];
 
-                                if (
-                                    $statusStunting === "normal"
-                                    || $statusStunting ===
-                                        "normal/sehat"
-                                    || $statusStunting ===
-                                        "tidak stunting"
-                                ) {
-
-                                    $kelasStunting =
-                                        "bg-success";
-
-                                } elseif (
-                                    $statusStunting ===
-                                        "risiko stunting"
-                                ) {
-
-                                    $kelasStunting =
-                                        "bg-warning text-dark";
-
-                                } elseif (
-                                    $statusStunting === "stunting"
-                                    || $statusStunting ===
-                                        "pendek"
-                                ) {
-
-                                    $kelasStunting =
-                                        "bg-danger";
-
-                                } elseif (
-                                    $statusStunting ===
-                                        "stunting berat"
-                                    || $statusStunting ===
-                                        "severely stunted"
-                                    || $statusStunting ===
-                                        "sangat pendek"
-                                ) {
-
-                                    $kelasStunting =
-                                        "bg-dark text-white";
-                                }
                             ?>
 
                                 <tr>
 
                                     <td class="text-center">
-                                        <?= $no++; ?>
-                                    </td>
 
-                                    <td class="text-center">
-                                        <?= !empty(
-                                            $data[
-                                                "tanggal_deteksi"
-                                            ]
-                                        )
-                                            ? date(
-                                                "d-m-Y",
-                                                strtotime(
-                                                    $data[
-                                                        "tanggal_deteksi"
-                                                    ]
-                                                )
-                                            )
-                                            : "-"; ?>
+                                        <?= $nomor++; ?>
+
                                     </td>
 
                                     <td>
+
                                         <div
                                             class="d-flex
-                                            align-items-center gap-2"
+                                            align-items-center
+                                            gap-2"
                                         >
+
                                             <span
-                                                class="badge
-                                                badge-primary"
+                                                class="badge badge-primary"
                                             >
+
                                                 <i
                                                     class="bi
                                                     bi-person-heart"
                                                 ></i>
+
                                             </span>
 
                                             <strong>
-                                                <?= htmlspecialchars(
-                                                    $data[
-                                                        "nama_balita"
-                                                    ],
-                                                    ENT_QUOTES,
-                                                    "UTF-8"
+
+                                                <?= amanSkrining(
+                                                    $data["nama_balita"]
                                                 ); ?>
+
                                             </strong>
+
                                         </div>
+
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <?= amanSkrining(
+                                            $data["tinggi_badan_ibu"]
+                                        ); ?>
+
+                                        cm
+
                                     </td>
 
                                     <td>
-                                        <?= htmlspecialchars(
-                                            $data["nik_balita"],
-                                            ENT_QUOTES,
-                                            "UTF-8"
+
+                                        <?= amanSkrining(
+                                            $data["pendidikan_ibu"]
                                         ); ?>
+
+                                    </td>
+
+                                    <td>
+
+                                        <?= amanSkrining(
+                                            $data["pekerjaan_ibu"]
+                                        ); ?>
+
                                     </td>
 
                                     <td class="text-center">
-                                        <?= htmlspecialchars(
-                                            $data[
-                                                "jenis_kelamin"
-                                            ],
-                                            ENT_QUOTES,
-                                            "UTF-8"
-                                        ); ?>
-                                    </td>
 
-                                    <td class="text-center">
-                                        <?= (int) (
-                                            $data[
-                                                "umur_bulan"
-                                            ] ?? 0
+                                        <?= amanSkrining(
+                                            $data["lama_asi_eksklusif"]
                                         ); ?>
+
                                         bulan
+
                                     </td>
 
                                     <td class="text-center">
-                                        <?= htmlspecialchars(
-                                            $data[
-                                                "berat_badan"
-                                            ] ?? "-",
-                                            ENT_QUOTES,
-                                            "UTF-8"
+
+                                        <?= amanSkrining(
+                                            $data["mpasi"]
                                         ); ?>
-                                        kg
+
                                     </td>
 
                                     <td class="text-center">
-                                        <?= htmlspecialchars(
-                                            $data[
-                                                "tinggi_panjang_badan"
-                                            ] ?? "-",
-                                            ENT_QUOTES,
-                                            "UTF-8"
+
+                                        <?= amanSkrining(
+                                            $data["frekuensi_makan"]
                                         ); ?>
-                                        cm
+
                                     </td>
 
                                     <td class="text-center">
-                                        <?= htmlspecialchars(
-                                            $data[
-                                                "status_gizi"
-                                            ]
-                                                ?? "Belum tersedia",
-                                            ENT_QUOTES,
-                                            "UTF-8"
+
+                                        <?= amanSkrining(
+                                            $data["protein_hewani"]
                                         ); ?>
+
                                     </td>
 
                                     <td class="text-center">
-                                        <span
-                                            class="badge
-                                            <?= $kelasStunting; ?>"
-                                        >
-                                            <?= htmlspecialchars(
-                                                $data[
-                                                    "status_stunting"
-                                                ]
-                                                    ?? "Belum tersedia",
-                                                ENT_QUOTES,
-                                                "UTF-8"
-                                            ); ?>
-                                        </span>
+
+                                        <?= amanSkrining(
+                                            $data["status_ekonomi"]
+                                        ); ?>
+
                                     </td>
 
                                     <td class="text-center">
-                                        <a
-                                            href="detail_deteksi.php?id=<?= (int) $data["id_deteksi"]; ?>"
-                                            class="btn btn-info btn-sm"
-                                        >
-                                            <i
-                                                class="bi
-                                                bi-eye"
-                                            ></i>
-                                            Detail
-                                        </a>
+
+                                        <?= amanSkrining(
+                                            $data["sanitasi"]
+                                        ); ?>
+
                                     </td>
+
+                                    <td class="text-center">
+
+                                        <?= amanSkrining(
+                                            $data["air_bersih"]
+                                        ); ?>
+
+                                    </td>
+
+                                    <?php if ($bolehKelolaSkrining): ?>
+
+                                        <td>
+
+                                            <div
+                                                class="table-actions
+                                                justify-content-center"
+                                            >
+
+                                                <a
+                                                    href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
+                                                    class="btn btn-info btn-sm"
+                                                >
+
+                                                    <i
+                                                        class="bi
+                                                        bi-search-heart"
+                                                    ></i>
+
+                                                    Analisis
+
+                                                </a>
+
+                                                <a
+                                                    href="edit_skrining.php?id=<?= $idSkrining; ?>"
+                                                    class="btn btn-warning btn-sm"
+                                                >
+
+                                                    <i
+                                                        class="bi
+                                                        bi-pencil-square"
+                                                    ></i>
+
+                                                    Edit
+
+                                                </a>
+
+                                                <a
+                                                    href="hapus_skrining.php?id=<?= $idSkrining; ?>"
+                                                    class="btn btn-danger btn-sm"
+                                                    onclick="return confirm(
+                                                        'Yakin ingin menghapus data skrining ini?'
+                                                    );"
+                                                >
+
+                                                    <i
+                                                        class="bi
+                                                        bi-trash3"
+                                                    ></i>
+
+                                                    Hapus
+
+                                                </a>
+
+                                            </div>
+
+                                        </td>
+
+                                    <?php endif; ?>
 
                                 </tr>
 
@@ -691,27 +717,54 @@ require_once "../includes/navbar.php";
 
                             <tr>
 
-                                <td colspan="11">
+                                <td
+                                    colspan="<?= $bolehKelolaSkrining
+                                        ? "13"
+                                        : "12"; ?>"
+                                >
 
                                     <div class="empty-state">
 
                                         <div
                                             class="empty-state-icon"
                                         >
+
                                             <i
                                                 class="bi
-                                                bi-clipboard2-pulse"
+                                                bi-clipboard2-heart"
                                             ></i>
+
                                         </div>
 
                                         <h3>
-                                            Belum ada hasil deteksi
+                                            Belum ada data skrining
                                         </h3>
 
                                         <p>
-                                            Data hasil deteksi
-                                            stunting belum tersedia.
+
+                                            <?= $bolehTambahSkrining
+                                                ? "Tambahkan skrining awal untuk mulai mencatat faktor risiko balita."
+                                                : "Data skrining awal balita belum tersedia."; ?>
+
                                         </p>
+
+                                        <?php if ($bolehTambahSkrining): ?>
+
+                                            <a
+                                                href="form_skrining.php"
+                                                class="btn btn-primary mt-3"
+                                            >
+
+                                                <i
+                                                    class="bi
+                                                    bi-plus-circle"
+                                                ></i>
+
+                                                Tambah Skrining Awal
+
+                                            </a>
+
+                                        <?php endif; ?>
 
                                     </div>
 
@@ -735,10 +788,264 @@ require_once "../includes/navbar.php";
 
 </div>
 
-<?php
+<?php if (is_array($skriningBaru)): ?>
 
-mysqli_stmt_close($stmt);
+    <?php
+    $popupIdBalita =
+        (int) ($skriningBaru["id_balita"] ?? 0);
 
-require_once "../includes/footer.php";
+    $popupNamaBalita =
+        amanSkrining(
+            $skriningBaru["nama_balita"]
+            ?? "Balita"
+        );
+    ?>
 
-?>
+    <div
+        class="modal fade"
+        id="modalSkriningBerhasil"
+        tabindex="-1"
+        aria-labelledby="modalSkriningBerhasilLabel"
+        aria-hidden="true"
+        data-bs-backdrop="static"
+    >
+        <div class="modal-dialog modal-dialog-centered">
+
+            <div class="modal-content">
+
+                <div class="modal-header">
+
+                    <div>
+                        <h5
+                            class="modal-title"
+                            id="modalSkriningBerhasilLabel"
+                        >
+                            <i class="bi bi-clipboard2-check me-2"></i>
+                            Skrining Berhasil Disimpan
+                        </h5>
+
+                        <small class="text-muted">
+                            Ringkasan data skrining awal yang baru diisi.
+                        </small>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Tutup"
+                    ></button>
+
+                </div>
+
+                <div class="modal-body">
+
+                    <div class="text-center mb-4">
+
+                        <div
+                            class="empty-state-icon mx-auto mb-2"
+                            style="width: 58px; height: 58px;"
+                        >
+                            <i class="bi bi-person-heart"></i>
+                        </div>
+
+                        <h4 class="mb-1">
+                            <?= $popupNamaBalita; ?>
+                        </h4>
+
+                        <p class="text-muted mb-0">
+                            Data skrining awal berhasil direkam.
+                        </p>
+
+                    </div>
+
+                    <div class="table-responsive">
+
+                        <table
+                            class="table table-bordered
+                            align-middle mb-0"
+                        >
+                            <tbody>
+
+                                <tr>
+                                    <th width="48%">
+                                        Tinggi Badan Ibu
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "tinggi_badan_ibu"
+                                            ] ?? null
+                                        ); ?>
+                                        cm
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        ASI Eksklusif
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "lama_asi_eksklusif"
+                                            ] ?? null
+                                        ); ?>
+                                        bulan
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        MPASI
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru["mpasi"]
+                                            ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        Frekuensi Makan
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "frekuensi_makan"
+                                            ] ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        Protein Hewani
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "protein_hewani"
+                                            ] ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        Status Ekonomi
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "status_ekonomi"
+                                            ] ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        Sanitasi
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru["sanitasi"]
+                                            ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>
+                                        Air Bersih
+                                    </th>
+                                    <td>
+                                        <?= amanSkrining(
+                                            $skriningBaru[
+                                                "air_bersih"
+                                            ] ?? null
+                                        ); ?>
+                                    </td>
+                                </tr>
+
+                            </tbody>
+                        </table>
+
+                    </div>
+
+                    <div class="alert alert-info mt-3 mb-0">
+
+                        <i class="bi bi-info-circle me-1"></i>
+
+                        Skrining awal mencatat faktor risiko.
+                        Untuk menghitung status pertumbuhan
+                        berdasarkan pengukuran antropometri,
+                        lanjutkan ke proses analisis.
+
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+
+                    <button
+                        type="button"
+                        class="btn btn-light"
+                        data-bs-dismiss="modal"
+                    >
+                        <i class="bi bi-table"></i>
+                        Lihat Daftar
+                    </button>
+
+                    <?php if (
+                        $bolehKelolaSkrining
+                        && $popupIdBalita > 0
+                    ): ?>
+
+                        <a
+                            href="../deteksi/analisis_deteksi.php?id_balita=<?= $popupIdBalita; ?>"
+                            class="btn btn-primary"
+                        >
+                            <i class="bi bi-search-heart"></i>
+                            Lanjut Analisis
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener(
+            "load",
+            function () {
+                const elemenModal =
+                    document.getElementById(
+                        "modalSkriningBerhasil"
+                    );
+
+                if (
+                    elemenModal
+                    && typeof bootstrap !== "undefined"
+                ) {
+                    const modalSkrining =
+                        new bootstrap.Modal(
+                            elemenModal
+                        );
+
+                    modalSkrining.show();
+                }
+            }
+        );
+    </script>
+
+<?php endif; ?>
+
+<?php require_once "../includes/footer.php"; ?>

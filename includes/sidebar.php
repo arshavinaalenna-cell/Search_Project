@@ -133,6 +133,17 @@ $menuSidebar = [
                 "tambah_pengukuran.php",
                 "edit_pengukuran.php"
             ]
+        ],
+        [
+            "nama" => "Skrining Awal",
+            "ikon" => "◇",
+            "url" => "../skrining/hasil_skrining.php",
+            "halaman" => [
+                "form_skrining.php",
+                "hasil_skrining.php",
+                "edit_skrining.php",
+                "analisis_deteksi.php"
+            ]
         ]
     ],
 

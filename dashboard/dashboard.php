@@ -6,6 +6,27 @@ require_once "statistik.php";
 
 $rolePengguna = $_SESSION["role"] ?? "";
 
+$filterPuskesmas = $rolePengguna === "kader"
+    ? max(0, (int) ($_GET["puskesmas"] ?? 0))
+    : 0;
+
+$daftarPuskesmas = [];
+
+if ($rolePengguna === "kader") {
+    $queryPuskesmas = mysqli_query(
+        $conn,
+        "SELECT id_puskesmas, nama_puskesmas
+         FROM puskesmas
+         ORDER BY nama_puskesmas ASC"
+    );
+
+    if ($queryPuskesmas) {
+        while ($puskesmas = mysqli_fetch_assoc($queryPuskesmas)) {
+            $daftarPuskesmas[] = $puskesmas;
+        }
+    }
+}
+
 $judulHalaman =
     "Dashboard | Sistem Deteksi Stunting";
 
@@ -396,6 +417,18 @@ switch ($rolePengguna) {
         break;
 }
 
+if ($rolePengguna === "kader" && $filterPuskesmas > 0) {
+    foreach ($aksiDashboard as &$aksi) {
+        if (
+            strpos($aksi["url"], "data_balita.php") !== false
+            || strpos($aksi["url"], "data_pengukuran.php") !== false
+        ) {
+            $aksi["url"] .= "?puskesmas=" . $filterPuskesmas;
+        }
+    }
+    unset($aksi);
+}
+
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
 
@@ -487,6 +520,81 @@ require_once "../includes/navbar.php";
     <?php require_once "../includes/sidebar.php"; ?>
 
     <main class="main-content">
+
+        <?php if ($rolePengguna === "kader"): ?>
+
+            <div class="card content-card mb-4">
+
+                <div class="card-body">
+
+                    <form
+                        method="GET"
+                        class="row g-2 align-items-end"
+                    >
+
+                        <div class="col-12 col-lg-8">
+
+                            <label
+                                for="filter_puskesmas"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Filter data dashboard berdasarkan Puskesmas
+                            </label>
+
+                            <select
+                                id="filter_puskesmas"
+                                name="puskesmas"
+                                class="form-select"
+                            >
+                                <option value="0">
+                                    Semua Puskesmas
+                                </option>
+
+                                <?php foreach ($daftarPuskesmas as $puskesmas): ?>
+                                    <option
+                                        value="<?= (int) $puskesmas["id_puskesmas"]; ?>"
+                                        <?= $filterPuskesmas === (int) $puskesmas["id_puskesmas"]
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= htmlspecialchars(
+                                            $puskesmas["nama_puskesmas"],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+
+                        </div>
+
+                        <div class="col-6 col-lg-2">
+                            <button
+                                type="submit"
+                                class="btn btn-primary w-100"
+                            >
+                                <i class="bi bi-funnel"></i>
+                                Filter
+                            </button>
+                        </div>
+
+                        <div class="col-6 col-lg-2">
+                            <a
+                                href="dashboard.php"
+                                class="btn btn-light w-100"
+                            >
+                                <i class="bi bi-x-circle"></i>
+                                Hapus Filter
+                            </a>
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        <?php endif; ?>
 
         <div class="dashboard-stat-grid">
 

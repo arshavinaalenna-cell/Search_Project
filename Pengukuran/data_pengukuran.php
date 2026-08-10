@@ -21,6 +21,33 @@ $bolehKelolaPengukuran =
 
 /*
 |--------------------------------------------------------------------------
+| Filter Puskesmas khusus Kader
+|--------------------------------------------------------------------------
+*/
+
+$filterPuskesmas = $roleAktif === "kader"
+    ? max(0, (int) ($_GET["puskesmas"] ?? 0))
+    : 0;
+
+$daftarPuskesmas = [];
+
+if ($roleAktif === "kader") {
+    $queryPuskesmas = mysqli_query(
+        $conn,
+        "SELECT id_puskesmas, nama_puskesmas
+         FROM puskesmas
+         ORDER BY nama_puskesmas ASC"
+    );
+
+    if ($queryPuskesmas) {
+        while ($puskesmas = mysqli_fetch_assoc($queryPuskesmas)) {
+            $daftarPuskesmas[] = $puskesmas;
+        }
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
 | Judul halaman
 |--------------------------------------------------------------------------
 */
@@ -92,6 +119,55 @@ if ($roleAktif === "orang_tua") {
 
     $query =
         mysqli_stmt_get_result($stmtPengukuran);
+
+} elseif ($roleAktif === "kader" && $filterPuskesmas > 0) {
+
+    $sql = "
+        SELECT
+            p.id_pengukuran,
+            p.id_balita,
+            p.tanggal_pengukuran,
+            p.umur_bulan,
+            p.berat_badan,
+            p.tinggi_panjang_badan,
+            p.lingkar_kepala,
+            p.lila,
+            b.nama_balita
+        FROM pengukuran_antropometri AS p
+        INNER JOIN balita AS b
+            ON p.id_balita = b.id_balita
+        WHERE b.id_puskesmas = ?
+        ORDER BY
+            p.tanggal_pengukuran DESC,
+            p.id_pengukuran DESC
+    ";
+
+    $stmtPengukuran = mysqli_prepare(
+        $conn,
+        $sql
+    );
+
+    if (!$stmtPengukuran) {
+        die(
+            "Gagal menyiapkan filter data pengukuran: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPengukuran,
+        "i",
+        $filterPuskesmas
+    );
+
+    if (!mysqli_stmt_execute($stmtPengukuran)) {
+        die(
+            "Gagal mengambil data pengukuran: "
+            . mysqli_stmt_error($stmtPengukuran)
+        );
+    }
+
+    $query = mysqli_stmt_get_result($stmtPengukuran);
 
 } else {
 
@@ -372,6 +448,73 @@ require_once "../includes/navbar.php";
                     <?php endif; ?>
 
                 </div>
+
+                <?php if ($roleAktif === "kader"): ?>
+
+                    <form
+                        method="GET"
+                        class="row g-2 mb-4 align-items-end"
+                    >
+
+                        <div class="col-12 col-lg-8">
+
+                            <label
+                                for="filter_puskesmas"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Filter berdasarkan Puskesmas
+                            </label>
+
+                            <select
+                                id="filter_puskesmas"
+                                name="puskesmas"
+                                class="form-select"
+                            >
+                                <option value="0">
+                                    Semua Puskesmas
+                                </option>
+
+                                <?php foreach ($daftarPuskesmas as $puskesmas): ?>
+                                    <option
+                                        value="<?= (int) $puskesmas["id_puskesmas"]; ?>"
+                                        <?= $filterPuskesmas === (int) $puskesmas["id_puskesmas"]
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= htmlspecialchars(
+                                            $puskesmas["nama_puskesmas"],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+
+                        </div>
+
+                        <div class="col-6 col-lg-2">
+                            <button
+                                type="submit"
+                                class="btn btn-primary w-100"
+                            >
+                                <i class="bi bi-funnel"></i>
+                                Filter
+                            </button>
+                        </div>
+
+                        <div class="col-6 col-lg-2">
+                            <a
+                                href="data_pengukuran.php"
+                                class="btn btn-light w-100"
+                            >
+                                <i class="bi bi-x-circle"></i>
+                                Hapus Filter
+                            </a>
+                        </div>
+
+                    </form>
+
+                <?php endif; ?>
 
                 <div class="table-responsive">
 

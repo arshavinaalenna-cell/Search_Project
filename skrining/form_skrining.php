@@ -4,7 +4,12 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
-cekRole(["petugas_gizi"]);
+cekRole(["petugas_gizi", "kader"]);
+
+$roleAktif = $_SESSION["role"] ?? "";
+$idPuskesmasDipilih = $roleAktif === "kader"
+    ? trim($_POST["id_puskesmas"] ?? "")
+    : "";
 
 /*
 |--------------------------------------------------------------------------
@@ -123,6 +128,32 @@ $daftarEkonomi = [
 
 /*
 |--------------------------------------------------------------------------
+| Daftar Puskesmas untuk Kader
+|--------------------------------------------------------------------------
+*/
+
+$queryPuskesmas = null;
+
+if ($roleAktif === "kader") {
+    $queryPuskesmas = mysqli_query(
+        $conn,
+        "SELECT
+            id_puskesmas,
+            nama_puskesmas
+         FROM puskesmas
+         ORDER BY nama_puskesmas ASC"
+    );
+
+    if (!$queryPuskesmas) {
+        die(
+            "Gagal mengambil daftar Puskesmas: "
+            . mysqli_error($conn)
+        );
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
 | Proses penyimpanan
 |--------------------------------------------------------------------------
 */
@@ -132,6 +163,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     foreach ($old as $namaKolom => $nilai) {
         $old[$namaKolom] =
             trim($_POST[$namaKolom] ?? "");
+    }
+
+    if ($roleAktif === "kader") {
+        $idPuskesmasDipilih =
+            trim($_POST["id_puskesmas"] ?? "");
     }
 
     /*
@@ -161,8 +197,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     |--------------------------------------------------------------------------
     */
 
+    if (
+        $roleAktif === "kader"
+        && (
+            $idPuskesmasDipilih === ""
+            || filter_var(
+                $idPuskesmasDipilih,
+                FILTER_VALIDATE_INT
+            ) === false
+            || (int) $idPuskesmasDipilih < 1
+        )
+    ) {
+        $error = "Puskesmas wajib dipilih.";
+    }
+
     foreach ($old as $nilai) {
-        if ($nilai === "") {
+        if ($error === "" && $nilai === "") {
             $error =
                 "Semua kolom skrining wajib diisi.";
             break;
@@ -314,15 +364,28 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     if ($error === "") {
 
-        $stmtCekBalita = mysqli_prepare(
-            $conn,
-            "SELECT
-                id_balita,
-                nama_balita
-             FROM balita
-             WHERE id_balita = ?
-             LIMIT 1"
-        );
+        if ($roleAktif === "kader") {
+            $stmtCekBalita = mysqli_prepare(
+                $conn,
+                "SELECT
+                    id_balita,
+                    nama_balita
+                 FROM balita
+                 WHERE id_balita = ?
+                   AND id_puskesmas = ?
+                 LIMIT 1"
+            );
+        } else {
+            $stmtCekBalita = mysqli_prepare(
+                $conn,
+                "SELECT
+                    id_balita,
+                    nama_balita
+                 FROM balita
+                 WHERE id_balita = ?
+                 LIMIT 1"
+            );
+        }
 
         if (!$stmtCekBalita) {
             $error =
@@ -330,11 +393,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         } else {
 
-            mysqli_stmt_bind_param(
-                $stmtCekBalita,
-                "i",
-                $idBalita
-            );
+            if ($roleAktif === "kader") {
+                $idPuskesmasValid = (int) $idPuskesmasDipilih;
+
+                mysqli_stmt_bind_param(
+                    $stmtCekBalita,
+                    "ii",
+                    $idBalita,
+                    $idPuskesmasValid
+                );
+            } else {
+                mysqli_stmt_bind_param(
+                    $stmtCekBalita,
+                    "i",
+                    $idBalita
+                );
+            }
 
             mysqli_stmt_execute($stmtCekBalita);
 
@@ -347,8 +421,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             mysqli_stmt_close($stmtCekBalita);
 
             if (!$dataBalita) {
-                $error =
-                    "Data balita tidak ditemukan.";
+                $error = $roleAktif === "kader"
+                    ? "Balita tidak ditemukan pada Puskesmas yang dipilih."
+                    : "Data balita tidak ditemukan.";
             }
         }
     }
@@ -503,6 +578,7 @@ $queryBalita = mysqli_query(
     $conn,
     "SELECT
         id_balita,
+        id_puskesmas,
         nama_balita
      FROM balita
      ORDER BY nama_balita ASC"
@@ -651,6 +727,52 @@ require_once "../includes/navbar.php";
                         autocomplete="off"
                     >
 
+                        <?php if ($roleAktif === "kader"): ?>
+
+                            <!-- Puskesmas -->
+                            <div class="form-group">
+
+                                <label
+                                    for="id_puskesmas"
+                                    class="form-label"
+                                >
+                                    Puskesmas
+                                    <span class="text-danger">*</span>
+                                </label>
+
+                                <select
+                                    name="id_puskesmas"
+                                    id="id_puskesmas"
+                                    class="form-select"
+                                    required
+                                >
+                                    <option value="">
+                                        -- Pilih Puskesmas --
+                                    </option>
+
+                                    <?php while ($puskesmas = mysqli_fetch_assoc($queryPuskesmas)): ?>
+                                        <option
+                                            value="<?= (int) $puskesmas["id_puskesmas"]; ?>"
+                                            <?= (
+                                                (string) $idPuskesmasDipilih
+                                                === (string) $puskesmas["id_puskesmas"]
+                                            ) ? "selected" : ""; ?>
+                                        >
+                                            <?= amanFormSkrining(
+                                                $puskesmas["nama_puskesmas"]
+                                            ); ?>
+                                        </option>
+                                    <?php endwhile; ?>
+                                </select>
+
+                                <small class="text-muted">
+                                    Pilih Puskesmas terlebih dahulu. Daftar balita akan menyesuaikan otomatis.
+                                </small>
+
+                            </div>
+
+                        <?php endif; ?>
+
                         <!-- Data balita -->
                         <div class="form-group">
 
@@ -684,6 +806,7 @@ require_once "../includes/navbar.php";
 
                                     <option
                                         value="<?= (int) $balita["id_balita"]; ?>"
+                                        data-puskesmas="<?= (int) $balita["id_puskesmas"]; ?>"
                                         <?= (
                                             (string) $old["id_balita"]
                                             ===
@@ -1655,6 +1778,57 @@ require_once "../includes/navbar.php";
         );
     </script>
 
+<?php endif; ?>
+
+<?php if ($roleAktif === "kader"): ?>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const puskesmasSelect = document.getElementById("id_puskesmas");
+    const balitaSelect = document.getElementById("id_balita");
+
+    if (!puskesmasSelect || !balitaSelect) {
+        return;
+    }
+
+    function filterBalita(resetPilihan = false) {
+        const idPuskesmas = puskesmasSelect.value;
+        const pilihanSekarang = balitaSelect.value;
+        let pilihanMasihValid = false;
+
+        Array.from(balitaSelect.options).forEach(function (option, index) {
+            if (index === 0) {
+                return;
+            }
+
+            const cocok =
+                idPuskesmas !== ""
+                && option.dataset.puskesmas === idPuskesmas;
+
+            option.hidden = !cocok;
+            option.disabled = !cocok;
+
+            if (cocok && option.value === pilihanSekarang) {
+                pilihanMasihValid = true;
+            }
+        });
+
+        if (resetPilihan || !pilihanMasihValid) {
+            balitaSelect.value = "";
+        }
+
+        balitaSelect.disabled = idPuskesmas === "";
+        balitaSelect.options[0].textContent = idPuskesmas === ""
+            ? "-- Pilih Puskesmas terlebih dahulu --"
+            : "-- Pilih Balita --";
+    }
+
+    puskesmasSelect.addEventListener("change", function () {
+        filterBalita(true);
+    });
+
+    filterBalita(false);
+});
+</script>
 <?php endif; ?>
 
 <?php require_once "../includes/footer.php"; ?>

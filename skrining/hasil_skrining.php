@@ -35,34 +35,111 @@ if ($skriningBaru !== null) {
 |--------------------------------------------------------------------------
 */
 
-$sql = "
-    SELECT
-        s.id_skrining,
-        s.id_balita,
-        s.tinggi_badan_ibu,
-        s.pendidikan_ibu,
-        s.pekerjaan_ibu,
-        s.lama_asi_eksklusif,
-        s.mpasi,
-        s.frekuensi_makan,
-        s.protein_hewani,
-        s.status_ekonomi,
-        s.sanitasi,
-        s.air_bersih,
-        b.nama_balita
-    FROM skrining_awal AS s
-    INNER JOIN balita AS b
-        ON s.id_balita = b.id_balita
-    ORDER BY s.id_skrining DESC
-";
+$roleAktif = $_SESSION["role"] ?? "";
 
-$query = mysqli_query($conn, $sql);
+/*
+|--------------------------------------------------------------------------
+| Filter Puskesmas khusus Kader
+|--------------------------------------------------------------------------
+*/
 
-if (!$query) {
-    die(
-        "Gagal mengambil data skrining: "
-        . mysqli_error($conn)
+$filterPuskesmas = $roleAktif === "kader"
+    ? max(0, (int) ($_GET["puskesmas"] ?? 0))
+    : 0;
+
+$daftarPuskesmas = [];
+
+if ($roleAktif === "kader") {
+    $queryPuskesmas = mysqli_query(
+        $conn,
+        "SELECT id_puskesmas, nama_puskesmas
+         FROM puskesmas
+         ORDER BY nama_puskesmas ASC"
     );
+
+    if ($queryPuskesmas) {
+        while ($puskesmas = mysqli_fetch_assoc($queryPuskesmas)) {
+            $daftarPuskesmas[] = $puskesmas;
+        }
+    }
+}
+
+if ($roleAktif === "kader" && $filterPuskesmas > 0) {
+    $sql = "
+        SELECT
+            s.id_skrining,
+            s.id_balita,
+            s.tinggi_badan_ibu,
+            s.pendidikan_ibu,
+            s.pekerjaan_ibu,
+            s.lama_asi_eksklusif,
+            s.mpasi,
+            s.frekuensi_makan,
+            s.protein_hewani,
+            s.status_ekonomi,
+            s.sanitasi,
+            s.air_bersih,
+            b.nama_balita
+        FROM skrining_awal AS s
+        INNER JOIN balita AS b
+            ON s.id_balita = b.id_balita
+        WHERE b.id_puskesmas = ?
+        ORDER BY s.id_skrining DESC
+    ";
+
+    $stmtSkrining = mysqli_prepare($conn, $sql);
+
+    if (!$stmtSkrining) {
+        die(
+            "Gagal menyiapkan filter data skrining: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtSkrining,
+        "i",
+        $filterPuskesmas
+    );
+
+    if (!mysqli_stmt_execute($stmtSkrining)) {
+        die(
+            "Gagal mengambil data skrining: "
+            . mysqli_stmt_error($stmtSkrining)
+        );
+    }
+
+    $query = mysqli_stmt_get_result($stmtSkrining);
+} else {
+    $sql = "
+        SELECT
+            s.id_skrining,
+            s.id_balita,
+            s.tinggi_badan_ibu,
+            s.pendidikan_ibu,
+            s.pekerjaan_ibu,
+            s.lama_asi_eksklusif,
+            s.mpasi,
+            s.frekuensi_makan,
+            s.protein_hewani,
+            s.status_ekonomi,
+            s.sanitasi,
+            s.air_bersih,
+            b.nama_balita
+        FROM skrining_awal AS s
+        INNER JOIN balita AS b
+            ON s.id_balita = b.id_balita
+        ORDER BY s.id_skrining DESC
+    ";
+
+    $query = mysqli_query($conn, $sql);
+
+    if (!$query) {
+        die(
+            "Gagal mengambil data skrining: "
+            . mysqli_error($conn)
+        );
+    }
 }
 
 /*
@@ -98,8 +175,13 @@ function amanSkrining($nilai): string
 |
 */
 
-$roleAktif = $_SESSION["role"] ?? "";
 $bolehKelolaSkrining = $roleAktif === "petugas_gizi";
+
+$bolehTambahSkrining = in_array(
+    $roleAktif,
+    ["petugas_gizi", "kader"],
+    true
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -197,7 +279,7 @@ require_once "../includes/navbar.php";
 
                 </a>
 
-                <?php if ($bolehKelolaSkrining): ?>
+                <?php if ($bolehTambahSkrining): ?>
 
                     <a
                         href="form_skrining.php"
@@ -206,7 +288,7 @@ require_once "../includes/navbar.php";
 
                         <i class="bi bi-plus-circle"></i>
 
-                        Tambah Skrining
+                        Tambah Skrining Awal
 
                     </a>
 
@@ -279,6 +361,73 @@ require_once "../includes/navbar.php";
             </div>
 
             <div class="card-body">
+
+                <?php if ($roleAktif === "kader"): ?>
+
+                    <form
+                        method="GET"
+                        class="row g-2 mb-4 align-items-end"
+                    >
+
+                        <div class="col-12 col-lg-8">
+
+                            <label
+                                for="filter_puskesmas"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Filter berdasarkan Puskesmas
+                            </label>
+
+                            <select
+                                id="filter_puskesmas"
+                                name="puskesmas"
+                                class="form-select"
+                            >
+                                <option value="0">
+                                    Semua Puskesmas
+                                </option>
+
+                                <?php foreach ($daftarPuskesmas as $puskesmas): ?>
+                                    <option
+                                        value="<?= (int) $puskesmas["id_puskesmas"]; ?>"
+                                        <?= $filterPuskesmas === (int) $puskesmas["id_puskesmas"]
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= htmlspecialchars(
+                                            $puskesmas["nama_puskesmas"],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+
+                        </div>
+
+                        <div class="col-6 col-lg-2">
+                            <button
+                                type="submit"
+                                class="btn btn-primary w-100"
+                            >
+                                <i class="bi bi-funnel"></i>
+                                Filter
+                            </button>
+                        </div>
+
+                        <div class="col-6 col-lg-2">
+                            <a
+                                href="hasil_skrining.php"
+                                class="btn btn-light w-100"
+                            >
+                                <i class="bi bi-x-circle"></i>
+                                Hapus Filter
+                            </a>
+                        </div>
+
+                    </form>
+
+                <?php endif; ?>
 
                 <div class="table-responsive">
 
@@ -584,13 +733,13 @@ require_once "../includes/navbar.php";
 
                                         <p>
 
-                                            <?= $bolehKelolaSkrining
+                                            <?= $bolehTambahSkrining
                                                 ? "Tambahkan skrining awal untuk mulai mencatat faktor risiko balita."
                                                 : "Data skrining awal balita belum tersedia."; ?>
 
                                         </p>
 
-                                        <?php if ($bolehKelolaSkrining): ?>
+                                        <?php if ($bolehTambahSkrining): ?>
 
                                             <a
                                                 href="form_skrining.php"
@@ -602,7 +751,7 @@ require_once "../includes/navbar.php";
                                                     bi-plus-circle"
                                                 ></i>
 
-                                                Tambah Skrining
+                                                Tambah Skrining Awal
 
                                             </a>
 
