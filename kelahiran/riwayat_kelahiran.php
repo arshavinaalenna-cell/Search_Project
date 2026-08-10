@@ -162,18 +162,13 @@ require_once "../includes/navbar.php";
             <div>
 
                 <h1 class="page-title">
-
                     <i class="bi bi-balloon-heart me-2"></i>
-
                     Riwayat Kelahiran
-
                 </h1>
 
                 <p class="page-subtitle">
-
-                    Kelola informasi berat lahir, panjang lahir,
-                    usia kehamilan, dan jenis persalinan balita.
-
+                    Kelola data kelahiran balita untuk melengkapi
+                    informasi awal pertumbuhan.
                 </p>
 
             </div>
@@ -182,15 +177,15 @@ require_once "../includes/navbar.php";
 
                 <a
                     href="../dashboard/dashboard.php"
-                    class="btn btn-secondary"
+                    class="btn btn-secondary btn-sm"
                 >
                     <i class="bi bi-arrow-left"></i>
-                    Kembali ke Dashboard
+                    Kembali
                 </a>
 
                 <a
                     href="tambah_kelahiran.php"
-                    class="btn btn-primary"
+                    class="btn btn-primary btn-sm"
                 >
                     <i class="bi bi-plus-circle"></i>
                     Tambah Riwayat
@@ -208,6 +203,13 @@ require_once "../includes/navbar.php";
                 ); ?> alert-dismissible fade show"
                 role="alert"
             >
+                <i
+                    class="bi <?= $jenisAlert === "success"
+                        ? "bi-check-circle"
+                        : ($jenisAlert === "danger"
+                            ? "bi-x-circle"
+                            : "bi-exclamation-triangle"); ?> me-1"
+                ></i>
 
                 <?= amanKelahiran($isiPesan); ?>
 
@@ -217,7 +219,6 @@ require_once "../includes/navbar.php";
                     data-bs-dismiss="alert"
                     aria-label="Tutup"
                 ></button>
-
             </div>
 
         <?php endif; ?>
@@ -233,23 +234,18 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-
                         Total data:
-
-                        <?= mysqli_num_rows($query); ?>
-
+                        <strong>
+                            <?= mysqli_num_rows($query); ?>
+                        </strong>
                         riwayat kelahiran
-
                     </small>
 
                 </div>
 
                 <span class="badge badge-info">
-
                     <i class="bi bi-heart-pulse"></i>
-
                     Data Kelahiran
-
                 </span>
 
             </div>
@@ -263,7 +259,6 @@ require_once "../includes/navbar.php";
                         <thead>
 
                             <tr>
-
                                 <th class="text-center">
                                     No
                                 </th>
@@ -273,7 +268,7 @@ require_once "../includes/navbar.php";
                                 </th>
 
                                 <th>
-                                    NIK Balita
+                                    NIK
                                 </th>
 
                                 <th class="text-center">
@@ -292,10 +287,12 @@ require_once "../includes/navbar.php";
                                     Jenis Persalinan
                                 </th>
 
-                                <th class="text-center">
+                                <th
+                                    class="text-center"
+                                    style="min-width: 170px;"
+                                >
                                     Aksi
                                 </th>
-
                             </tr>
 
                         </thead>
@@ -305,25 +302,20 @@ require_once "../includes/navbar.php";
                         <?php if (mysqli_num_rows($query) > 0): ?>
 
                             <?php
-
                             $nomor = 1;
 
                             while (
-                                $data =
-                                    mysqli_fetch_assoc($query)
+                                $data = mysqli_fetch_assoc($query)
                             ):
 
                                 $idRiwayat =
                                     (int) $data[$kolomPrimaryKey];
-
                             ?>
 
                                 <tr>
 
                                     <td class="text-center">
-
                                         <?= $nomor++; ?>
-
                                     </td>
 
                                     <td>
@@ -343,11 +335,9 @@ require_once "../includes/navbar.php";
                                             </span>
 
                                             <strong>
-
                                                 <?= amanKelahiran(
                                                     $data["nama_balita"]
                                                 ); ?>
-
                                             </strong>
 
                                         </div>
@@ -355,53 +345,57 @@ require_once "../includes/navbar.php";
                                     </td>
 
                                     <td>
-
                                         <?= amanKelahiran(
                                             $data["nik_balita"]
                                         ); ?>
-
                                     </td>
 
                                     <td class="text-center">
-
-                                        <?= amanKelahiran(
-                                            $data["berat_lahir"]
-                                        ); ?>
-
-                                        kg
-
+                                        <strong>
+                                            <?= amanKelahiran(
+                                                $data["berat_lahir"]
+                                            ); ?>
+                                        </strong>
+                                        <span class="text-muted">
+                                            kg
+                                        </span>
                                     </td>
 
                                     <td class="text-center">
-
-                                        <?= amanKelahiran(
-                                            $data["panjang_lahir"]
-                                        ); ?>
-
-                                        cm
-
+                                        <strong>
+                                            <?= amanKelahiran(
+                                                $data["panjang_lahir"]
+                                            ); ?>
+                                        </strong>
+                                        <span class="text-muted">
+                                            cm
+                                        </span>
                                     </td>
 
                                     <td class="text-center">
-
-                                        <?= amanKelahiran(
-                                            $data["usia_kehamilan"]
-                                        ); ?>
-
-                                        minggu
-
+                                        <strong>
+                                            <?= amanKelahiran(
+                                                $data["usia_kehamilan"]
+                                            ); ?>
+                                        </strong>
+                                        <span class="text-muted">
+                                            minggu
+                                        </span>
                                     </td>
 
                                     <td class="text-center">
 
                                         <span class="badge badge-info">
+                                            <i
+                                                class="bi
+                                                bi-hospital me-1"
+                                            ></i>
 
                                             <?= amanKelahiran(
                                                 $data[
                                                     "jenis_persalinan"
                                                 ]
                                             ); ?>
-
                                         </span>
 
                                     </td>
@@ -421,7 +415,6 @@ require_once "../includes/navbar.php";
                                                     class="bi
                                                     bi-pencil-square"
                                                 ></i>
-
                                                 Edit
                                             </a>
 
@@ -433,7 +426,6 @@ require_once "../includes/navbar.php";
                                                     'Yakin ingin menghapus riwayat kelahiran ini?'
                                                 );"
                                             >
-
                                                 <input
                                                     type="hidden"
                                                     name="id"
@@ -448,10 +440,8 @@ require_once "../includes/navbar.php";
                                                         class="bi
                                                         bi-trash3"
                                                     ></i>
-
                                                     Hapus
                                                 </button>
-
                                             </form>
 
                                         </div>
@@ -470,9 +460,7 @@ require_once "../includes/navbar.php";
 
                                     <div class="empty-state">
 
-                                        <div
-                                            class="empty-state-icon"
-                                        >
+                                        <div class="empty-state-icon">
                                             <i
                                                 class="bi
                                                 bi-balloon-heart"
@@ -486,7 +474,7 @@ require_once "../includes/navbar.php";
                                         <p>
                                             Tambahkan data kelahiran
                                             balita untuk melengkapi
-                                            informasi pertumbuhan.
+                                            informasi awal pertumbuhan.
                                         </p>
 
                                         <a
@@ -497,7 +485,6 @@ require_once "../includes/navbar.php";
                                                 class="bi
                                                 bi-plus-circle"
                                             ></i>
-
                                             Tambah Riwayat
                                         </a>
 

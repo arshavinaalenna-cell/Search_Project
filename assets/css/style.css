@@ -1761,3 +1761,398 @@ body,
         padding: 14px !important;
     }
 }
+
+/* =========================================================
+   GLOBAL UI CONSISTENCY PATCH
+   App-wide finishing layer
+   ---------------------------------------------------------
+   IMPORTANT:
+   - Existing design system above remains untouched.
+   - This section only normalizes legacy Bootstrap markup
+     and pages that do not yet use all shared app classes.
+========================================================= */
+
+/* ---------------------------------------------------------
+   1. PAGE RHYTHM / LEGACY PAGE HEADERS
+--------------------------------------------------------- */
+
+.main-content > .d-flex.flex-column.flex-md-row.justify-content-between {
+    margin-bottom: 17px !important;
+}
+
+.main-content > .d-flex.flex-column.flex-md-row.justify-content-between h1,
+.main-content > .d-flex.flex-column.flex-md-row.justify-content-between h2,
+.main-content > .d-flex.flex-column.flex-md-row.justify-content-between h3 {
+    margin: 0 0 5px !important;
+    color: var(--text-900) !important;
+    font-size: clamp(23px, 2.1vw, 29px) !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.65px;
+    line-height: 1.2;
+}
+
+.main-content > .d-flex.flex-column.flex-md-row.justify-content-between p {
+    max-width: 760px;
+    margin-bottom: 0 !important;
+    color: var(--text-500) !important;
+    font-size: 13px !important;
+    font-weight: 600;
+}
+
+/* ---------------------------------------------------------
+   2. CARD NORMALIZATION
+--------------------------------------------------------- */
+
+.content-card > .card-header,
+.card.content-card > .card-header {
+    color: var(--text-900) !important;
+    background:
+        linear-gradient(
+            135deg,
+            var(--pink-050),
+            var(--blue-050)
+        ) !important;
+    border-bottom: 1px solid var(--border-soft) !important;
+}
+
+.content-card > .card-header.bg-primary,
+.content-card > .card-header.bg-info,
+.content-card > .card-header.bg-success,
+.content-card > .card-header.bg-warning,
+.content-card > .card-header.bg-danger,
+.card.content-card > .card-header.bg-primary,
+.card.content-card > .card-header.bg-info,
+.card.content-card > .card-header.bg-success,
+.card.content-card > .card-header.bg-warning,
+.card.content-card > .card-header.bg-danger {
+    color: var(--text-900) !important;
+    background:
+        linear-gradient(
+            135deg,
+            var(--pink-050),
+            var(--blue-050)
+        ) !important;
+}
+
+.content-card > .card-header.text-white,
+.content-card > .card-header.text-dark,
+.card.content-card > .card-header.text-white,
+.card.content-card > .card-header.text-dark {
+    color: var(--text-900) !important;
+}
+
+.content-card > .card-header h1,
+.content-card > .card-header h2,
+.content-card > .card-header h3,
+.content-card > .card-header h4,
+.content-card > .card-header h5,
+.content-card > .card-header h6 {
+    color: var(--text-900) !important;
+    font-weight: 800 !important;
+}
+
+/* ---------------------------------------------------------
+   3. TABLE NORMALIZATION
+--------------------------------------------------------- */
+
+.table-bordered {
+    border: 0 !important;
+}
+
+.table-bordered > :not(caption) > * {
+    border-width: 0 !important;
+}
+
+.table-bordered > :not(caption) > * > * {
+    border-right: 0 !important;
+    border-left: 0 !important;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    --bs-table-accent-bg: transparent !important;
+    background: #ffffff !important;
+}
+
+.table-dark,
+.table-dark > tr,
+.table-dark > tr > th,
+.table thead.table-dark th {
+    color: var(--text-900) !important;
+    background:
+        linear-gradient(
+            135deg,
+            var(--pink-050),
+            var(--blue-050)
+        ) !important;
+    border-color: var(--border-soft) !important;
+}
+
+.table td strong {
+    color: var(--text-900);
+}
+
+.table-responsive + .small,
+.table-responsive + small {
+    color: var(--text-500);
+}
+
+/* ---------------------------------------------------------
+   4. SEARCH / FILTER FORMS
+--------------------------------------------------------- */
+
+.content-card form.row.g-2,
+.content-card form.row.g-3 {
+    align-items: end;
+}
+
+.content-card form.row.g-2 .btn,
+.content-card form.row.g-3 .btn {
+    min-height: 41px;
+}
+
+.btn-outline-secondary {
+    color: var(--text-700) !important;
+    background: #ffffff !important;
+    border-color: var(--border) !important;
+}
+
+.btn-outline-secondary:hover {
+    color: var(--pink-700) !important;
+    background: var(--pink-050) !important;
+    border-color: var(--pink-300) !important;
+}
+
+/* ---------------------------------------------------------
+   5. BOOTSTRAP STATUS COLORS
+   Keep semantic colors semantic.
+   Buttons stay themed by the earlier button rules.
+--------------------------------------------------------- */
+
+/* Undo the earlier generic .bg-success pink override
+   for semantic labels / badges / status indicators. */
+.badge.bg-success,
+span.bg-success:not(.btn),
+.status-badge.bg-success {
+    color: #ffffff !important;
+    background: var(--success) !important;
+}
+
+.badge.bg-warning,
+span.bg-warning:not(.btn),
+.status-badge.bg-warning {
+    color: #6f4b23 !important;
+    background: #f5c979 !important;
+}
+
+.badge.bg-danger,
+span.bg-danger:not(.btn),
+.status-badge.bg-danger {
+    color: #ffffff !important;
+    background: var(--danger) !important;
+}
+
+.badge.bg-info,
+span.bg-info:not(.btn),
+.status-badge.bg-info {
+    color: #ffffff !important;
+    background: var(--blue-600) !important;
+}
+
+.badge.bg-dark,
+span.bg-dark:not(.btn),
+.status-badge.bg-dark {
+    color: #ffffff !important;
+    background: #30343b !important;
+}
+
+/* Preserve the soft custom badge variants. */
+.badge-success:not(.bg-success) {
+    color: #477b5d !important;
+    background: var(--success-soft) !important;
+}
+
+.badge-warning:not(.bg-warning) {
+    color: #96652e !important;
+    background: var(--warning-soft) !important;
+}
+
+.badge-danger:not(.bg-danger) {
+    color: #a54b58 !important;
+    background: var(--danger-soft) !important;
+}
+
+.badge-info:not(.bg-info) {
+    color: var(--blue-700) !important;
+    background: var(--blue-100) !important;
+}
+
+/* ---------------------------------------------------------
+   6. STATUS LEGEND
+--------------------------------------------------------- */
+
+.status-legend,
+.content-card .d-flex.flex-wrap.align-items-center.gap-2.mb-3,
+.content-card .d-flex.flex-wrap.align-items-center.gap-2.mb-4 {
+    row-gap: 8px !important;
+}
+
+.status-legend .badge,
+.content-card .d-flex.flex-wrap.align-items-center.gap-2.mb-3 > .badge,
+.content-card .d-flex.flex-wrap.align-items-center.gap-2.mb-4 > .badge {
+    min-height: 27px;
+    padding: 7px 10px;
+}
+
+/* ---------------------------------------------------------
+   7. DETAIL PAGE TABLES
+--------------------------------------------------------- */
+
+.content-card .card-body > .table:not(.table-responsive .table) {
+    overflow: hidden;
+    border: 1px solid var(--border-soft) !important;
+    border-radius: 12px;
+}
+
+.content-card .card-body > .table th {
+    width: auto;
+    color: var(--text-500) !important;
+    background: var(--pink-050) !important;
+    font-size: 11.5px !important;
+    font-weight: 800 !important;
+}
+
+.content-card .card-body > .table td {
+    color: var(--text-900) !important;
+    font-weight: 700;
+}
+
+/* ---------------------------------------------------------
+   8. MODALS
+--------------------------------------------------------- */
+
+.modal-content {
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.95) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 22px 55px rgba(71, 59, 78, 0.18) !important;
+}
+
+.modal-header {
+    padding: 17px 19px !important;
+    background:
+        linear-gradient(
+            135deg,
+            var(--pink-050),
+            var(--blue-050)
+        );
+    border-bottom: 1px solid var(--border-soft) !important;
+}
+
+.modal-title {
+    color: var(--text-900);
+    font-weight: 800;
+}
+
+.modal-body {
+    padding: 19px !important;
+}
+
+.modal-footer {
+    gap: 8px;
+    padding: 14px 19px !important;
+    background: #fffafb;
+    border-top: 1px solid var(--border-soft) !important;
+}
+
+/* ---------------------------------------------------------
+   9. SMALL INFORMATION PANELS
+--------------------------------------------------------- */
+
+.bg-light {
+    background:
+        linear-gradient(
+            135deg,
+            var(--pink-050),
+            var(--blue-050)
+        ) !important;
+}
+
+.border.rounded,
+.border.rounded-3,
+.border.rounded-4 {
+    border-color: var(--border-soft) !important;
+}
+
+/* ---------------------------------------------------------
+   10. TEXT / UTILITY CLEANUP
+--------------------------------------------------------- */
+
+.text-muted {
+    color: var(--text-500) !important;
+}
+
+.text-dark {
+    color: var(--text-900) !important;
+}
+
+small,
+.small {
+    font-weight: 600;
+}
+
+/* ---------------------------------------------------------
+   11. FORM CARD CONSISTENCY
+--------------------------------------------------------- */
+
+.content-card .form-label,
+.content-card label {
+    color: var(--text-900);
+}
+
+.content-card hr {
+    margin: 20px 0;
+    border: 0;
+    border-top: 1px solid var(--border-soft);
+    opacity: 1;
+}
+
+.input-group-text {
+    color: var(--text-700);
+    background: var(--blue-050);
+    border: 1px solid var(--border) !important;
+}
+
+/* ---------------------------------------------------------
+   12. RESPONSIVE FINISHING
+--------------------------------------------------------- */
+
+@media (max-width: 768px) {
+    .main-content > .d-flex.flex-column.flex-md-row.justify-content-between {
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+
+    .main-content > .d-flex.flex-column.flex-md-row.justify-content-between > .btn,
+    .main-content > .d-flex.flex-column.flex-md-row.justify-content-between > div:last-child .btn {
+        width: 100%;
+    }
+
+    .content-card form.row.g-2 .btn,
+    .content-card form.row.g-3 .btn {
+        width: 100%;
+    }
+
+    .modal-dialog {
+        margin: 12px;
+    }
+
+    .modal-content {
+        border-radius: 17px !important;
+    }
+}
+
+/* =========================================================
+   END GLOBAL UI CONSISTENCY PATCH
+========================================================= */
+
