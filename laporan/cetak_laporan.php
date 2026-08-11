@@ -739,14 +739,64 @@ $parameterKembali = http_build_query([
 | Format kop surat berdasarkan role
 |--------------------------------------------------------------------------
 |
-| Dinkes menggunakan identitas Dinas Kesehatan.
-| Kepala Puskesmas dan Petugas Gizi menggunakan identitas Puskesmas.
-| Isi laporan tetap sama; yang dibedakan adalah logo dan kop surat.
+| Dinkes:
+|   kiri  = Logo Dinas Kesehatan
+|   kanan = kosong
+|
+| Puskesmas (Petugas Gizi / Kepala Puskesmas):
+|   kiri  = Logo Dinas Kesehatan
+|   kanan = Logo Puskesmas
+|
+| Dengan begitu kop Puskesmas tetap menunjukkan pembinaan Dinas Kesehatan
+| sekaligus identitas Puskesmas yang menerbitkan laporan.
 |
 */
 
 $formatCetakDinkes =
     $roleAktif === "dinkes";
+
+/*
+|--------------------------------------------------------------------------
+| Logo kiri: Dinas Kesehatan untuk semua format
+|--------------------------------------------------------------------------
+*/
+
+$logoKiriSrc =
+    "../assets/img/logo_dinkes.png";
+
+$logoKiriServer =
+    __DIR__
+    . "/../assets/img/logo_dinkes.png";
+
+$logoKiriAda =
+    file_exists(
+        $logoKiriServer
+    );
+
+$labelLogoKiri =
+    "LOGO<br>DINAS<br>KESEHATAN";
+
+/*
+|--------------------------------------------------------------------------
+| Logo kanan: khusus laporan Puskesmas
+|--------------------------------------------------------------------------
+*/
+
+$logoKananSrc =
+    "../assets/img/logo_puskesmas.png";
+
+$logoKananServer =
+    __DIR__
+    . "/../assets/img/logo_puskesmas.png";
+
+$logoKananAda =
+    !$formatCetakDinkes
+    && file_exists(
+        $logoKananServer
+    );
+
+$labelLogoKanan =
+    "LOGO<br>PUSKESMAS";
 
 if ($formatCetakDinkes) {
 
@@ -758,16 +808,6 @@ if ($formatCetakDinkes) {
 
     $subjudulKop =
         "Sistem Deteksi dan Pemantauan Stunting";
-
-    $logoCetakSrc =
-        "../assets/img/logo_dinkes.png";
-
-    $logoCetakServer =
-        __DIR__
-        . "/../assets/img/logo_dinkes.png";
-
-    $labelLogoCetak =
-        "LOGO<br>DINAS<br>KESEHATAN";
 
     $footerInstansi =
         "Dinas Kesehatan";
@@ -789,27 +829,12 @@ if ($formatCetakDinkes) {
     $subjudulKop =
         "Sistem Deteksi dan Pemantauan Stunting";
 
-    $logoCetakSrc =
-        "../assets/img/logo_puskesmas.png";
-
-    $logoCetakServer =
-        __DIR__
-        . "/../assets/img/logo_puskesmas.png";
-
-    $labelLogoCetak =
-        "LOGO<br>PUSKESMAS";
-
     $footerInstansi =
         $namaPuskesmasAkun !== ""
             ? "Puskesmas "
                 . $namaPuskesmasAkun
             : "Puskesmas";
 }
-
-$logoCetakAda =
-    file_exists(
-        $logoCetakServer
-    );
 
 ?>
 
@@ -1386,17 +1411,16 @@ $logoCetakAda =
 
         <header class="report-header">
 
+            <!-- Logo kiri: Dinas Kesehatan -->
             <div class="report-logo">
 
-                <?php if ($logoCetakAda): ?>
+                <?php if ($logoKiriAda): ?>
 
                     <img
                         src="<?= amanCetak(
-                            $logoCetakSrc
+                            $logoKiriSrc
                         ); ?>"
-                        alt="<?= $formatCetakDinkes
-                            ? "Logo Dinas Kesehatan"
-                            : "Logo Puskesmas"; ?>"
+                        alt="Logo Dinas Kesehatan"
                     >
 
                 <?php else: ?>
@@ -1404,13 +1428,14 @@ $logoCetakAda =
                     <div
                         class="report-logo-placeholder"
                     >
-                        <?= $labelLogoCetak; ?>
+                        <?= $labelLogoKiri; ?>
                     </div>
 
                 <?php endif; ?>
 
             </div>
 
+            <!-- Identitas instansi -->
             <div class="report-heading">
 
                 <h1>
@@ -1433,7 +1458,36 @@ $logoCetakAda =
 
             </div>
 
-            <div></div>
+            <!--
+                Dinkes: kosong.
+                Puskesmas: Logo Puskesmas.
+            -->
+            <div class="report-logo">
+
+                <?php if (!$formatCetakDinkes): ?>
+
+                    <?php if ($logoKananAda): ?>
+
+                        <img
+                            src="<?= amanCetak(
+                                $logoKananSrc
+                            ); ?>"
+                            alt="Logo Puskesmas"
+                        >
+
+                    <?php else: ?>
+
+                        <div
+                            class="report-logo-placeholder"
+                        >
+                            <?= $labelLogoKanan; ?>
+                        </div>
+
+                    <?php endif; ?>
+
+                <?php endif; ?>
+
+            </div>
 
         </header>
 
