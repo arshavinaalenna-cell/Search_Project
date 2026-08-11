@@ -55,12 +55,30 @@ $menuSidebar = [
             ]
         ],
         [
+            "nama" => "Hasil Deteksi",
+            "ikon" => "◇",
+            "url" => "../deteksi/hasil_deteksi.php",
+            "halaman" => [
+                "hasil_deteksi.php",
+                "detail_deteksi.php"
+            ]
+        ],
+        [
             "nama" => "Grafik Pertumbuhan",
             "ikon" => "↗",
             "url" => "../pengukuran/grafik_pertumbuhan.php",
             "halaman" => [
                 "data_pengukuran.php",
                 "grafik_pertumbuhan.php"
+            ]
+        ],
+        [
+            "nama" => "Monitoring Konsultasi",
+            "ikon" => "✦",
+            "url" => "../konsultasi/data_konsultasi.php",
+            "halaman" => [
+                "data_konsultasi.php",
+                "detail_konsultasi.php"
             ]
         ],
         [
@@ -81,6 +99,24 @@ $menuSidebar = [
             "ikon" => "⌂",
             "url" => "../dashboard/dashboard.php",
             "halaman" => ["dashboard.php"]
+        ],
+        [
+            "nama" => "Skrining & Deteksi",
+            "ikon" => "◇",
+            "url" => "../skrining/hasil_skrining.php",
+            "halaman" => [
+                "hasil_skrining.php",
+                "detail_skrining.php"
+            ]
+        ],
+        [
+            "nama" => "Hasil Deteksi",
+            "ikon" => "◎",
+            "url" => "../deteksi/hasil_deteksi.php",
+            "halaman" => [
+                "hasil_deteksi.php",
+                "detail_deteksi.php"
+            ]
         ],
         [
             "nama" => "Grafik Pertumbuhan",
@@ -145,10 +181,10 @@ $menuSidebar = [
             "ikon" => "◇",
             "url" => "../skrining/hasil_skrining.php",
             "halaman" => [
-                "form_skrining.php",
                 "hasil_skrining.php",
-                "edit_skrining.php",
-                "analisis_deteksi.php"
+                "detail_skrining.php",
+                "form_skrining.php",
+                "edit_skrining.php"
             ]
         ]
     ],
@@ -175,6 +211,7 @@ $menuSidebar = [
             "url" => "../kelahiran/riwayat_kelahiran.php",
             "halaman" => [
                 "riwayat_kelahiran.php",
+                "detail_kelahiran.php",
                 "tambah_kelahiran.php",
                 "edit_kelahiran.php"
             ]
@@ -218,20 +255,23 @@ $menuSidebar = [
             "halaman" => ["dashboard.php"]
         ],
         [
-            "nama" => "Verifikasi Data Balita",
-            "ikon" => "♡",
-            "url" => "../balita/data_balita.php",
+            "nama" => "Skrining & Analisis",
+            "ikon" => "◇",
+            "url" => "../skrining/hasil_skrining.php",
             "halaman" => [
-                "data_balita.php",
-                "detail_balita.php"
+                "hasil_skrining.php",
+                "detail_skrining.php",
+                "analisis_deteksi.php"
             ]
         ],
         [
-            "nama" => "Riwayat Kelahiran",
-            "ikon" => "○",
-            "url" => "../kelahiran/riwayat_kelahiran.php",
+            "nama" => "Hasil Deteksi & Verifikasi",
+            "ikon" => "◎",
+            "url" => "../deteksi/hasil_deteksi.php",
             "halaman" => [
-                "riwayat_kelahiran.php"
+                "hasil_deteksi.php",
+                "detail_deteksi.php",
+                "verifikasi_deteksi.php"
             ]
         ],
         [
@@ -244,19 +284,6 @@ $menuSidebar = [
             ]
         ],
         [
-            "nama" => "Deteksi Risiko Stunting",
-            "ikon" => "◇",
-            "url" => "../skrining/hasil_skrining.php",
-            "halaman" => [
-                "form_skrining.php",
-                "hasil_skrining.php",
-                "analisis_deteksi.php",
-                "analisis_stunting.php",
-                "hasil_deteksi.php",
-                "detail_deteksi.php"
-            ]
-        ],
-        [
             "nama" => "Grafik Pertumbuhan",
             "ikon" => "↗",
             "url" => "../pengukuran/grafik_pertumbuhan.php",
@@ -266,12 +293,11 @@ $menuSidebar = [
             ]
         ],
         [
-            "nama" => "Konsultasi & Monitoring",
+            "nama" => "Konsultasi",
             "ikon" => "✦",
             "url" => "../konsultasi/data_konsultasi.php",
             "halaman" => [
                 "data_konsultasi.php",
-                "tambah_konsultasi.php",
                 "detail_konsultasi.php",
                 "edit_konsultasi.php"
             ]
@@ -304,7 +330,7 @@ $menuSidebar = [
             ]
         ],
         [
-            "nama" => "Konsultasi & Monitoring",
+            "nama" => "Konsultasi",
             "ikon" => "✦",
             "url" => "../konsultasi/data_konsultasi.php",
             "halaman" => [
