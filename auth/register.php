@@ -2,6 +2,8 @@
 
 session_start();
 
+require_once "../config/koneksi.php";
+
 /*
 |--------------------------------------------------------------------------
 | Halaman registrasi dapat dibuka tanpa login
@@ -22,6 +24,7 @@ $noHpLama       = $old["no_hp"] ?? "";
 $alamatLama     = $old["alamat"] ?? "";
 $pendidikanLama = $old["pendidikan_ibu"] ?? "";
 $pekerjaanLama  = $old["pekerjaan_ibu"] ?? "";
+$idPuskesmasLama  = (int) ($old["id_puskesmas"] ?? 0);
 
 $daftarPendidikan = [
     "Tidak Sekolah",
@@ -46,6 +49,35 @@ $daftarPekerjaan = [
     "Guru/Dosen",
     "Lainnya"
 ];
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil daftar Puskesmas aktif dari master
+|--------------------------------------------------------------------------
+*/
+
+$daftarPuskesmas = [];
+
+$queryPuskesmas = mysqli_query(
+    $conn,
+    "SELECT
+        id_puskesmas,
+        nama_puskesmas
+     FROM puskesmas
+     ORDER BY nama_puskesmas ASC"
+);
+
+if ($queryPuskesmas) {
+    while (
+        $puskesmas =
+            mysqli_fetch_assoc(
+                $queryPuskesmas
+            )
+    ) {
+        $daftarPuskesmas[] =
+            $puskesmas;
+    }
+}
 
 function aman(string $teks): string
 {
@@ -501,8 +533,9 @@ function aman(string $teks): string
 
             <div class="role-info">
                 🍼 Akun otomatis terdaftar sebagai
-                <strong>orang tua</strong>. Data Profil Ibu di bawah
-                akan terhubung ke akun yang sama.
+                <strong>orang tua</strong>. Pilih Puskesmas pembina
+                agar akun, Profil Ibu, dan data balita nantinya berada
+                pada wilayah layanan yang sama.
             </div>
 
             <form
@@ -664,6 +697,59 @@ function aman(string $teks): string
 
                 <div class="row g-3">
 
+                    <div class="col-12">
+
+                        <label
+                            for="id_puskesmas"
+                            class="form-label"
+                        >
+                            Puskesmas Pembina
+                        </label>
+
+                        <select
+                            name="id_puskesmas"
+                            id="id_puskesmas"
+                            class="form-select"
+                            required
+                        >
+                            <option value="">
+                                Pilih Puskesmas
+                            </option>
+
+                            <?php foreach (
+                                $daftarPuskesmas
+                                as $puskesmas
+                            ): ?>
+
+                                <option
+                                    value="<?= (int) $puskesmas[
+                                        "id_puskesmas"
+                                    ]; ?>"
+                                    <?= $idPuskesmasLama ===
+                                        (int) $puskesmas[
+                                            "id_puskesmas"
+                                        ]
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    <?= aman(
+                                        $puskesmas[
+                                            "nama_puskesmas"
+                                        ]
+                                    ); ?>
+                                </option>
+
+                            <?php endforeach; ?>
+                        </select>
+
+                        <div class="form-text">
+                            Puskesmas ini menjadi wilayah layanan akun
+                            Orang Tua dan digunakan untuk menghubungkan
+                            data balita dengan petugas di Puskesmas yang sama.
+                        </div>
+
+                    </div>
+
                     <div class="col-12 col-md-6">
 
                         <label
@@ -821,9 +907,11 @@ function aman(string $teks): string
                 </div>
 
                 <div class="role-info mt-4">
-                    Data ini akan tersimpan sebagai
-                    <strong>Profil Ibu</strong> dan nantinya muncul
-                    pada pilihan Kader saat menghubungkan data balita.
+                    Data ini tersimpan sebagai
+                    <strong>Profil Ibu</strong> dan akun Orang Tua akan
+                    terhubung ke Puskesmas yang dipilih. Kader pada
+                    Puskesmas yang sama dapat menghubungkan akun ini
+                    saat mendaftarkan balita.
                 </div>
 
                 <div class="d-grid">

@@ -67,6 +67,13 @@ $password =
 $konfirmasiPassword =
     $_POST["konfirmasi_password"] ?? "";
 
+$idPuskesmas =
+    filter_input(
+        INPUT_POST,
+        "id_puskesmas",
+        FILTER_VALIDATE_INT
+    );
+
 /*
 |--------------------------------------------------------------------------
 | Mengambil input Profil Ibu
@@ -139,7 +146,10 @@ $_SESSION["register_old"] = [
         $pendidikanIbu,
 
     "pekerjaan_ibu" =>
-        $pekerjaanIbu
+        $pekerjaanIbu,
+
+    "id_puskesmas" =>
+        (int) $idPuskesmas
 ];
 
 /*
@@ -173,6 +183,7 @@ if (
     || $username === ""
     || $password === ""
     || $konfirmasiPassword === ""
+    || !$idPuskesmas
     || $nikIbu === ""
     || $namaIbu === ""
     || $noHp === ""
@@ -181,7 +192,7 @@ if (
     || $pekerjaanIbu === ""
 ) {
     kembaliRegister(
-        "Semua data akun dan Profil Ibu wajib diisi."
+        "Semua data akun, Puskesmas, dan Profil Ibu wajib diisi."
     );
 }
 
@@ -326,6 +337,61 @@ if (
 
 /*
 |--------------------------------------------------------------------------
+| Memvalidasi Puskesmas
+|--------------------------------------------------------------------------
+|
+| Nilai dari browser tidak langsung dipercaya. Puskesmas harus benar-benar
+| ada pada tabel master puskesmas.
+|
+*/
+
+$stmtCekPuskesmas =
+    mysqli_prepare(
+        $conn,
+        "SELECT id_puskesmas
+         FROM puskesmas
+         WHERE id_puskesmas = ?
+         LIMIT 1"
+    );
+
+if (!$stmtCekPuskesmas) {
+    kembaliRegister(
+        "Sistem gagal memeriksa Puskesmas."
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtCekPuskesmas,
+    "i",
+    $idPuskesmas
+);
+
+mysqli_stmt_execute(
+    $stmtCekPuskesmas
+);
+
+$resultCekPuskesmas =
+    mysqli_stmt_get_result(
+        $stmtCekPuskesmas
+    );
+
+$dataPuskesmas =
+    mysqli_fetch_assoc(
+        $resultCekPuskesmas
+    );
+
+mysqli_stmt_close(
+    $stmtCekPuskesmas
+);
+
+if (!$dataPuskesmas) {
+    kembaliRegister(
+        "Puskesmas yang dipilih tidak valid."
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
 | Memeriksa username
 |--------------------------------------------------------------------------
 */
@@ -463,7 +529,7 @@ $role =
 | Transaksi registrasi
 |--------------------------------------------------------------------------
 |
-| 1. Buat akun pengguna
+| 1. Buat akun pengguna + Puskesmas pembina
 | 2. Ambil id_user baru
 | 3. Buat Profil Ibu dengan id_user yang sama
 |
@@ -491,9 +557,10 @@ try {
                 nama,
                 username,
                 password,
-                role
+                role,
+                id_puskesmas
             )
-            VALUES (?, ?, ?, ?)"
+            VALUES (?, ?, ?, ?, ?)"
         );
 
     if (!$stmtInsertPengguna) {
@@ -504,11 +571,12 @@ try {
 
     mysqli_stmt_bind_param(
         $stmtInsertPengguna,
-        "ssss",
+        "ssssi",
         $nama,
         $username,
         $passwordHash,
-        $role
+        $role,
+        $idPuskesmas
     );
 
     if (
@@ -672,8 +740,9 @@ unset(
 | Registrasi selesai
 |--------------------------------------------------------------------------
 |
-| Karena Profil Ibu sudah dibuat dalam proses registrasi yang sama,
-| akun langsung siap dihubungkan oleh Kader ke data balita.
+| Karena akun sudah memiliki Puskesmas pembina dan Profil Ibu dibuat
+| dalam transaksi yang sama, akun siap dihubungkan oleh Kader pada
+| Puskesmas yang sama ke data balita.
 |
 */
 
