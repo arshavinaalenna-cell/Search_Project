@@ -119,10 +119,16 @@ $stmtData = mysqli_prepare(
         hd.catatan_verifikasi,
 
         pa.tanggal_pengukuran,
+        pa.umur_bulan,
+        pa.berat_badan,
+        pa.tinggi_panjang_badan,
+        pa.lingkar_kepala,
+        pa.lila,
 
         b.id_balita,
         b.nama_balita,
         b.nik_balita,
+        b.jenis_kelamin,
 
         p.nama_puskesmas
 
@@ -204,6 +210,15 @@ $daftarStatus = [
     "Perlu pemeriksaan ulang"
 ];
 
+$labelStatusVerifikasi = [
+    "Belum diverifikasi" =>
+        "Belum Diverifikasi",
+    "Sudah diverifikasi" =>
+        "Terverifikasi",
+    "Perlu pemeriksaan ulang" =>
+        "Perlu Pemeriksaan Ulang"
+];
+
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $statusVerifikasi =
@@ -221,6 +236,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     ) {
         $error =
             "Status verifikasi tidak valid.";
+    } elseif (
+        $statusVerifikasi ===
+            "Perlu pemeriksaan ulang"
+        && $catatanVerifikasi === ""
+    ) {
+        $error =
+            "Catatan Petugas Gizi wajib diisi jika hasil memerlukan pemeriksaan ulang.";
     }
 
     if ($error === "") {
@@ -396,10 +418,8 @@ require_once "../includes/navbar.php";
 
                 <div class="row g-3 mb-4">
 
-                    <div class="col-12 col-md-4">
-
+                    <div class="col-12 col-md-6 col-xl-3">
                         <div class="detail-item h-100">
-
                             <span class="detail-label">
                                 Balita
                             </span>
@@ -422,46 +442,57 @@ require_once "../includes/navbar.php";
                                     "UTF-8"
                                 ); ?>
                             </div>
-
                         </div>
-
                     </div>
 
-                    <div class="col-12 col-md-4">
-
+                    <div class="col-12 col-md-6 col-xl-3">
                         <div class="detail-item h-100">
-
                             <span class="detail-label">
-                                Hasil Deteksi
+                                Status Stunting
                             </span>
 
                             <div class="detail-value">
-                                <?= htmlspecialchars(
-                                    $dataDeteksi["status_stunting"]
-                                        ?? "-",
-                                    ENT_QUOTES,
-                                    "UTF-8"
-                                ); ?>
+                                <strong>
+                                    <?= htmlspecialchars(
+                                        $dataDeteksi["status_stunting"]
+                                            ?? "-",
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
+                                </strong>
                             </div>
 
                             <div class="form-text">
-                                Status gizi:
-                                <?= htmlspecialchars(
-                                    $dataDeteksi["status_gizi"]
-                                        ?? "-",
-                                    ENT_QUOTES,
-                                    "UTF-8"
-                                ); ?>
+                                Indikator: TB/U
                             </div>
-
                         </div>
-
                     </div>
 
-                    <div class="col-12 col-md-4">
-
+                    <div class="col-12 col-md-6 col-xl-3">
                         <div class="detail-item h-100">
+                            <span class="detail-label">
+                                Status Gizi
+                            </span>
 
+                            <div class="detail-value">
+                                <strong>
+                                    <?= htmlspecialchars(
+                                        $dataDeteksi["status_gizi"]
+                                            ?? "-",
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
+                                </strong>
+                            </div>
+
+                            <div class="form-text">
+                                Indikator: BB/U
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="detail-item h-100">
                             <span class="detail-label">
                                 Puskesmas
                             </span>
@@ -475,9 +506,7 @@ require_once "../includes/navbar.php";
                                     "UTF-8"
                                 ); ?>
                             </div>
-
                         </div>
-
                     </div>
 
                 </div>
@@ -487,6 +516,162 @@ require_once "../includes/navbar.php";
                     Verifikasi ini menetapkan
                     <strong>status hasil deteksi</strong>,
                     bukan memverifikasi identitas atau data balita.
+                </div>
+
+                <div class="mb-4">
+
+                    <button
+                        class="btn btn-outline-primary btn-sm"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#dataPendukungVerifikasi"
+                        aria-expanded="false"
+                        aria-controls="dataPendukungVerifikasi"
+                    >
+                        <i class="bi bi-clipboard2-data me-1"></i>
+                        Lihat Data Pendukung
+                    </button>
+
+                    <div
+                        class="collapse mt-3"
+                        id="dataPendukungVerifikasi"
+                    >
+                        <div class="detail-item">
+
+                            <div class="row g-3">
+
+                                <div class="col-6 col-lg-3">
+                                    <span class="detail-label">
+                                        Tanggal Pengukuran
+                                    </span>
+                                    <div class="detail-value">
+                                        <?= !empty(
+                                            $dataDeteksi[
+                                                "tanggal_pengukuran"
+                                            ]
+                                        )
+                                            ? date(
+                                                "d-m-Y",
+                                                strtotime(
+                                                    $dataDeteksi[
+                                                        "tanggal_pengukuran"
+                                                    ]
+                                                )
+                                            )
+                                            : "-"; ?>
+                                    </div>
+                                </div>
+
+                                <div class="col-6 col-lg-3">
+                                    <span class="detail-label">
+                                        Umur
+                                    </span>
+                                    <div class="detail-value">
+                                        <?= htmlspecialchars(
+                                            (string) (
+                                                $dataDeteksi[
+                                                    "umur_bulan"
+                                                ]
+                                                ?? "-"
+                                            ),
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                        bulan
+                                    </div>
+                                </div>
+
+                                <div class="col-6 col-lg-3">
+                                    <span class="detail-label">
+                                        Berat Badan
+                                    </span>
+                                    <div class="detail-value">
+                                        <?= htmlspecialchars(
+                                            (string) (
+                                                $dataDeteksi[
+                                                    "berat_badan"
+                                                ]
+                                                ?? "-"
+                                            ),
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                        kg
+                                    </div>
+                                </div>
+
+                                <div class="col-6 col-lg-3">
+                                    <span class="detail-label">
+                                        Tinggi / Panjang Badan
+                                    </span>
+                                    <div class="detail-value">
+                                        <?= htmlspecialchars(
+                                            (string) (
+                                                $dataDeteksi[
+                                                    "tinggi_panjang_badan"
+                                                ]
+                                                ?? "-"
+                                            ),
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                        cm
+                                    </div>
+                                </div>
+
+                                <div class="col-6 col-lg-3">
+                                    <span class="detail-label">
+                                        Lingkar Kepala
+                                    </span>
+                                    <div class="detail-value">
+                                        <?= htmlspecialchars(
+                                            (string) (
+                                                $dataDeteksi[
+                                                    "lingkar_kepala"
+                                                ]
+                                                ?? "-"
+                                            ),
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                        cm
+                                    </div>
+                                </div>
+
+                                <div class="col-6 col-lg-3">
+                                    <span class="detail-label">
+                                        LILA
+                                    </span>
+                                    <div class="detail-value">
+                                        <?= htmlspecialchars(
+                                            (string) (
+                                                $dataDeteksi[
+                                                    "lila"
+                                                ]
+                                                ?? "-"
+                                            ),
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                        cm
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-lg-6">
+                                    <span class="detail-label">
+                                        Indikator Analisis
+                                    </span>
+                                    <div class="detail-value">
+                                        TB/U untuk status stunting
+                                        dan BB/U untuk status gizi.
+                                    </div>
+                                </div>
+
+                            </div>
+
+                        </div>
+                    </div>
+
                 </div>
 
                 <form method="POST">
@@ -521,7 +706,9 @@ require_once "../includes/navbar.php";
                                         : ""; ?>
                                 >
                                     <?= htmlspecialchars(
-                                        $status,
+                                        $labelStatusVerifikasi[
+                                            $status
+                                        ] ?? $status,
                                         ENT_QUOTES,
                                         "UTF-8"
                                     ); ?>
@@ -533,8 +720,8 @@ require_once "../includes/navbar.php";
 
                         <div class="form-text">
                             Pilih hasil peninjauan Petugas Gizi:
-                            Belum diverifikasi, Sudah diverifikasi,
-                            atau Perlu pemeriksaan ulang.
+                            Belum Diverifikasi, Terverifikasi,
+                            atau Perlu Pemeriksaan Ulang.
                         </div>
 
                     </div>
@@ -546,6 +733,10 @@ require_once "../includes/navbar.php";
                             class="form-label"
                         >
                             Catatan Petugas Gizi
+                            <span
+                                id="tandaCatatanWajib"
+                                class="text-danger d-none"
+                            >*</span>
                         </label>
 
                         <textarea
@@ -559,6 +750,13 @@ require_once "../includes/navbar.php";
                             ENT_QUOTES,
                             "UTF-8"
                         ); ?></textarea>
+
+                        <div class="form-text">
+                            Wajib diisi jika memilih
+                            <strong>Perlu Pemeriksaan Ulang</strong>.
+                            Untuk status Terverifikasi,
+                            catatan bersifat opsional.
+                        </div>
 
                     </div>
 
@@ -591,5 +789,56 @@ require_once "../includes/navbar.php";
     </main>
 
 </div>
+
+<script>
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+
+        const status =
+            document.getElementById(
+                "status_verifikasi"
+            );
+
+        const catatan =
+            document.getElementById(
+                "catatan_verifikasi"
+            );
+
+        const tandaWajib =
+            document.getElementById(
+                "tandaCatatanWajib"
+            );
+
+        function aturCatatan() {
+
+            if (!status || !catatan) {
+                return;
+            }
+
+            const wajib =
+                status.value ===
+                "Perlu pemeriksaan ulang";
+
+            catatan.required =
+                wajib;
+
+            if (tandaWajib) {
+                tandaWajib.classList.toggle(
+                    "d-none",
+                    !wajib
+                );
+            }
+        }
+
+        status.addEventListener(
+            "change",
+            aturCatatan
+        );
+
+        aturCatatan();
+    }
+);
+</script>
 
 <?php require_once "../includes/footer.php"; ?>
