@@ -664,65 +664,184 @@ require_once "../includes/navbar.php";
                                 <span class="text-danger">*</span>
                             </label>
 
-                            <select
-                                id="id_user"
-                                name="id_user"
-                                class="form-select"
-                                <?= $jumlahOrangTua === 0
-                                    ? "disabled"
-                                    : "required"; ?>
-                            >
-                                <option value="">
-                                    Pilih profil Ibu
-                                </option>
+                            <?php
+                            /*
+                            |--------------------------------------------------------------------------
+                            | Menentukan label Ibu yang sedang terpilih
+                            |--------------------------------------------------------------------------
+                            */
 
-                                <?php
+                            $labelIbuTerpilih = "Pilih profil Ibu";
+
+                            if ($jumlahOrangTua > 0) {
+
                                 mysqli_data_seek(
                                     $queryOrangTua,
                                     0
                                 );
-                                ?>
 
-                                <?php while (
-                                    $orangTua =
+                                while (
+                                    $ibuPilihan =
                                         mysqli_fetch_assoc(
                                             $queryOrangTua
                                         )
-                                ): ?>
+                                ) {
 
-                                    <option
-                                        value="<?= (int)
-                                            $orangTua[
-                                                "id_user"
-                                            ]; ?>"
-                                        <?= (string) $idUser ===
-                                            (string) $orangTua[
-                                                "id_user"
-                                            ]
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= htmlspecialchars(
-                                            $orangTua[
-                                                "nama_ibu"
-                                            ]
+                                    if (
+                                        (string) $idUser ===
+                                        (string) $ibuPilihan["id_user"]
+                                    ) {
+                                        $labelIbuTerpilih =
+                                            $ibuPilihan["nama_ibu"]
                                             . " — NIK "
-                                            . $orangTua[
-                                                "nik_ibu"
-                                            ]
+                                            . $ibuPilihan["nik_ibu"]
                                             . " ("
-                                            . $orangTua[
-                                                "username"
-                                            ]
-                                            . ")",
+                                            . $ibuPilihan["username"]
+                                            . ")";
+
+                                        break;
+                                    }
+                                }
+                            }
+                            ?>
+
+                            <div
+                                class="ibu-search-select"
+                                id="ibuSearchSelect"
+                            >
+
+                                <input
+                                    type="hidden"
+                                    id="id_user"
+                                    name="id_user"
+                                    value="<?= htmlspecialchars(
+                                        (string) $idUser,
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>"
+                                >
+
+                                <button
+                                    type="button"
+                                    class="form-select text-start ibu-search-trigger"
+                                    id="ibuSearchTrigger"
+                                    <?= $jumlahOrangTua === 0
+                                        ? "disabled"
+                                        : ""; ?>
+                                >
+                                    <span id="ibuSearchSelected">
+                                        <?= htmlspecialchars(
+                                            $labelIbuTerpilih,
                                             ENT_QUOTES,
                                             "UTF-8"
                                         ); ?>
-                                    </option>
+                                    </span>
+                                </button>
 
-                                <?php endwhile; ?>
+                                <div
+                                    class="ibu-search-panel"
+                                    id="ibuSearchPanel"
+                                    hidden
+                                >
 
-                            </select>
+                                    <div class="p-2 border-bottom">
+
+                                        <div class="input-group">
+
+                                            <span class="input-group-text">
+                                                <i class="bi bi-search"></i>
+                                            </span>
+
+                                            <input
+                                                type="text"
+                                                class="form-control"
+                                                id="ibuSearchInput"
+                                                placeholder="Cari nama ibu, NIK, atau username..."
+                                                autocomplete="off"
+                                            >
+
+                                        </div>
+
+                                    </div>
+
+                                    <div
+                                        class="ibu-search-list"
+                                        id="ibuSearchList"
+                                    >
+
+                                        <?php
+                                        if ($jumlahOrangTua > 0) {
+
+                                            mysqli_data_seek(
+                                                $queryOrangTua,
+                                                0
+                                            );
+                                        }
+                                        ?>
+
+                                        <?php while (
+                                            $orangTua =
+                                                mysqli_fetch_assoc(
+                                                    $queryOrangTua
+                                                )
+                                        ): ?>
+
+                                            <?php
+                                            $labelIbu =
+                                                $orangTua["nama_ibu"]
+                                                . " — NIK "
+                                                . $orangTua["nik_ibu"]
+                                                . " ("
+                                                . $orangTua["username"]
+                                                . ")";
+                                            ?>
+
+                                            <button
+                                                type="button"
+                                                class="ibu-search-option"
+                                                data-value="<?= (int)
+                                                    $orangTua[
+                                                        "id_user"
+                                                    ]; ?>"
+                                                data-search="<?= htmlspecialchars(
+                                                    strtolower(
+                                                        $orangTua["nama_ibu"]
+                                                        . " "
+                                                        . $orangTua["nik_ibu"]
+                                                        . " "
+                                                        . $orangTua["username"]
+                                                    ),
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                ); ?>"
+                                                data-label="<?= htmlspecialchars(
+                                                    $labelIbu,
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                ); ?>"
+                                            >
+                                                <?= htmlspecialchars(
+                                                    $labelIbu,
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                ); ?>
+                                            </button>
+
+                                        <?php endwhile; ?>
+
+                                        <div
+                                            class="ibu-search-empty text-muted text-center p-3"
+                                            id="ibuSearchEmpty"
+                                            hidden
+                                        >
+                                            Data Ibu tidak ditemukan.
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
 
                             <small class="text-muted">
                                 Nama Ibu dan alamat diambil otomatis
@@ -861,5 +980,233 @@ require_once "../includes/navbar.php";
     </main>
 
 </div>
+
+
+<style>
+.ibu-search-select {
+    position: relative;
+}
+
+.ibu-search-trigger {
+    min-height: 46px;
+}
+
+.ibu-search-panel {
+    position: absolute;
+    z-index: 2000;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    background: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    box-shadow: 0 14px 32px rgba(30, 41, 59, 0.16);
+    overflow: hidden;
+}
+
+.ibu-search-list {
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 6px;
+}
+
+.ibu-search-option {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #334155;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ibu-search-option:hover,
+.ibu-search-option:focus {
+    background: #f4f7fb;
+    outline: none;
+}
+
+.ibu-search-option.is-selected {
+    background: #eef4ff;
+    font-weight: 700;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const wrapper =
+        document.getElementById("ibuSearchSelect");
+
+    const trigger =
+        document.getElementById("ibuSearchTrigger");
+
+    const panel =
+        document.getElementById("ibuSearchPanel");
+
+    const searchInput =
+        document.getElementById("ibuSearchInput");
+
+    const hiddenInput =
+        document.getElementById("id_user");
+
+    const selectedText =
+        document.getElementById("ibuSearchSelected");
+
+    const emptyState =
+        document.getElementById("ibuSearchEmpty");
+
+    if (
+        !wrapper
+        || !trigger
+        || !panel
+        || !searchInput
+        || !hiddenInput
+        || !selectedText
+    ) {
+        return;
+    }
+
+    const options = Array.from(
+        wrapper.querySelectorAll(
+            ".ibu-search-option"
+        )
+    );
+
+    function normalisasi(teks) {
+        return String(teks || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim();
+    }
+
+    function bukaPanel() {
+        if (trigger.disabled) {
+            return;
+        }
+
+        panel.hidden = false;
+        searchInput.value = "";
+
+        options.forEach(function (option) {
+            option.hidden = false;
+        });
+
+        if (emptyState) {
+            emptyState.hidden = true;
+        }
+
+        setTimeout(function () {
+            searchInput.focus();
+        }, 0);
+    }
+
+    function tutupPanel() {
+        panel.hidden = true;
+    }
+
+    trigger.addEventListener(
+        "click",
+        function () {
+            if (panel.hidden) {
+                bukaPanel();
+            } else {
+                tutupPanel();
+            }
+        }
+    );
+
+    searchInput.addEventListener(
+        "input",
+        function () {
+
+            const keyword =
+                normalisasi(
+                    searchInput.value
+                );
+
+            let jumlahTampil = 0;
+
+            options.forEach(function (option) {
+
+                const dataSearch =
+                    normalisasi(
+                        option.dataset.search
+                    );
+
+                const cocok =
+                    keyword === ""
+                    || dataSearch.includes(
+                        keyword
+                    );
+
+                option.hidden = !cocok;
+
+                if (cocok) {
+                    jumlahTampil++;
+                }
+            });
+
+            if (emptyState) {
+                emptyState.hidden =
+                    jumlahTampil > 0;
+            }
+        }
+    );
+
+    options.forEach(function (option) {
+
+        option.addEventListener(
+            "click",
+            function () {
+
+                hiddenInput.value =
+                    option.dataset.value;
+
+                selectedText.textContent =
+                    option.dataset.label;
+
+                options.forEach(function (item) {
+                    item.classList.remove(
+                        "is-selected"
+                    );
+                });
+
+                option.classList.add(
+                    "is-selected"
+                );
+
+                tutupPanel();
+            }
+        );
+
+        if (
+            option.dataset.value
+            === hiddenInput.value
+        ) {
+            option.classList.add(
+                "is-selected"
+            );
+        }
+    });
+
+    document.addEventListener(
+        "click",
+        function (event) {
+
+            if (
+                !wrapper.contains(
+                    event.target
+                )
+            ) {
+                tutupPanel();
+            }
+        }
+    );
+});
+</script>
 
 <?php require_once "../includes/footer.php"; ?>

@@ -20,6 +20,114 @@ $cari = trim($_GET["cari"] ?? "");
 
 $kataKunci = "%" . $cari . "%";
 
+/*
+|--------------------------------------------------------------------------
+| Filter khusus Dinkes
+|--------------------------------------------------------------------------
+|
+| Filter Puskesmas, bulan, dan tahun hanya berlaku untuk role Dinkes.
+| Role lain tetap memakai batas wilayah masing-masing seperti sebelumnya.
+|
+*/
+
+$filterPuskesmas = 0;
+$filterBulan = 0;
+$filterTahun = 0;
+
+if ($roleAktif === "dinkes") {
+
+    $filterPuskesmas =
+        filter_input(
+            INPUT_GET,
+            "puskesmas",
+            FILTER_VALIDATE_INT
+        ) ?: 0;
+
+    $filterBulan =
+        filter_input(
+            INPUT_GET,
+            "bulan",
+            FILTER_VALIDATE_INT
+        ) ?: 0;
+
+    $filterTahun =
+        filter_input(
+            INPUT_GET,
+            "tahun",
+            FILTER_VALIDATE_INT
+        ) ?: 0;
+
+    if (
+        $filterBulan < 1
+        || $filterBulan > 12
+    ) {
+        $filterBulan = 0;
+    }
+
+    if (
+        $filterTahun < 2000
+        || $filterTahun > 2100
+    ) {
+        $filterTahun = 0;
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Daftar pilihan filter Dinkes
+|--------------------------------------------------------------------------
+*/
+
+$daftarPuskesmasFilter = [];
+$daftarTahunFilter = [];
+
+if ($roleAktif === "dinkes") {
+
+    $queryPuskesmasFilter = mysqli_query(
+        $conn,
+        "SELECT
+            id_puskesmas,
+            nama_puskesmas
+         FROM puskesmas
+         ORDER BY nama_puskesmas ASC"
+    );
+
+    if ($queryPuskesmasFilter) {
+        while (
+            $itemPuskesmas =
+                mysqli_fetch_assoc(
+                    $queryPuskesmasFilter
+                )
+        ) {
+            $daftarPuskesmasFilter[] =
+                $itemPuskesmas;
+        }
+    }
+
+    $queryTahunFilter = mysqli_query(
+        $conn,
+        "SELECT DISTINCT
+            YEAR(tanggal_deteksi) AS tahun
+         FROM hasil_deteksi
+         WHERE tanggal_deteksi IS NOT NULL
+         ORDER BY tahun DESC"
+    );
+
+    if ($queryTahunFilter) {
+        while (
+            $itemTahun =
+                mysqli_fetch_assoc(
+                    $queryTahunFilter
+                )
+        ) {
+            if (!empty($itemTahun["tahun"])) {
+                $daftarTahunFilter[] =
+                    (int) $itemTahun["tahun"];
+            }
+        }
+    }
+}
+
 $idPuskesmasAktif = 0;
 $namaPuskesmasAktif = "";
 $puskesmasBelumTerhubung = false;
@@ -295,47 +403,59 @@ if ($roleAktif === "orang_tua") {
 
 } else {
 
-    if ($cari !== "") {
+    /*
+    |--------------------------------------------------------------------------
+    | Dinkes
+    |--------------------------------------------------------------------------
+    |
+    | Dinkes dapat melihat seluruh wilayah dan menggunakan filter:
+    | - Puskesmas
+    | - Bulan deteksi
+    | - Tahun deteksi
+    | - Pencarian
+    |
+    */
 
-        $stmt = mysqli_prepare(
-            $conn,
-            $selectDeteksi . "
-            WHERE " . $filterCari . "
-            ORDER BY hd.id_deteksi DESC"
+    $stmt = mysqli_prepare(
+        $conn,
+        $selectDeteksi . "
+        WHERE
+            (? = 0 OR b.id_puskesmas = ?)
+        AND
+            (? = 0 OR MONTH(hd.tanggal_deteksi) = ?)
+        AND
+            (? = 0 OR YEAR(hd.tanggal_deteksi) = ?)
+        AND
+            (
+                ? = ''
+                OR " . $filterCari . "
+            )
+        ORDER BY hd.id_deteksi DESC"
+    );
+
+    if (!$stmt) {
+        die(
+            "Gagal menyiapkan filter hasil deteksi Dinkes: "
+            . mysqli_error($conn)
         );
-
-        if (!$stmt) {
-            die(
-                "Gagal menyiapkan pencarian hasil deteksi: "
-                . mysqli_error($conn)
-            );
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "sssss",
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci
-        );
-
-    } else {
-
-        $stmt = mysqli_prepare(
-            $conn,
-            $selectDeteksi . "
-            ORDER BY hd.id_deteksi DESC"
-        );
-
-        if (!$stmt) {
-            die(
-                "Gagal mengambil hasil deteksi: "
-                . mysqli_error($conn)
-            );
-        }
     }
+
+    mysqli_stmt_bind_param(
+        $stmt,
+        "iiiiiissssss",
+        $filterPuskesmas,
+        $filterPuskesmas,
+        $filterBulan,
+        $filterBulan,
+        $filterTahun,
+        $filterTahun,
+        $cari,
+        $kataKunci,
+        $kataKunci,
+        $kataKunci,
+        $kataKunci,
+        $kataKunci
+    );
 }
 
 mysqli_stmt_execute($stmt);
@@ -478,52 +598,268 @@ require_once "../includes/navbar.php";
 
                 <?php endif; ?>
 
-                <form
-                    method="GET"
-                    class="row g-2 mb-3"
-                >
+                <?php if ($roleAktif === "dinkes"): ?>
 
-                    <div class="col-12 col-md-8">
+                    <form
+                        method="GET"
+                        class="row g-2 mb-3"
+                    >
 
-                        <input
-                            type="text"
-                            name="cari"
-                            class="form-control"
-                            placeholder="Cari nama, NIK, status gizi, atau status stunting"
-                            value="<?= htmlspecialchars(
-                                $cari,
-                                ENT_QUOTES,
-                                "UTF-8"
-                            ); ?>"
-                        >
+                        <div class="col-12 col-lg-4">
 
-                    </div>
+                            <label
+                                for="cari"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Pencarian
+                            </label>
 
-                    <div class="col-6 col-md-2">
+                            <input
+                                type="text"
+                                id="cari"
+                                name="cari"
+                                class="form-control"
+                                placeholder="Cari nama, NIK, status gizi, atau status stunting"
+                                value="<?= htmlspecialchars(
+                                    $cari,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                            >
 
-                        <button
-                            type="submit"
-                            class="btn btn-primary w-100"
-                        >
-                            <i class="bi bi-search"></i>
-                            Cari
-                        </button>
+                        </div>
 
-                    </div>
+                        <div class="col-12 col-md-4 col-lg-3">
 
-                    <div class="col-6 col-md-2">
+                            <label
+                                for="puskesmas"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Puskesmas
+                            </label>
 
-                        <a
-                            href="hasil_deteksi.php"
-                            class="btn btn-light w-100"
-                        >
-                            <i class="bi bi-arrow-counterclockwise"></i>
-                            Reset
-                        </a>
+                            <select
+                                id="puskesmas"
+                                name="puskesmas"
+                                class="form-select"
+                            >
 
-                    </div>
+                                <option value="0">
+                                    Semua Puskesmas
+                                </option>
 
-                </form>
+                                <?php foreach (
+                                    $daftarPuskesmasFilter
+                                    as $puskesmasFilter
+                                ): ?>
+
+                                    <option
+                                        value="<?= (int)
+                                            $puskesmasFilter[
+                                                "id_puskesmas"
+                                            ]; ?>"
+                                        <?= (
+                                            $filterPuskesmas
+                                            ===
+                                            (int) $puskesmasFilter[
+                                                "id_puskesmas"
+                                            ]
+                                        )
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= htmlspecialchars(
+                                            $puskesmasFilter[
+                                                "nama_puskesmas"
+                                            ],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </option>
+
+                                <?php endforeach; ?>
+
+                            </select>
+
+                        </div>
+
+                        <div class="col-6 col-md-4 col-lg-2">
+
+                            <label
+                                for="bulan"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Bulan
+                            </label>
+
+                            <select
+                                id="bulan"
+                                name="bulan"
+                                class="form-select"
+                            >
+
+                                <option value="0">
+                                    Semua Bulan
+                                </option>
+
+                                <?php
+                                $namaBulan = [
+                                    1  => "Januari",
+                                    2  => "Februari",
+                                    3  => "Maret",
+                                    4  => "April",
+                                    5  => "Mei",
+                                    6  => "Juni",
+                                    7  => "Juli",
+                                    8  => "Agustus",
+                                    9  => "September",
+                                    10 => "Oktober",
+                                    11 => "November",
+                                    12 => "Desember"
+                                ];
+                                ?>
+
+                                <?php foreach (
+                                    $namaBulan
+                                    as $nomorBulan => $labelBulan
+                                ): ?>
+
+                                    <option
+                                        value="<?= $nomorBulan; ?>"
+                                        <?= $filterBulan === $nomorBulan
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= $labelBulan; ?>
+                                    </option>
+
+                                <?php endforeach; ?>
+
+                            </select>
+
+                        </div>
+
+                        <div class="col-6 col-md-4 col-lg-2">
+
+                            <label
+                                for="tahun"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Tahun
+                            </label>
+
+                            <select
+                                id="tahun"
+                                name="tahun"
+                                class="form-select"
+                            >
+
+                                <option value="0">
+                                    Semua Tahun
+                                </option>
+
+                                <?php foreach (
+                                    $daftarTahunFilter
+                                    as $tahunFilter
+                                ): ?>
+
+                                    <option
+                                        value="<?= $tahunFilter; ?>"
+                                        <?= $filterTahun === $tahunFilter
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= $tahunFilter; ?>
+                                    </option>
+
+                                <?php endforeach; ?>
+
+                            </select>
+
+                        </div>
+
+                        <div class="col-6 col-md-2 col-lg-1">
+
+                            <label
+                                class="form-label small text-muted mb-1 d-block"
+                            >
+                                &nbsp;
+                            </label>
+
+                            <button
+                                type="submit"
+                                class="btn btn-primary w-100"
+                                title="Terapkan filter"
+                            >
+                                <i class="bi bi-funnel"></i>
+                            </button>
+
+                        </div>
+
+                        <div class="col-6 col-md-2 col-lg-12">
+
+                            <a
+                                href="hasil_deteksi.php"
+                                class="btn btn-light"
+                            >
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                                Reset Filter
+                            </a>
+
+                        </div>
+
+                    </form>
+
+                <?php else: ?>
+
+                    <form
+                        method="GET"
+                        class="row g-2 mb-3"
+                    >
+
+                        <div class="col-12 col-md-8">
+
+                            <input
+                                type="text"
+                                name="cari"
+                                class="form-control"
+                                placeholder="Cari nama, NIK, status gizi, atau status stunting"
+                                value="<?= htmlspecialchars(
+                                    $cari,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
+                            >
+
+                        </div>
+
+                        <div class="col-6 col-md-2">
+
+                            <button
+                                type="submit"
+                                class="btn btn-primary w-100"
+                            >
+                                <i class="bi bi-search"></i>
+                                Cari
+                            </button>
+
+                        </div>
+
+                        <div class="col-6 col-md-2">
+
+                            <a
+                                href="hasil_deteksi.php"
+                                class="btn btn-light w-100"
+                            >
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                                Reset
+                            </a>
+
+                        </div>
+
+                    </form>
+
+                <?php endif; ?>
 
                 <div
                     class="d-flex flex-wrap

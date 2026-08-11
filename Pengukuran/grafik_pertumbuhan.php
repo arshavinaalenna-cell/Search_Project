@@ -24,6 +24,198 @@ $idUserAktif =
 
 /*
 |--------------------------------------------------------------------------
+| Filter khusus Dinkes
+|--------------------------------------------------------------------------
+|
+| Hanya Dinkes yang dapat memilih Puskesmas, bulan, dan tahun.
+| Bulan/tahun memfilter tanggal_pengukuran pada grafik.
+|
+*/
+
+$filterPuskesmas = 0;
+$filterBulan = 0;
+$filterTahun = 0;
+
+$daftarPuskesmasFilter = [];
+$daftarTahunFilter = [];
+
+if ($roleAktif === "dinkes") {
+
+    $filterPuskesmas =
+        filter_input(
+            INPUT_GET,
+            "puskesmas",
+            FILTER_VALIDATE_INT
+        ) ?: 0;
+
+    $filterBulan =
+        filter_input(
+            INPUT_GET,
+            "bulan",
+            FILTER_VALIDATE_INT
+        ) ?: 0;
+
+    $filterTahun =
+        filter_input(
+            INPUT_GET,
+            "tahun",
+            FILTER_VALIDATE_INT
+        ) ?: 0;
+
+    if (
+        $filterBulan < 1
+        || $filterBulan > 12
+    ) {
+        $filterBulan = 0;
+    }
+
+    if (
+        $filterTahun < 2000
+        || $filterTahun > 2100
+    ) {
+        $filterTahun = 0;
+    }
+
+    $queryPuskesmasFilter = mysqli_query(
+        $conn,
+        "SELECT
+            id_puskesmas,
+            nama_puskesmas
+         FROM puskesmas
+         ORDER BY nama_puskesmas ASC"
+    );
+
+    if ($queryPuskesmasFilter) {
+        while (
+            $itemPuskesmas =
+                mysqli_fetch_assoc(
+                    $queryPuskesmasFilter
+                )
+        ) {
+            $daftarPuskesmasFilter[] =
+                $itemPuskesmas;
+        }
+    }
+
+    $queryTahunFilter = mysqli_query(
+        $conn,
+        "SELECT DISTINCT
+            YEAR(tanggal_pengukuran) AS tahun
+         FROM pengukuran_antropometri
+         WHERE tanggal_pengukuran IS NOT NULL
+         ORDER BY tahun DESC"
+    );
+
+    if ($queryTahunFilter) {
+        while (
+            $itemTahun =
+                mysqli_fetch_assoc(
+                    $queryTahunFilter
+                )
+        ) {
+            if (!empty($itemTahun["tahun"])) {
+                $daftarTahunFilter[] =
+                    (int) $itemTahun["tahun"];
+            }
+        }
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Pembatasan wilayah Puskesmas
+|--------------------------------------------------------------------------
+*/
+
+$roleTerikatPuskesmas = [
+    "kader",
+    "petugas_kia",
+    "petugas_gizi",
+    "kepala_puskesmas"
+];
+
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
+
+if (
+    in_array(
+        $roleAktif,
+        $roleTerikatPuskesmas,
+        true
+    )
+) {
+
+    $stmtPuskesmas = mysqli_prepare(
+        $conn,
+        "SELECT
+            u.id_puskesmas,
+            p.nama_puskesmas
+         FROM pengguna AS u
+         LEFT JOIN puskesmas AS p
+            ON u.id_puskesmas = p.id_puskesmas
+         WHERE u.id_user = ?
+         LIMIT 1"
+    );
+
+    if (!$stmtPuskesmas) {
+        die(
+            "Gagal memeriksa Puskesmas pengguna: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmas,
+        "i",
+        $idUserAktif
+    );
+
+    mysqli_stmt_execute(
+        $stmtPuskesmas
+    );
+
+    $hasilPuskesmas =
+        mysqli_stmt_get_result(
+            $stmtPuskesmas
+        );
+
+    $dataPuskesmas =
+        mysqli_fetch_assoc(
+            $hasilPuskesmas
+        );
+
+    mysqli_stmt_close(
+        $stmtPuskesmas
+    );
+
+    if (
+        !$dataPuskesmas
+        || empty(
+            $dataPuskesmas["id_puskesmas"]
+        )
+        || empty(
+            $dataPuskesmas["nama_puskesmas"]
+        )
+    ) {
+        $puskesmasBelumTerhubung = true;
+    } else {
+        $idPuskesmasAktif =
+            (int) $dataPuskesmas[
+                "id_puskesmas"
+            ];
+
+        $namaPuskesmasAktif =
+            trim(
+                (string) $dataPuskesmas[
+                    "nama_puskesmas"
+                ]
+            );
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
 | Fungsi bantuan
 |--------------------------------------------------------------------------
 */
@@ -100,25 +292,15 @@ if ($roleAktif === "orang_tua") {
             b.nama_balita ASC"
     );
 
-    if (!$stmtDaftar) {
-        die(
-            "Gagal menyiapkan daftar anak: "
-            . mysqli_error($conn)
-        );
-    }
-
     mysqli_stmt_bind_param(
         $stmtDaftar,
         "i",
         $idUserAktif
     );
 
-    if (!mysqli_stmt_execute($stmtDaftar)) {
-        die(
-            "Gagal mengambil daftar anak: "
-            . mysqli_stmt_error($stmtDaftar)
-        );
-    }
+    mysqli_stmt_execute(
+        $stmtDaftar
+    );
 
     $hasilDaftar =
         mysqli_stmt_get_result(
@@ -138,15 +320,83 @@ if ($roleAktif === "orang_tua") {
         $stmtDaftar
     );
 
+} elseif (
+    in_array(
+        $roleAktif,
+        $roleTerikatPuskesmas,
+        true
+    )
+) {
+
+    if (!$puskesmasBelumTerhubung) {
+
+        $stmtDaftar = mysqli_prepare(
+            $conn,
+            "SELECT
+                b.id_balita,
+                b.nama_balita,
+                b.nik_balita
+             FROM balita AS b
+             WHERE b.id_puskesmas = ?
+             ORDER BY
+                (
+                    SELECT COUNT(*)
+                    FROM pengukuran_antropometri AS pa
+                    WHERE pa.id_balita = b.id_balita
+                ) DESC,
+                b.nama_balita ASC"
+        );
+
+        mysqli_stmt_bind_param(
+            $stmtDaftar,
+            "i",
+            $idPuskesmasAktif
+        );
+
+        mysqli_stmt_execute(
+            $stmtDaftar
+        );
+
+        $hasilDaftar =
+            mysqli_stmt_get_result(
+                $stmtDaftar
+            );
+
+        while (
+            $item =
+                mysqli_fetch_assoc(
+                    $hasilDaftar
+                )
+        ) {
+            $daftarBalita[] = $item;
+        }
+
+        mysqli_stmt_close(
+            $stmtDaftar
+        );
+    }
+
 } else {
 
-    $queryDaftar = mysqli_query(
+    /*
+    |--------------------------------------------------------------------------
+    | Dinkes
+    |--------------------------------------------------------------------------
+    |
+    | Jika Puskesmas dipilih, pilihan balita hanya berasal dari
+    | Puskesmas tersebut. Jika "Semua Puskesmas", semua balita tersedia.
+    |
+    */
+
+    $stmtDaftar = mysqli_prepare(
         $conn,
         "SELECT
             b.id_balita,
             b.nama_balita,
             b.nik_balita
          FROM balita AS b
+         WHERE
+            (? = 0 OR b.id_puskesmas = ?)
          ORDER BY
             (
                 SELECT COUNT(*)
@@ -156,21 +406,41 @@ if ($roleAktif === "orang_tua") {
             b.nama_balita ASC"
     );
 
-    if (!$queryDaftar) {
+    if (!$stmtDaftar) {
         die(
-            "Gagal mengambil daftar balita: "
+            "Gagal menyiapkan daftar balita Dinkes: "
             . mysqli_error($conn)
         );
     }
 
+    mysqli_stmt_bind_param(
+        $stmtDaftar,
+        "ii",
+        $filterPuskesmas,
+        $filterPuskesmas
+    );
+
+    mysqli_stmt_execute(
+        $stmtDaftar
+    );
+
+    $hasilDaftar =
+        mysqli_stmt_get_result(
+            $stmtDaftar
+        );
+
     while (
         $item =
             mysqli_fetch_assoc(
-                $queryDaftar
+                $hasilDaftar
             )
     ) {
         $daftarBalita[] = $item;
     }
+
+    mysqli_stmt_close(
+        $stmtDaftar
+    );
 }
 
 /*
@@ -341,35 +611,82 @@ if (
 
 if ($balita) {
 
-    $stmtRiwayat = mysqli_prepare(
-        $conn,
-        "SELECT
-            id_pengukuran,
-            tanggal_pengukuran,
-            umur_bulan,
-            berat_badan,
-            tinggi_panjang_badan,
-            lingkar_kepala,
-            lila
-         FROM pengukuran_antropometri
-         WHERE id_balita = ?
-         ORDER BY
-            tanggal_pengukuran ASC,
-            id_pengukuran ASC"
-    );
+    if ($roleAktif === "dinkes") {
 
-    if (!$stmtRiwayat) {
-        die(
-            "Gagal menyiapkan riwayat pertumbuhan: "
-            . mysqli_error($conn)
+        $stmtRiwayat = mysqli_prepare(
+            $conn,
+            "SELECT
+                id_pengukuran,
+                tanggal_pengukuran,
+                umur_bulan,
+                berat_badan,
+                tinggi_panjang_badan,
+                lingkar_kepala,
+                lila
+             FROM pengukuran_antropometri
+             WHERE id_balita = ?
+               AND (
+                    ? = 0
+                    OR MONTH(tanggal_pengukuran) = ?
+               )
+               AND (
+                    ? = 0
+                    OR YEAR(tanggal_pengukuran) = ?
+               )
+             ORDER BY
+                tanggal_pengukuran ASC,
+                id_pengukuran ASC"
+        );
+
+        if (!$stmtRiwayat) {
+            die(
+                "Gagal menyiapkan riwayat pertumbuhan Dinkes: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmtRiwayat,
+            "iiiii",
+            $idBalita,
+            $filterBulan,
+            $filterBulan,
+            $filterTahun,
+            $filterTahun
+        );
+
+    } else {
+
+        $stmtRiwayat = mysqli_prepare(
+            $conn,
+            "SELECT
+                id_pengukuran,
+                tanggal_pengukuran,
+                umur_bulan,
+                berat_badan,
+                tinggi_panjang_badan,
+                lingkar_kepala,
+                lila
+             FROM pengukuran_antropometri
+             WHERE id_balita = ?
+             ORDER BY
+                tanggal_pengukuran ASC,
+                id_pengukuran ASC"
+        );
+
+        if (!$stmtRiwayat) {
+            die(
+                "Gagal menyiapkan riwayat pertumbuhan: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmtRiwayat,
+            "i",
+            $idBalita
         );
     }
-
-    mysqli_stmt_bind_param(
-        $stmtRiwayat,
-        "i",
-        $idBalita
-    );
 
     if (!mysqli_stmt_execute($stmtRiwayat)) {
         die(
@@ -529,6 +846,48 @@ require_once "../includes/navbar.php";
             <div class="card-body">
 
                 <?php if (
+                    $puskesmasBelumTerhubung
+                    && in_array(
+                        $roleAktif,
+                        $roleTerikatPuskesmas,
+                        true
+                    )
+                ): ?>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Akun ini belum terhubung dengan Puskesmas.
+                    </div>
+
+                <?php elseif (
+                    in_array(
+                        $roleAktif,
+                        $roleTerikatPuskesmas,
+                        true
+                    )
+                ): ?>
+
+                    <div
+                        class="mb-4 p-3 rounded border"
+                        style="background: #f8fafc;"
+                    >
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-hospital"></i>
+                            <strong>
+                                <?= amanGrafik(
+                                    $namaPuskesmasAktif
+                                ); ?>
+                            </strong>
+                        </div>
+                        <small class="text-muted">
+                            Balita yang tersedia hanya berasal dari
+                            Puskesmas akun yang sedang login.
+                        </small>
+                    </div>
+
+                <?php endif; ?>
+
+                <?php if (
                     count($daftarBalita) > 0
                 ): ?>
 
@@ -536,6 +895,347 @@ require_once "../includes/navbar.php";
                         count($daftarBalita) > 1
                         || $roleAktif !== "orang_tua"
                     ): ?>
+
+                        <?php if ($roleAktif === "dinkes"): ?>
+
+                            <form
+                                method="GET"
+                                action="grafik_pertumbuhan.php"
+                                class="row g-3 align-items-end mb-4"
+                            >
+
+                                <div class="col-12 col-md-4 col-lg-4">
+
+                                    <label
+                                        for="puskesmas"
+                                        class="form-label"
+                                    >
+                                        Puskesmas
+                                    </label>
+
+                                    <select
+                                        id="puskesmas"
+                                        name="puskesmas"
+                                        class="form-select"
+                                    >
+
+                                        <option value="0">
+                                            Semua Puskesmas
+                                        </option>
+
+                                        <?php foreach (
+                                            $daftarPuskesmasFilter
+                                            as $puskesmasFilter
+                                        ): ?>
+
+                                            <option
+                                                value="<?= (int)
+                                                    $puskesmasFilter[
+                                                        "id_puskesmas"
+                                                    ]; ?>"
+                                                <?= (
+                                                    $filterPuskesmas
+                                                    ===
+                                                    (int) $puskesmasFilter[
+                                                        "id_puskesmas"
+                                                    ]
+                                                )
+                                                    ? "selected"
+                                                    : ""; ?>
+                                            >
+                                                <?= amanGrafik(
+                                                    $puskesmasFilter[
+                                                        "nama_puskesmas"
+                                                    ]
+                                                ); ?>
+                                            </option>
+
+                                        <?php endforeach; ?>
+
+                                    </select>
+
+                                </div>
+
+                                <div class="col-6 col-md-4 col-lg-2">
+
+                                    <label
+                                        for="bulan"
+                                        class="form-label"
+                                    >
+                                        Bulan
+                                    </label>
+
+                                    <select
+                                        id="bulan"
+                                        name="bulan"
+                                        class="form-select"
+                                    >
+
+                                        <option value="0">
+                                            Semua Bulan
+                                        </option>
+
+                                        <?php
+                                        $namaBulanGrafik = [
+                                            1  => "Januari",
+                                            2  => "Februari",
+                                            3  => "Maret",
+                                            4  => "April",
+                                            5  => "Mei",
+                                            6  => "Juni",
+                                            7  => "Juli",
+                                            8  => "Agustus",
+                                            9  => "September",
+                                            10 => "Oktober",
+                                            11 => "November",
+                                            12 => "Desember"
+                                        ];
+                                        ?>
+
+                                        <?php foreach (
+                                            $namaBulanGrafik
+                                            as $nomorBulan => $labelBulan
+                                        ): ?>
+
+                                            <option
+                                                value="<?= $nomorBulan; ?>"
+                                                <?= $filterBulan === $nomorBulan
+                                                    ? "selected"
+                                                    : ""; ?>
+                                            >
+                                                <?= $labelBulan; ?>
+                                            </option>
+
+                                        <?php endforeach; ?>
+
+                                    </select>
+
+                                </div>
+
+                                <div class="col-6 col-md-4 col-lg-2">
+
+                                    <label
+                                        for="tahun"
+                                        class="form-label"
+                                    >
+                                        Tahun
+                                    </label>
+
+                                    <select
+                                        id="tahun"
+                                        name="tahun"
+                                        class="form-select"
+                                    >
+
+                                        <option value="0">
+                                            Semua Tahun
+                                        </option>
+
+                                        <?php foreach (
+                                            $daftarTahunFilter
+                                            as $tahunFilter
+                                        ): ?>
+
+                                            <option
+                                                value="<?= $tahunFilter; ?>"
+                                                <?= $filterTahun === $tahunFilter
+                                                    ? "selected"
+                                                    : ""; ?>
+                                            >
+                                                <?= $tahunFilter; ?>
+                                            </option>
+
+                                        <?php endforeach; ?>
+
+                                    </select>
+
+                                </div>
+
+                            <div class="col-12 col-lg-6">
+
+                                <label
+                                    for="id_balita"
+                                    class="form-label"
+                                >
+                                    Pilih Balita
+                                </label>
+
+                                <input
+                                    type="hidden"
+                                    name="id_balita"
+                                    id="id_balita"
+                                    value="<?= (int) $idBalita; ?>"
+                                >
+
+                                <?php
+                                $labelBalitaTerpilih =
+                                    "-- Pilih Balita --";
+
+                                foreach (
+                                    $daftarBalita
+                                    as $balitaPilihan
+                                ) {
+                                    if (
+                                        (int) $balitaPilihan["id_balita"]
+                                        === $idBalita
+                                    ) {
+                                        $labelBalitaTerpilih =
+                                            $balitaPilihan["nama_balita"];
+
+                                        if (
+                                            !empty(
+                                                $balitaPilihan["nik_balita"]
+                                            )
+                                        ) {
+                                            $labelBalitaTerpilih .=
+                                                " — "
+                                                . $balitaPilihan["nik_balita"];
+                                        }
+
+                                        break;
+                                    }
+                                }
+                                ?>
+
+                                <div
+                                    class="grafik-balita-search"
+                                    id="grafikBalitaSearch"
+                                >
+
+                                    <button
+                                        type="button"
+                                        class="form-select text-start grafik-balita-trigger"
+                                        id="grafikBalitaTrigger"
+                                    >
+                                        <span id="grafikBalitaSelected">
+                                            <?= amanGrafik(
+                                                $labelBalitaTerpilih
+                                            ); ?>
+                                        </span>
+                                    </button>
+
+                                    <div
+                                        class="grafik-balita-panel"
+                                        id="grafikBalitaPanel"
+                                        hidden
+                                    >
+
+                                        <div class="p-2 border-bottom">
+                                            <div class="input-group">
+                                                <span class="input-group-text">
+                                                    <i class="bi bi-search"></i>
+                                                </span>
+                                                <input
+                                                    type="text"
+                                                    class="form-control"
+                                                    id="grafikBalitaInput"
+                                                    placeholder="Cari nama atau NIK balita..."
+                                                    autocomplete="off"
+                                                >
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            class="grafik-balita-list"
+                                            id="grafikBalitaList"
+                                        >
+
+                                            <?php foreach (
+                                                $daftarBalita
+                                                as $itemBalita
+                                            ): ?>
+
+                                                <?php
+                                                $idPilihan =
+                                                    (int) $itemBalita[
+                                                        "id_balita"
+                                                    ];
+
+                                                $labelPilihan =
+                                                    $itemBalita[
+                                                        "nama_balita"
+                                                    ];
+
+                                                if (
+                                                    !empty(
+                                                        $itemBalita[
+                                                            "nik_balita"
+                                                        ]
+                                                    )
+                                                ) {
+                                                    $labelPilihan .=
+                                                        " — "
+                                                        . $itemBalita[
+                                                            "nik_balita"
+                                                        ];
+                                                }
+                                                ?>
+
+                                                <button
+                                                    type="button"
+                                                    class="grafik-balita-option"
+                                                    data-value="<?= $idPilihan; ?>"
+                                                    data-label="<?= amanGrafik(
+                                                        $labelPilihan
+                                                    ); ?>"
+                                                    data-search="<?= amanGrafik(
+                                                        strtolower(
+                                                            $labelPilihan
+                                                        )
+                                                    ); ?>"
+                                                >
+                                                    <?= amanGrafik(
+                                                        $labelPilihan
+                                                    ); ?>
+                                                </button>
+
+                                            <?php endforeach; ?>
+
+                                            <div
+                                                class="grafik-balita-empty"
+                                                id="grafikBalitaEmpty"
+                                                hidden
+                                            >
+                                                Balita tidak ditemukan.
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+
+
+                                <div class="col-6 col-lg-3">
+
+                                    <button
+                                        type="submit"
+                                        class="btn btn-primary w-100"
+                                    >
+                                        <i class="bi bi-funnel"></i>
+                                        Tampilkan Grafik
+                                    </button>
+
+                                </div>
+
+                                <div class="col-6 col-lg-3">
+
+                                    <a
+                                        href="grafik_pertumbuhan.php"
+                                        class="btn btn-light w-100"
+                                    >
+                                        <i class="bi bi-arrow-counterclockwise"></i>
+                                        Reset Filter
+                                    </a>
+
+                                </div>
+
+                            </form>
+
+                        <?php else: ?>
 
                         <form
                             method="GET"
@@ -552,58 +1252,150 @@ require_once "../includes/navbar.php";
                                     Pilih Balita
                                 </label>
 
-                                <select
+                                <input
+                                    type="hidden"
                                     name="id_balita"
                                     id="id_balita"
-                                    class="form-select"
-                                    onchange="this.form.submit();"
+                                    value="<?= (int) $idBalita; ?>"
                                 >
 
-                                    <?php foreach (
-                                        $daftarBalita
-                                        as $itemBalita
-                                    ): ?>
+                                <?php
+                                $labelBalitaTerpilih =
+                                    "-- Pilih Balita --";
 
-                                        <?php
-                                        $idPilihan =
-                                            (int) $itemBalita[
-                                                "id_balita"
-                                            ];
-                                        ?>
+                                foreach (
+                                    $daftarBalita
+                                    as $balitaPilihan
+                                ) {
+                                    if (
+                                        (int) $balitaPilihan["id_balita"]
+                                        === $idBalita
+                                    ) {
+                                        $labelBalitaTerpilih =
+                                            $balitaPilihan["nama_balita"];
 
-                                        <option
-                                            value="<?= $idPilihan; ?>"
-                                            <?= $idPilihan ===
-                                                $idBalita
-                                                ? "selected"
-                                                : ""; ?>
-                                        >
+                                        if (
+                                            !empty(
+                                                $balitaPilihan["nik_balita"]
+                                            )
+                                        ) {
+                                            $labelBalitaTerpilih .=
+                                                " — "
+                                                . $balitaPilihan["nik_balita"];
+                                        }
+
+                                        break;
+                                    }
+                                }
+                                ?>
+
+                                <div
+                                    class="grafik-balita-search"
+                                    id="grafikBalitaSearch"
+                                >
+
+                                    <button
+                                        type="button"
+                                        class="form-select text-start grafik-balita-trigger"
+                                        id="grafikBalitaTrigger"
+                                    >
+                                        <span id="grafikBalitaSelected">
                                             <?= amanGrafik(
-                                                $itemBalita[
-                                                    "nama_balita"
-                                                ]
+                                                $labelBalitaTerpilih
                                             ); ?>
+                                        </span>
+                                    </button>
 
-                                            <?php if (
-                                                !empty(
-                                                    $itemBalita[
-                                                        "nik_balita"
-                                                    ]
-                                                )
+                                    <div
+                                        class="grafik-balita-panel"
+                                        id="grafikBalitaPanel"
+                                        hidden
+                                    >
+
+                                        <div class="p-2 border-bottom">
+                                            <div class="input-group">
+                                                <span class="input-group-text">
+                                                    <i class="bi bi-search"></i>
+                                                </span>
+                                                <input
+                                                    type="text"
+                                                    class="form-control"
+                                                    id="grafikBalitaInput"
+                                                    placeholder="Cari nama atau NIK balita..."
+                                                    autocomplete="off"
+                                                >
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            class="grafik-balita-list"
+                                            id="grafikBalitaList"
+                                        >
+
+                                            <?php foreach (
+                                                $daftarBalita
+                                                as $itemBalita
                                             ): ?>
-                                                —
-                                                <?= amanGrafik(
+
+                                                <?php
+                                                $idPilihan =
+                                                    (int) $itemBalita[
+                                                        "id_balita"
+                                                    ];
+
+                                                $labelPilihan =
                                                     $itemBalita[
-                                                        "nik_balita"
-                                                    ]
-                                                ); ?>
-                                            <?php endif; ?>
+                                                        "nama_balita"
+                                                    ];
 
-                                        </option>
+                                                if (
+                                                    !empty(
+                                                        $itemBalita[
+                                                            "nik_balita"
+                                                        ]
+                                                    )
+                                                ) {
+                                                    $labelPilihan .=
+                                                        " — "
+                                                        . $itemBalita[
+                                                            "nik_balita"
+                                                        ];
+                                                }
+                                                ?>
 
-                                    <?php endforeach; ?>
+                                                <button
+                                                    type="button"
+                                                    class="grafik-balita-option"
+                                                    data-value="<?= $idPilihan; ?>"
+                                                    data-label="<?= amanGrafik(
+                                                        $labelPilihan
+                                                    ); ?>"
+                                                    data-search="<?= amanGrafik(
+                                                        strtolower(
+                                                            $labelPilihan
+                                                        )
+                                                    ); ?>"
+                                                >
+                                                    <?= amanGrafik(
+                                                        $labelPilihan
+                                                    ); ?>
+                                                </button>
 
-                                </select>
+                                            <?php endforeach; ?>
+
+                                            <div
+                                                class="grafik-balita-empty"
+                                                id="grafikBalitaEmpty"
+                                                hidden
+                                            >
+                                                Balita tidak ditemukan.
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
 
                             </div>
 
@@ -620,6 +1412,8 @@ require_once "../includes/navbar.php";
                             </div>
 
                         </form>
+
+                        <?php endif; ?>
 
                     <?php endif; ?>
 
@@ -1090,5 +1884,153 @@ require_once "../includes/navbar.php";
     ></script>
 
 <?php endif; ?>
+
+
+<style>
+.grafik-balita-search { position: relative; }
+.grafik-balita-trigger { min-height: 46px; }
+.grafik-balita-panel {
+    position: absolute;
+    z-index: 2000;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    box-shadow: 0 14px 32px rgba(30, 41, 59, .16);
+    overflow: hidden;
+}
+.grafik-balita-panel[hidden] { display: none !important; }
+.grafik-balita-list {
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 6px;
+}
+.grafik-balita-option {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #334155;
+    text-align: left;
+    cursor: pointer;
+}
+.grafik-balita-option:hover,
+.grafik-balita-option:focus {
+    background: #f4f7fb;
+    outline: none;
+}
+.grafik-balita-option.is-selected {
+    background: #eef4ff;
+    font-weight: 700;
+}
+.grafik-balita-empty {
+    padding: 12px;
+    color: #8a96a6;
+    text-align: center;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const wrapper = document.getElementById("grafikBalitaSearch");
+    const trigger = document.getElementById("grafikBalitaTrigger");
+    const panel = document.getElementById("grafikBalitaPanel");
+    const searchInput = document.getElementById("grafikBalitaInput");
+    const hiddenBalita = document.getElementById("id_balita");
+    const selectedText = document.getElementById("grafikBalitaSelected");
+    const emptyState = document.getElementById("grafikBalitaEmpty");
+
+    if (!wrapper || !trigger || !panel || !searchInput || !hiddenBalita || !selectedText) {
+        return;
+    }
+
+    const options = Array.from(
+        wrapper.querySelectorAll(".grafik-balita-option")
+    );
+
+    function normalisasi(teks) {
+        return String(teks || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim();
+    }
+
+    function bukaPanel() {
+        panel.hidden = false;
+        searchInput.value = "";
+        options.forEach(function (option) {
+            option.hidden = false;
+        });
+        if (emptyState) {
+            emptyState.hidden = true;
+        }
+        setTimeout(function () {
+            searchInput.focus();
+        }, 0);
+    }
+
+    function tutupPanel() {
+        panel.hidden = true;
+    }
+
+    trigger.addEventListener("click", function () {
+        if (panel.hidden) {
+            bukaPanel();
+        } else {
+            tutupPanel();
+        }
+    });
+
+    searchInput.addEventListener("input", function () {
+        const keyword = normalisasi(searchInput.value);
+        let tampil = 0;
+
+        options.forEach(function (option) {
+            const cocok =
+                keyword === ""
+                || normalisasi(option.dataset.search).includes(keyword);
+
+            option.hidden = !cocok;
+
+            if (cocok) {
+                tampil++;
+            }
+        });
+
+        if (emptyState) {
+            emptyState.hidden = tampil > 0;
+        }
+    });
+
+    options.forEach(function (option) {
+        if (option.dataset.value === hiddenBalita.value) {
+            option.classList.add("is-selected");
+        }
+
+        option.addEventListener("click", function () {
+            hiddenBalita.value = option.dataset.value;
+            selectedText.textContent = option.dataset.label;
+
+            options.forEach(function (item) {
+                item.classList.remove("is-selected");
+            });
+
+            option.classList.add("is-selected");
+            tutupPanel();
+        });
+    });
+
+    document.addEventListener("click", function (event) {
+        if (!wrapper.contains(event.target)) {
+            tutupPanel();
+        }
+    });
+});
+</script>
 
 <?php require_once "../includes/footer.php"; ?>

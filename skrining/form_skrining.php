@@ -7,9 +7,87 @@ require_once "../config/koneksi.php";
 cekRole(["kader"]);
 
 $roleAktif = $_SESSION["role"] ?? "";
-$idPuskesmasDipilih = $roleAktif === "kader"
-    ? trim($_POST["id_puskesmas"] ?? "")
-    : "";
+$idKaderAktif = (int) ($_SESSION["id_user"] ?? 0);
+
+/*
+|--------------------------------------------------------------------------
+| Puskesmas Kader aktif
+|--------------------------------------------------------------------------
+|
+| Puskesmas tidak dipilih dari form. Sistem mengambilnya langsung dari
+| pengguna.id_puskesmas milik akun Kader yang sedang login.
+|
+*/
+
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
+
+$stmtPuskesmasAktif = mysqli_prepare(
+    $conn,
+    "SELECT
+        u.id_puskesmas,
+        p.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS p
+        ON u.id_puskesmas = p.id_puskesmas
+     WHERE u.id_user = ?
+       AND u.role = 'kader'
+     LIMIT 1"
+);
+
+if (!$stmtPuskesmasAktif) {
+    die(
+        "Gagal memeriksa Puskesmas Kader: "
+        . mysqli_error($conn)
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtPuskesmasAktif,
+    "i",
+    $idKaderAktif
+);
+
+mysqli_stmt_execute(
+    $stmtPuskesmasAktif
+);
+
+$hasilPuskesmasAktif =
+    mysqli_stmt_get_result(
+        $stmtPuskesmasAktif
+    );
+
+$dataPuskesmasAktif =
+    mysqli_fetch_assoc(
+        $hasilPuskesmasAktif
+    );
+
+mysqli_stmt_close(
+    $stmtPuskesmasAktif
+);
+
+if (
+    !$dataPuskesmasAktif
+    || empty(
+        $dataPuskesmasAktif["id_puskesmas"]
+    )
+    || empty(
+        $dataPuskesmasAktif["nama_puskesmas"]
+    )
+) {
+    $puskesmasBelumTerhubung = true;
+} else {
+    $idPuskesmasAktif =
+        (int) $dataPuskesmasAktif["id_puskesmas"];
+
+    $namaPuskesmasAktif =
+        trim(
+            (string) $dataPuskesmasAktif[
+                "nama_puskesmas"
+            ]
+        );
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -75,32 +153,6 @@ $daftarEkonomi = [
 
 /*
 |--------------------------------------------------------------------------
-| Daftar Puskesmas untuk Kader
-|--------------------------------------------------------------------------
-*/
-
-$queryPuskesmas = null;
-
-if ($roleAktif === "kader") {
-    $queryPuskesmas = mysqli_query(
-        $conn,
-        "SELECT
-            id_puskesmas,
-            nama_puskesmas
-         FROM puskesmas
-         ORDER BY nama_puskesmas ASC"
-    );
-
-    if (!$queryPuskesmas) {
-        die(
-            "Gagal mengambil daftar Puskesmas: "
-            . mysqli_error($conn)
-        );
-    }
-}
-
-/*
-|--------------------------------------------------------------------------
 | Proses penyimpanan
 |--------------------------------------------------------------------------
 */
@@ -110,11 +162,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     foreach ($old as $namaKolom => $nilai) {
         $old[$namaKolom] =
             trim($_POST[$namaKolom] ?? "");
-    }
-
-    if ($roleAktif === "kader") {
-        $idPuskesmasDipilih =
-            trim($_POST["id_puskesmas"] ?? "");
     }
 
     /*
@@ -144,18 +191,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     |--------------------------------------------------------------------------
     */
 
-    if (
-        $roleAktif === "kader"
-        && (
-            $idPuskesmasDipilih === ""
-            || filter_var(
-                $idPuskesmasDipilih,
-                FILTER_VALIDATE_INT
-            ) === false
-            || (int) $idPuskesmasDipilih < 1
-        )
-    ) {
-        $error = "Puskesmas wajib dipilih.";
+    if ($puskesmasBelumTerhubung) {
+        $error =
+            "Akun Kader belum terhubung dengan Puskesmas. Hubungkan akun Kader ke Puskesmas terlebih dahulu.";
     }
 
     foreach ($old as $nilai) {
@@ -287,38 +325,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     if ($error === "") {
 
-        if ($roleAktif === "kader") {
-            $stmtCekBalita = mysqli_prepare(
-                $conn,
-                "SELECT
-                    b.id_balita,
-                    b.nama_balita,
-                    ot.nama_ibu,
-                    ot.pendidikan_ibu,
-                    ot.pekerjaan_ibu
-                 FROM balita AS b
-                 LEFT JOIN orang_tua AS ot
-                    ON b.id_user = ot.id_user
-                 WHERE b.id_balita = ?
-                   AND b.id_puskesmas = ?
-                 LIMIT 1"
-            );
-        } else {
-            $stmtCekBalita = mysqli_prepare(
-                $conn,
-                "SELECT
-                    b.id_balita,
-                    b.nama_balita,
-                    ot.nama_ibu,
-                    ot.pendidikan_ibu,
-                    ot.pekerjaan_ibu
-                 FROM balita AS b
-                 LEFT JOIN orang_tua AS ot
-                    ON b.id_user = ot.id_user
-                 WHERE b.id_balita = ?
-                 LIMIT 1"
-            );
-        }
+        $stmtCekBalita = mysqli_prepare(
+            $conn,
+            "SELECT
+                b.id_balita,
+                b.nama_balita,
+                ot.nama_ibu,
+                ot.pendidikan_ibu,
+                ot.pekerjaan_ibu
+             FROM balita AS b
+             LEFT JOIN orang_tua AS ot
+                ON b.id_user = ot.id_user
+             WHERE b.id_balita = ?
+               AND b.id_puskesmas = ?
+             LIMIT 1"
+        );
 
         if (!$stmtCekBalita) {
             $error =
@@ -326,36 +347,34 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         } else {
 
-            if ($roleAktif === "kader") {
-                $idPuskesmasValid = (int) $idPuskesmasDipilih;
+            mysqli_stmt_bind_param(
+                $stmtCekBalita,
+                "ii",
+                $idBalita,
+                $idPuskesmasAktif
+            );
 
-                mysqli_stmt_bind_param(
-                    $stmtCekBalita,
-                    "ii",
-                    $idBalita,
-                    $idPuskesmasValid
-                );
-            } else {
-                mysqli_stmt_bind_param(
-                    $stmtCekBalita,
-                    "i",
-                    $idBalita
-                );
-            }
-
-            mysqli_stmt_execute($stmtCekBalita);
+            mysqli_stmt_execute(
+                $stmtCekBalita
+            );
 
             $hasilBalita =
-                mysqli_stmt_get_result($stmtCekBalita);
+                mysqli_stmt_get_result(
+                    $stmtCekBalita
+                );
 
             $dataBalita =
-                mysqli_fetch_assoc($hasilBalita);
+                mysqli_fetch_assoc(
+                    $hasilBalita
+                );
 
-            mysqli_stmt_close($stmtCekBalita);
+            mysqli_stmt_close(
+                $stmtCekBalita
+            );
 
             if (!$dataBalita) {
                 $error =
-                    "Balita tidak ditemukan pada Puskesmas yang dipilih.";
+                    "Balita tidak ditemukan pada Puskesmas akun Kader.";
             } else {
 
                 $namaIbuProfil =
@@ -550,33 +569,68 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 |--------------------------------------------------------------------------
 */
 
-$queryBalita = mysqli_query(
-    $conn,
-    "SELECT
-        b.id_balita,
-        b.id_user,
-        b.id_puskesmas,
-        b.nama_balita,
-        b.nama_ibu AS nama_ibu_lama,
-        ot.id_orang_tua,
-        ot.nama_ibu AS profil_nama_ibu,
-        ot.pendidikan_ibu,
-        ot.pekerjaan_ibu
-     FROM balita AS b
-     LEFT JOIN orang_tua AS ot
-        ON b.id_user = ot.id_user
-     ORDER BY b.nama_balita ASC"
-);
+$daftarBalita = [];
 
-if (!$queryBalita) {
-    die(
-        "Gagal mengambil daftar balita: "
-        . mysqli_error($conn)
+if (!$puskesmasBelumTerhubung) {
+
+    $stmtDaftarBalita = mysqli_prepare(
+        $conn,
+        "SELECT
+            b.id_balita,
+            b.id_user,
+            b.id_puskesmas,
+            b.nik_balita,
+            b.nama_balita,
+            b.nama_ibu AS nama_ibu_lama,
+            ot.id_orang_tua,
+            ot.nama_ibu AS profil_nama_ibu,
+            ot.pendidikan_ibu,
+            ot.pekerjaan_ibu
+         FROM balita AS b
+         LEFT JOIN orang_tua AS ot
+            ON b.id_user = ot.id_user
+         WHERE b.id_puskesmas = ?
+         ORDER BY b.nama_balita ASC"
+    );
+
+    if (!$stmtDaftarBalita) {
+        die(
+            "Gagal mengambil daftar balita: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtDaftarBalita,
+        "i",
+        $idPuskesmasAktif
+    );
+
+    mysqli_stmt_execute(
+        $stmtDaftarBalita
+    );
+
+    $hasilDaftarBalita =
+        mysqli_stmt_get_result(
+            $stmtDaftarBalita
+        );
+
+    while (
+        $balita =
+            mysqli_fetch_assoc(
+                $hasilDaftarBalita
+            )
+    ) {
+        $daftarBalita[] = $balita;
+    }
+
+    mysqli_stmt_close(
+        $stmtDaftarBalita
     );
 }
 
 $jumlahBalita =
-    mysqli_num_rows($queryBalita);
+    count($daftarBalita);
 
 /*
 |--------------------------------------------------------------------------
@@ -586,28 +640,53 @@ $jumlahBalita =
 
 $jumlahBalitaBelumTerhubung = 0;
 
-$queryBelumTerhubung = mysqli_query(
-    $conn,
-    "SELECT COUNT(*) AS total
-     FROM balita AS b
-     LEFT JOIN orang_tua AS ot
-        ON b.id_user = ot.id_user
-     WHERE b.id_user IS NULL
-        OR ot.id_orang_tua IS NULL"
-);
+if (!$puskesmasBelumTerhubung) {
 
-if ($queryBelumTerhubung) {
+    $stmtBelumTerhubung = mysqli_prepare(
+        $conn,
+        "SELECT COUNT(*) AS total
+         FROM balita AS b
+         LEFT JOIN orang_tua AS ot
+            ON b.id_user = ot.id_user
+         WHERE b.id_puskesmas = ?
+           AND (
+                b.id_user IS NULL
+                OR ot.id_orang_tua IS NULL
+           )"
+    );
 
-    $dataBelumTerhubung =
-        mysqli_fetch_assoc(
-            $queryBelumTerhubung
+    if ($stmtBelumTerhubung) {
+
+        mysqli_stmt_bind_param(
+            $stmtBelumTerhubung,
+            "i",
+            $idPuskesmasAktif
         );
 
-    $jumlahBalitaBelumTerhubung =
-        (int) (
-            $dataBelumTerhubung["total"]
-            ?? 0
+        mysqli_stmt_execute(
+            $stmtBelumTerhubung
         );
+
+        $hasilBelumTerhubung =
+            mysqli_stmt_get_result(
+                $stmtBelumTerhubung
+            );
+
+        $dataBelumTerhubung =
+            mysqli_fetch_assoc(
+                $hasilBelumTerhubung
+            );
+
+        $jumlahBalitaBelumTerhubung =
+            (int) (
+                $dataBelumTerhubung["total"]
+                ?? 0
+            );
+
+        mysqli_stmt_close(
+            $stmtBelumTerhubung
+        );
+    }
 }
 
 /*
@@ -626,6 +705,21 @@ require_once "../includes/navbar.php";
     <?php require_once "../includes/sidebar.php"; ?>
 
     <main class="main-content">
+
+        <?php if ($puskesmasBelumTerhubung): ?>
+
+            <div
+                class="alert alert-warning"
+                role="alert"
+            >
+                <i class="bi bi-exclamation-triangle me-1"></i>
+
+                Akun Kader belum terhubung dengan Puskesmas.
+                Hubungkan akun Kader melalui menu Data Pengguna
+                terlebih dahulu.
+            </div>
+
+        <?php endif; ?>
 
         <?php if ($jumlahBalita < 1): ?>
 
@@ -809,176 +903,265 @@ require_once "../includes/navbar.php";
                         autocomplete="off"
                     >
 
-                        <?php if ($roleAktif === "kader"): ?>
+                        <!-- Puskesmas otomatis -->
+                        <div class="form-group">
 
-                            <!-- Puskesmas -->
-                            <div class="form-group">
+                            <label class="form-label">
+                                Puskesmas
+                            </label>
 
-                                <label
-                                    for="id_puskesmas"
-                                    class="form-label"
+                            <div
+                                class="p-3 rounded border"
+                                style="background: #f8fafc;"
+                            >
+                                <div
+                                    class="d-flex align-items-center gap-2"
                                 >
-                                    Puskesmas
-                                    <span class="text-danger">*</span>
-                                </label>
+                                    <i class="bi bi-hospital"></i>
 
-                                <select
-                                    name="id_puskesmas"
-                                    id="id_puskesmas"
-                                    class="form-select"
-                                    required
-                                >
-                                    <option value="">
-                                        -- Pilih Puskesmas --
-                                    </option>
-
-                                    <?php while ($puskesmas = mysqli_fetch_assoc($queryPuskesmas)): ?>
-                                        <option
-                                            value="<?= (int) $puskesmas["id_puskesmas"]; ?>"
-                                            <?= (
-                                                (string) $idPuskesmasDipilih
-                                                === (string) $puskesmas["id_puskesmas"]
-                                            ) ? "selected" : ""; ?>
-                                        >
-                                            <?= amanFormSkrining(
-                                                $puskesmas["nama_puskesmas"]
-                                            ); ?>
-                                        </option>
-                                    <?php endwhile; ?>
-                                </select>
+                                    <strong>
+                                        <?= amanFormSkrining(
+                                            $namaPuskesmasAktif
+                                        ); ?>
+                                    </strong>
+                                </div>
 
                                 <small class="text-muted">
-                                    Pilih Puskesmas terlebih dahulu. Daftar balita akan menyesuaikan otomatis.
+                                    Puskesmas mengikuti akun Kader secara
+                                    otomatis dan tidak dapat diubah dari
+                                    form skrining.
                                 </small>
-
                             </div>
 
-                        <?php endif; ?>
+                        </div>
 
-                        <!-- Data balita -->
+                        <!-- Balita dengan pencarian -->
                         <div class="form-group">
 
                             <label
-                                for="id_balita"
+                                for="balitaSearchTrigger"
                                 class="form-label"
                             >
                                 Nama Balita
                                 <span class="text-danger">*</span>
                             </label>
 
-                            <select
+                            <input
+                                type="hidden"
                                 name="id_balita"
                                 id="id_balita"
-                                class="form-select"
-                                required
+                                value="<?= amanFormSkrining(
+                                    $old["id_balita"]
+                                ); ?>"
                             >
 
-                                <option value="">
-                                    -- Pilih Balita --
-                                </option>
+                            <?php
+                            $labelBalitaTerpilih =
+                                "-- Pilih Balita --";
 
-                                <?php
-                                while (
-                                    $balita =
-                                        mysqli_fetch_assoc(
-                                            $queryBalita
-                                        )
-                                ):
+                            foreach (
+                                $daftarBalita
+                                as $balitaTerpilih
+                            ) {
+                                if (
+                                    (string) $old["id_balita"]
+                                    ===
+                                    (string) $balitaTerpilih["id_balita"]
+                                ) {
+                                    $labelBalitaTerpilih =
+                                        $balitaTerpilih["nama_balita"]
+                                        . " — NIK "
+                                        . $balitaTerpilih["nik_balita"];
 
-                                    $namaIbuProfilPilihan =
-                                        trim(
-                                            (string) (
-                                                $balita[
-                                                    "profil_nama_ibu"
-                                                ]
-                                                ?? ""
-                                            )
-                                        );
+                                    break;
+                                }
+                            }
+                            ?>
 
-                                    $namaIbuLamaPilihan =
-                                        trim(
-                                            (string) (
-                                                $balita[
-                                                    "nama_ibu_lama"
-                                                ]
-                                                ?? ""
-                                            )
-                                        );
+                            <div
+                                class="balita-search-select"
+                                id="balitaSearchSelect"
+                            >
 
-                                    $namaIbuTampilPilihan =
-                                        $namaIbuProfilPilihan !== ""
-                                            ? $namaIbuProfilPilihan
-                                            : (
-                                                $namaIbuLamaPilihan !== ""
-                                                    ? $namaIbuLamaPilihan
-                                                    : "-"
-                                            );
-
-                                    $profilIbuTerhubungPilihan =
-                                        !empty(
-                                            $balita[
-                                                "id_orang_tua"
-                                            ]
-                                        )
-                                        && $namaIbuProfilPilihan !== ""
-                                        && trim(
-                                            (string) (
-                                                $balita[
-                                                    "pendidikan_ibu"
-                                                ]
-                                                ?? ""
-                                            )
-                                        ) !== ""
-                                        && trim(
-                                            (string) (
-                                                $balita[
-                                                    "pekerjaan_ibu"
-                                                ]
-                                                ?? ""
-                                            )
-                                        ) !== "";
-                                ?>
-
-                                    <option
-                                        value="<?= (int) $balita["id_balita"]; ?>"
-                                        data-puskesmas="<?= (int) $balita["id_puskesmas"]; ?>"
-                                        data-nama-ibu="<?= amanFormSkrining(
-                                            $namaIbuTampilPilihan
-                                        ); ?>"
-                                        data-pendidikan-ibu="<?= amanFormSkrining(
-                                            $balita["pendidikan_ibu"]
-                                            ?? ""
-                                        ); ?>"
-                                        data-pekerjaan-ibu="<?= amanFormSkrining(
-                                            $balita["pekerjaan_ibu"]
-                                            ?? ""
-                                        ); ?>"
-                                        data-profil-terhubung="<?= $profilIbuTerhubungPilihan
-                                            ? "1"
-                                            : "0"; ?>"
-                                        <?= (
-                                            (string) $old["id_balita"]
-                                            ===
-                                            (string) $balita["id_balita"]
-                                        )
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
+                                <button
+                                    type="button"
+                                    id="balitaSearchTrigger"
+                                    class="form-select text-start balita-search-trigger"
+                                >
+                                    <span id="balitaSearchSelected">
                                         <?= amanFormSkrining(
-                                            $balita["nama_balita"]
+                                            $labelBalitaTerpilih
                                         ); ?>
+                                    </span>
+                                </button>
 
-                                        <?= $profilIbuTerhubungPilihan
-                                            ? " — "
-                                                . amanFormSkrining(
-                                                    $namaIbuTampilPilihan
+                                <div
+                                    class="balita-search-panel"
+                                    id="balitaSearchPanel"
+                                    hidden
+                                >
+
+                                    <div class="p-2 border-bottom">
+
+                                        <div class="input-group">
+
+                                            <span class="input-group-text">
+                                                <i class="bi bi-search"></i>
+                                            </span>
+
+                                            <input
+                                                type="text"
+                                                class="form-control"
+                                                id="balitaSearchInput"
+                                                placeholder="Cari nama atau NIK balita..."
+                                                autocomplete="off"
+                                            >
+
+                                        </div>
+
+                                    </div>
+
+                                    <div
+                                        class="balita-search-list"
+                                        id="balitaSearchList"
+                                    >
+
+                                        <?php foreach (
+                                            $daftarBalita
+                                            as $balita
+                                        ): ?>
+
+                                            <?php
+                                            $namaIbuProfilPilihan =
+                                                trim(
+                                                    (string) (
+                                                        $balita[
+                                                            "profil_nama_ibu"
+                                                        ]
+                                                        ?? ""
+                                                    )
+                                                );
+
+                                            $namaIbuLamaPilihan =
+                                                trim(
+                                                    (string) (
+                                                        $balita[
+                                                            "nama_ibu_lama"
+                                                        ]
+                                                        ?? ""
+                                                    )
+                                                );
+
+                                            $namaIbuTampilPilihan =
+                                                $namaIbuProfilPilihan !== ""
+                                                    ? $namaIbuProfilPilihan
+                                                    : (
+                                                        $namaIbuLamaPilihan !== ""
+                                                            ? $namaIbuLamaPilihan
+                                                            : "-"
+                                                    );
+
+                                            $profilIbuTerhubungPilihan =
+                                                !empty(
+                                                    $balita[
+                                                        "id_orang_tua"
+                                                    ]
                                                 )
-                                            : " — Profil Ibu belum terhubung"; ?>
-                                    </option>
+                                                && $namaIbuProfilPilihan !== ""
+                                                && trim(
+                                                    (string) (
+                                                        $balita[
+                                                            "pendidikan_ibu"
+                                                        ]
+                                                        ?? ""
+                                                    )
+                                                ) !== ""
+                                                && trim(
+                                                    (string) (
+                                                        $balita[
+                                                            "pekerjaan_ibu"
+                                                        ]
+                                                        ?? ""
+                                                    )
+                                                ) !== "";
 
-                                <?php endwhile; ?>
+                                            $labelBalita =
+                                                $balita["nama_balita"]
+                                                . " — NIK "
+                                                . $balita["nik_balita"];
+                                            ?>
 
-                            </select>
+                                            <button
+                                                type="button"
+                                                class="balita-search-option"
+                                                data-value="<?= (int)
+                                                    $balita[
+                                                        "id_balita"
+                                                    ]; ?>"
+                                                data-search="<?= amanFormSkrining(
+                                                    strtolower(
+                                                        $balita["nama_balita"]
+                                                        . " "
+                                                        . $balita["nik_balita"]
+                                                    )
+                                                ); ?>"
+                                                data-label="<?= amanFormSkrining(
+                                                    $labelBalita
+                                                ); ?>"
+                                                data-nama-ibu="<?= amanFormSkrining(
+                                                    $namaIbuTampilPilihan
+                                                ); ?>"
+                                                data-pendidikan-ibu="<?= amanFormSkrining(
+                                                    $balita[
+                                                        "pendidikan_ibu"
+                                                    ]
+                                                    ?? ""
+                                                ); ?>"
+                                                data-pekerjaan-ibu="<?= amanFormSkrining(
+                                                    $balita[
+                                                        "pekerjaan_ibu"
+                                                    ]
+                                                    ?? ""
+                                                ); ?>"
+                                                data-profil-terhubung="<?= $profilIbuTerhubungPilihan
+                                                    ? "1"
+                                                    : "0"; ?>"
+                                            >
+                                                <?= amanFormSkrining(
+                                                    $labelBalita
+                                                ); ?>
+
+                                                <?= $profilIbuTerhubungPilihan
+                                                    ? " — "
+                                                        . amanFormSkrining(
+                                                            $namaIbuTampilPilihan
+                                                        )
+                                                    : " — Profil Ibu belum terhubung"; ?>
+                                            </button>
+
+                                        <?php endforeach; ?>
+
+                                        <div
+                                            class="balita-search-empty text-muted text-center p-3"
+                                            id="balitaSearchEmpty"
+                                            hidden
+                                        >
+                                            Balita tidak ditemukan.
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <small class="text-muted">
+                                Daftar hanya menampilkan balita dari
+                                Puskesmas
+                                <?= amanFormSkrining(
+                                    $namaPuskesmasAktif
+                                ); ?>.
+                            </small>
 
                         </div>
 
@@ -1503,38 +1686,142 @@ require_once "../includes/navbar.php";
 
 </div>
 
-<?php if ($roleAktif === "kader"): ?>
+<style>
+.balita-search-select {
+    position: relative;
+}
+
+.balita-search-trigger {
+    min-height: 46px;
+}
+
+.balita-search-panel {
+    position: absolute;
+    z-index: 2000;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    background: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    box-shadow: 0 14px 32px rgba(30, 41, 59, 0.16);
+    overflow: hidden;
+}
+
+.balita-search-list {
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 6px;
+}
+
+.balita-search-option {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #334155;
+    text-align: left;
+    cursor: pointer;
+}
+
+.balita-search-option:hover,
+.balita-search-option:focus {
+    background: #f4f7fb;
+    outline: none;
+}
+
+.balita-search-option.is-selected {
+    background: #eef4ff;
+    font-weight: 700;
+}
+</style>
+
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    const puskesmasSelect =
-        document.getElementById("id_puskesmas");
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
 
-    const balitaSelect =
-        document.getElementById("id_balita");
+        const wrapper =
+            document.getElementById(
+                "balitaSearchSelect"
+            );
 
-    const namaIbu =
-        document.getElementById("profil_nama_ibu");
+        const trigger =
+            document.getElementById(
+                "balitaSearchTrigger"
+            );
 
-    const pendidikanIbu =
-        document.getElementById("profil_pendidikan_ibu");
+        const panel =
+            document.getElementById(
+                "balitaSearchPanel"
+            );
 
-    const pekerjaanIbu =
-        document.getElementById("profil_pekerjaan_ibu");
+        const searchInput =
+            document.getElementById(
+                "balitaSearchInput"
+            );
 
-    if (!puskesmasSelect || !balitaSelect) {
-        return;
-    }
+        const hiddenBalita =
+            document.getElementById(
+                "id_balita"
+            );
 
-    function tampilkanProfilIbu() {
-        const option =
-            balitaSelect.options[
-                balitaSelect.selectedIndex
-            ];
+        const selectedText =
+            document.getElementById(
+                "balitaSearchSelected"
+            );
+
+        const emptyState =
+            document.getElementById(
+                "balitaSearchEmpty"
+            );
+
+        const namaIbu =
+            document.getElementById(
+                "profil_nama_ibu"
+            );
+
+        const pendidikanIbu =
+            document.getElementById(
+                "profil_pendidikan_ibu"
+            );
+
+        const pekerjaanIbu =
+            document.getElementById(
+                "profil_pekerjaan_ibu"
+            );
 
         if (
-            !option
-            || option.value === ""
+            !wrapper
+            || !trigger
+            || !panel
+            || !searchInput
+            || !hiddenBalita
+            || !selectedText
         ) {
+            return;
+        }
+
+        const options = Array.from(
+            wrapper.querySelectorAll(
+                ".balita-search-option"
+            )
+        );
+
+        function normalisasi(teks) {
+            return String(teks || "")
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(
+                    /[\u0300-\u036f]/g,
+                    ""
+                )
+                .trim();
+        }
+
+        function resetProfilIbu() {
             if (namaIbu) {
                 namaIbu.textContent =
                     "Pilih balita terlebih dahulu";
@@ -1547,121 +1834,213 @@ document.addEventListener("DOMContentLoaded", function () {
             if (pekerjaanIbu) {
                 pekerjaanIbu.textContent = "-";
             }
-
-            return;
         }
 
-        const profilTerhubung =
-            option.dataset.profilTerhubung === "1";
+        function tampilkanProfilDariOption(
+            option
+        ) {
+            if (!option) {
+                resetProfilIbu();
+                return;
+            }
 
-        if (!profilTerhubung) {
+            const profilTerhubung =
+                option.dataset.profilTerhubung
+                === "1";
+
+            if (!profilTerhubung) {
+
+                if (namaIbu) {
+                    namaIbu.textContent =
+                        option.dataset.namaIbu
+                        && option.dataset.namaIbu
+                            !== "-"
+                            ? option.dataset.namaIbu
+                                + " (profil belum terhubung)"
+                            : "Profil Ibu belum terhubung";
+                }
+
+                if (pendidikanIbu) {
+                    pendidikanIbu.textContent =
+                        "Belum tersedia";
+                }
+
+                if (pekerjaanIbu) {
+                    pekerjaanIbu.textContent =
+                        "Belum tersedia";
+                }
+
+                return;
+            }
 
             if (namaIbu) {
                 namaIbu.textContent =
                     option.dataset.namaIbu
-                    && option.dataset.namaIbu !== "-"
-                        ? option.dataset.namaIbu
-                            + " (profil belum terhubung)"
-                        : "Profil Ibu belum terhubung";
+                    || "-";
             }
 
             if (pendidikanIbu) {
                 pendidikanIbu.textContent =
-                    "Belum tersedia";
+                    option.dataset
+                        .pendidikanIbu
+                    || "-";
             }
 
             if (pekerjaanIbu) {
                 pekerjaanIbu.textContent =
-                    "Belum tersedia";
+                    option.dataset
+                        .pekerjaanIbu
+                    || "-";
+            }
+        }
+
+        function bukaPanel() {
+
+            panel.hidden = false;
+            searchInput.value = "";
+
+            options.forEach(
+                function (option) {
+                    option.hidden = false;
+                }
+            );
+
+            if (emptyState) {
+                emptyState.hidden = true;
             }
 
-            return;
+            setTimeout(
+                function () {
+                    searchInput.focus();
+                },
+                0
+            );
         }
 
-        if (namaIbu) {
-            namaIbu.textContent =
-                option.dataset.namaIbu || "-";
+        function tutupPanel() {
+            panel.hidden = true;
         }
 
-        if (pendidikanIbu) {
-            pendidikanIbu.textContent =
-                option.dataset.pendidikanIbu || "-";
+        trigger.addEventListener(
+            "click",
+            function () {
+                if (panel.hidden) {
+                    bukaPanel();
+                } else {
+                    tutupPanel();
+                }
+            }
+        );
+
+        searchInput.addEventListener(
+            "input",
+            function () {
+
+                const keyword =
+                    normalisasi(
+                        searchInput.value
+                    );
+
+                let jumlahTampil = 0;
+
+                options.forEach(
+                    function (option) {
+
+                        const dataSearch =
+                            normalisasi(
+                                option.dataset.search
+                            );
+
+                        const cocok =
+                            keyword === ""
+                            || dataSearch.includes(
+                                keyword
+                            );
+
+                        option.hidden =
+                            !cocok;
+
+                        if (cocok) {
+                            jumlahTampil++;
+                        }
+                    }
+                );
+
+                if (emptyState) {
+                    emptyState.hidden =
+                        jumlahTampil > 0;
+                }
+            }
+        );
+
+        options.forEach(
+            function (option) {
+
+                option.addEventListener(
+                    "click",
+                    function () {
+
+                        hiddenBalita.value =
+                            option.dataset.value;
+
+                        selectedText.textContent =
+                            option.dataset.label;
+
+                        options.forEach(
+                            function (item) {
+                                item.classList
+                                    .remove(
+                                        "is-selected"
+                                    );
+                            }
+                        );
+
+                        option.classList.add(
+                            "is-selected"
+                        );
+
+                        tampilkanProfilDariOption(
+                            option
+                        );
+
+                        tutupPanel();
+                    }
+                );
+
+                if (
+                    option.dataset.value
+                    === hiddenBalita.value
+                ) {
+                    option.classList.add(
+                        "is-selected"
+                    );
+
+                    tampilkanProfilDariOption(
+                        option
+                    );
+                }
+            }
+        );
+
+        if (!hiddenBalita.value) {
+            resetProfilIbu();
         }
 
-        if (pekerjaanIbu) {
-            pekerjaanIbu.textContent =
-                option.dataset.pekerjaanIbu || "-";
-        }
+        document.addEventListener(
+            "click",
+            function (event) {
+
+                if (
+                    !wrapper.contains(
+                        event.target
+                    )
+                ) {
+                    tutupPanel();
+                }
+            }
+        );
     }
-
-    function filterBalita(resetPilihan = false) {
-        const idPuskesmas =
-            puskesmasSelect.value;
-
-        const pilihanSekarang =
-            balitaSelect.value;
-
-        let pilihanMasihValid = false;
-
-        Array.from(
-            balitaSelect.options
-        ).forEach(function (option, index) {
-
-            if (index === 0) {
-                return;
-            }
-
-            const cocok =
-                idPuskesmas !== ""
-                && option.dataset.puskesmas
-                    === idPuskesmas;
-
-            option.hidden = !cocok;
-            option.disabled = !cocok;
-
-            if (
-                cocok
-                && option.value
-                    === pilihanSekarang
-            ) {
-                pilihanMasihValid = true;
-            }
-        });
-
-        if (
-            resetPilihan
-            || !pilihanMasihValid
-        ) {
-            balitaSelect.value = "";
-        }
-
-        balitaSelect.disabled =
-            idPuskesmas === "";
-
-        balitaSelect.options[0].textContent =
-            idPuskesmas === ""
-                ? "-- Pilih Puskesmas terlebih dahulu --"
-                : "-- Pilih Balita --";
-
-        tampilkanProfilIbu();
-    }
-
-    puskesmasSelect.addEventListener(
-        "change",
-        function () {
-            filterBalita(true);
-        }
-    );
-
-    balitaSelect.addEventListener(
-        "change",
-        tampilkanProfilIbu
-    );
-
-    filterBalita(false);
-    tampilkanProfilIbu();
-});
+);
 </script>
-<?php endif; ?>
 
 <?php require_once "../includes/footer.php"; ?>

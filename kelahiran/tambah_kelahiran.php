@@ -540,9 +540,9 @@ require_once "../includes/navbar.php";
                             </label>
 
                             <select
+                                id="id_balita"
                                 name="id_balita"
                                 class="form-select"
-                                required
                                 <?= !$adaBalitaTersedia
                                     ? "disabled"
                                     : ""; ?>
@@ -856,6 +856,420 @@ require_once "../includes/navbar.php";
     </main>
 
 </div>
+
+
+<style>
+.balita-native-select-search {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.balita-search-select {
+    position: relative;
+    width: 100%;
+}
+
+.balita-search-trigger {
+    width: 100%;
+    min-height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: .65rem .85rem;
+    border: 1px solid #dfe3ea;
+    border-radius: 12px;
+    background: #fff;
+    color: #334155;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+
+.balita-search-trigger:disabled {
+    background: #f4f6f8;
+    color: #98a2b0;
+    cursor: not-allowed;
+}
+
+.balita-search-trigger.is-placeholder {
+    color: #7d8998;
+}
+
+.balita-search-panel {
+    position: absolute;
+    z-index: 2000;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    padding: 8px;
+    border: 1px solid #e1e5eb;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 14px 32px rgba(30, 41, 59, .16);
+}
+
+.balita-search-panel[hidden] {
+    display: none !important;
+}
+
+.balita-search-list {
+    max-height: 260px;
+    overflow-y: auto;
+    margin-top: 7px;
+}
+
+.balita-search-option {
+    width: 100%;
+    display: block;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #334155;
+    text-align: left;
+    cursor: pointer;
+}
+
+.balita-search-option:hover,
+.balita-search-option:focus {
+    background: #f4f7fb;
+    outline: none;
+}
+
+.balita-search-option.is-selected {
+    background: #eef4ff;
+    font-weight: 700;
+}
+
+.balita-search-empty {
+    padding: 12px;
+    color: #8a96a6;
+    text-align: center;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const select =
+        document.getElementById("id_balita");
+
+    if (!select) {
+        return;
+    }
+
+    select.classList.add(
+        "balita-native-select-search"
+    );
+
+    const wrapper =
+        document.createElement("div");
+
+    wrapper.className =
+        "balita-search-select";
+
+    const trigger =
+        document.createElement("button");
+
+    trigger.type = "button";
+    trigger.className =
+        "balita-search-trigger";
+
+    const triggerText =
+        document.createElement("span");
+
+    const chevron =
+        document.createElement("i");
+
+    chevron.className =
+        "bi bi-chevron-down";
+
+    trigger.appendChild(triggerText);
+    trigger.appendChild(chevron);
+
+    const panel =
+        document.createElement("div");
+
+    panel.className =
+        "balita-search-panel";
+
+    panel.hidden = true;
+
+    const searchGroup =
+        document.createElement("div");
+
+    searchGroup.className =
+        "input-group";
+
+    const searchIcon =
+        document.createElement("span");
+
+    searchIcon.className =
+        "input-group-text";
+
+    searchIcon.innerHTML =
+        '<i class="bi bi-search"></i>';
+
+    const searchInput =
+        document.createElement("input");
+
+    searchInput.type = "text";
+    searchInput.className =
+        "form-control";
+    searchInput.placeholder =
+        "Cari nama atau NIK balita...";
+    searchInput.autocomplete =
+        "off";
+
+    searchGroup.appendChild(
+        searchIcon
+    );
+    searchGroup.appendChild(
+        searchInput
+    );
+
+    const list =
+        document.createElement("div");
+
+    list.className =
+        "balita-search-list";
+
+    panel.appendChild(searchGroup);
+    panel.appendChild(list);
+
+    wrapper.appendChild(trigger);
+    wrapper.appendChild(panel);
+
+    select.insertAdjacentElement(
+        "afterend",
+        wrapper
+    );
+
+    function normalisasi(value) {
+        return String(value || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(
+                /[\u0300-\u036f]/g,
+                ""
+            )
+            .trim();
+    }
+
+    function optionAktif() {
+        return Array.from(
+            select.options
+        ).filter(function (option) {
+            return (
+                option.value !== ""
+                && !option.disabled
+                && !option.hidden
+            );
+        });
+    }
+
+    function placeholder() {
+        const kosong =
+            Array.from(
+                select.options
+            ).find(function (option) {
+                return option.value === "";
+            });
+
+        return kosong
+            ? kosong.textContent.trim()
+            : "-- Pilih Balita --";
+    }
+
+    function sinkronTrigger() {
+        const option =
+            select.options[
+                select.selectedIndex
+            ];
+
+        const adaPilihan =
+            option
+            && option.value !== "";
+
+        triggerText.textContent =
+            adaPilihan
+                ? option.textContent.trim()
+                : placeholder();
+
+        trigger.classList.toggle(
+            "is-placeholder",
+            !adaPilihan
+        );
+
+        trigger.disabled =
+            select.disabled
+            || optionAktif().length === 0;
+    }
+
+    function render(keyword = "") {
+        list.innerHTML = "";
+
+        const kata =
+            normalisasi(keyword);
+
+        const hasil =
+            optionAktif().filter(
+                function (option) {
+                    if (kata === "") {
+                        return true;
+                    }
+
+                    return normalisasi(
+                        option.textContent
+                        + " "
+                        + option.value
+                    ).includes(kata);
+                }
+            );
+
+        if (hasil.length === 0) {
+            const kosong =
+                document.createElement("div");
+
+            kosong.className =
+                "balita-search-empty";
+
+            kosong.textContent =
+                "Balita tidak ditemukan.";
+
+            list.appendChild(kosong);
+            return;
+        }
+
+        hasil.forEach(
+            function (option) {
+                const item =
+                    document.createElement(
+                        "button"
+                    );
+
+                item.type = "button";
+                item.className =
+                    "balita-search-option";
+                item.textContent =
+                    option.textContent.trim();
+
+                if (
+                    option.value
+                    === select.value
+                ) {
+                    item.classList.add(
+                        "is-selected"
+                    );
+                }
+
+                item.addEventListener(
+                    "click",
+                    function () {
+                        select.value =
+                            option.value;
+
+                        select.dispatchEvent(
+                            new Event(
+                                "change",
+                                {
+                                    bubbles: true
+                                }
+                            )
+                        );
+
+                        sinkronTrigger();
+                        panel.hidden = true;
+                    }
+                );
+
+                list.appendChild(item);
+            }
+        );
+    }
+
+    trigger.addEventListener(
+        "click",
+        function () {
+            if (trigger.disabled) {
+                return;
+            }
+
+            panel.hidden =
+                !panel.hidden;
+
+            if (!panel.hidden) {
+                searchInput.value = "";
+                render("");
+
+                setTimeout(
+                    function () {
+                        searchInput.focus();
+                    },
+                    0
+                );
+            }
+        }
+    );
+
+    searchInput.addEventListener(
+        "input",
+        function () {
+            render(
+                searchInput.value
+            );
+        }
+    );
+
+    searchInput.addEventListener(
+        "keydown",
+        function (event) {
+            if (event.key === "Escape") {
+                panel.hidden = true;
+                trigger.focus();
+            }
+
+            if (event.key === "Enter") {
+                const pertama =
+                    list.querySelector(
+                        ".balita-search-option"
+                    );
+
+                if (pertama) {
+                    event.preventDefault();
+                    pertama.click();
+                }
+            }
+        }
+    );
+
+    select.addEventListener(
+        "change",
+        sinkronTrigger
+    );
+
+    document.addEventListener(
+        "click",
+        function (event) {
+            if (
+                !wrapper.contains(
+                    event.target
+                )
+            ) {
+                panel.hidden = true;
+            }
+        }
+    );
+
+    sinkronTrigger();
+});
+</script>
+
 
 <?php
 if (isset($stmtDaftarBalita)) {

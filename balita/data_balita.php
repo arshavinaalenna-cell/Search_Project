@@ -22,312 +22,198 @@ $cari = trim($_GET["cari"] ?? "");
 
 /*
 |--------------------------------------------------------------------------
-| Filter Puskesmas khusus Kader
+| Wilayah Puskesmas berdasarkan akun
 |--------------------------------------------------------------------------
+|
+| Kader, Petugas KIA, Petugas Gizi, dan Kepala Puskesmas hanya boleh
+| melihat balita dari Puskesmas yang terhubung ke akun mereka.
+|
+| Dinkes dapat melihat seluruh Puskesmas.
+| Orang Tua hanya melihat balita miliknya sendiri.
+|
 */
 
-$filterPuskesmas = $roleAktif === "kader"
-    ? max(0, (int) ($_GET["puskesmas"] ?? 0))
-    : 0;
+$roleTerikatPuskesmas = [
+    "kader",
+    "petugas_kia",
+    "petugas_gizi",
+    "kepala_puskesmas"
+];
 
-$daftarPuskesmas = [];
+$idPuskesmasAkun = 0;
+$namaPuskesmasAkun = "";
+$puskesmasBelumTerhubung = false;
 
-if ($roleAktif === "kader") {
-    $queryPuskesmas = mysqli_query(
+if (in_array($roleAktif, $roleTerikatPuskesmas, true)) {
+
+    $stmtPuskesmasAkun = mysqli_prepare(
         $conn,
-        "SELECT id_puskesmas, nama_puskesmas
-         FROM puskesmas
-         ORDER BY nama_puskesmas ASC"
+        "SELECT
+            u.id_puskesmas,
+            p.nama_puskesmas
+         FROM pengguna AS u
+         LEFT JOIN puskesmas AS p
+            ON u.id_puskesmas = p.id_puskesmas
+         WHERE u.id_user = ?
+         LIMIT 1"
     );
 
-    if ($queryPuskesmas) {
-        while ($puskesmas = mysqli_fetch_assoc($queryPuskesmas)) {
-            $daftarPuskesmas[] = $puskesmas;
-        }
+    if (!$stmtPuskesmasAkun) {
+        die(
+            "Gagal memeriksa Puskesmas akun: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmasAkun,
+        "i",
+        $idUserAktif
+    );
+
+    mysqli_stmt_execute(
+        $stmtPuskesmasAkun
+    );
+
+    $hasilPuskesmasAkun =
+        mysqli_stmt_get_result(
+            $stmtPuskesmasAkun
+        );
+
+    $dataPuskesmasAkun =
+        mysqli_fetch_assoc(
+            $hasilPuskesmasAkun
+        );
+
+    mysqli_stmt_close(
+        $stmtPuskesmasAkun
+    );
+
+    if (
+        !$dataPuskesmasAkun
+        || empty($dataPuskesmasAkun["id_puskesmas"])
+    ) {
+        $puskesmasBelumTerhubung = true;
+    } else {
+        $idPuskesmasAkun =
+            (int) $dataPuskesmasAkun["id_puskesmas"];
+
+        $namaPuskesmasAkun =
+            trim(
+                (string) (
+                    $dataPuskesmasAkun["nama_puskesmas"]
+                    ?? ""
+                )
+            );
     }
 }
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil data balita
+| Query dasar
 |--------------------------------------------------------------------------
-|
-| Orang tua hanya melihat anak yang terhubung dengan akunnya.
-| Kader dapat memfilter data berdasarkan Puskesmas.
-| Role lain dapat melihat seluruh data balita.
-|
 */
 
+$sql = "SELECT
+            b.id_balita,
+            b.id_user,
+            b.id_puskesmas,
+            b.nik_balita,
+            b.nama_balita,
+            b.jenis_kelamin,
+            b.tanggal_lahir,
+            b.umur,
+            b.nama_ibu,
+            b.alamat,
+            ot.nama_ibu AS profil_nama_ibu,
+            ot.nik_ibu,
+            ot.pendidikan_ibu,
+            ot.pekerjaan_ibu,
+            b.nama_posyandu,
+            p.nama_puskesmas
+        FROM balita AS b
+        LEFT JOIN puskesmas AS p
+            ON b.id_puskesmas = p.id_puskesmas
+        LEFT JOIN orang_tua AS ot
+            ON b.id_user = ot.id_user
+        WHERE 1 = 1";
+
+$tipe = "";
+$parameter = [];
+
+/* Orang Tua: hanya anak milik akun sendiri */
 if ($roleAktif === "orang_tua") {
-    if ($cari !== "") {
-        $kataKunci = "%" . $cari . "%";
 
-        $stmt = mysqli_prepare(
-            $conn,
-            "SELECT
-                b.id_balita,
-                b.id_user,
-                b.id_puskesmas,
-                b.nik_balita,
-                b.nama_balita,
-                b.jenis_kelamin,
-                b.tanggal_lahir,
-                b.umur,
-                b.nama_ibu,
-                b.alamat,
-                ot.nama_ibu AS profil_nama_ibu,
-                ot.nik_ibu,
-                ot.pendidikan_ibu,
-                ot.pekerjaan_ibu,
-                b.nama_posyandu,
-                p.nama_puskesmas
-             FROM balita b
-             LEFT JOIN puskesmas p
-                ON b.id_puskesmas = p.id_puskesmas
-             LEFT JOIN orang_tua ot
-                ON b.id_user = ot.id_user
-             WHERE b.id_user = ?
-             AND (
-                b.nik_balita LIKE ?
-                OR b.nama_balita LIKE ?
-                OR b.nama_ibu LIKE ?
-                OR ot.nama_ibu LIKE ?
-                OR b.nama_posyandu LIKE ?
-                OR p.nama_puskesmas LIKE ?
-             )
-             ORDER BY b.id_balita DESC"
-        );
+    $sql .= " AND b.id_user = ? ";
+    $tipe .= "i";
+    $parameter[] = $idUserAktif;
 
-        if (!$stmt) {
-            die("Gagal menyiapkan pencarian data balita.");
-        }
+/* Role wilayah: hanya Puskesmas akun sendiri */
+} elseif (
+    in_array(
+        $roleAktif,
+        $roleTerikatPuskesmas,
+        true
+    )
+) {
 
-        mysqli_stmt_bind_param(
-            $stmt,
-            "issssss",
-            $idUserAktif,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci
-        );
+    if ($puskesmasBelumTerhubung) {
+        /* Sengaja tidak menampilkan data jika akun belum punya wilayah */
+        $sql .= " AND 1 = 0 ";
     } else {
-        $stmt = mysqli_prepare(
-            $conn,
-            "SELECT
-                b.id_balita,
-                b.id_user,
-                b.id_puskesmas,
-                b.nik_balita,
-                b.nama_balita,
-                b.jenis_kelamin,
-                b.tanggal_lahir,
-                b.umur,
-                b.nama_ibu,
-                b.alamat,
-                ot.nama_ibu AS profil_nama_ibu,
-                ot.nik_ibu,
-                ot.pendidikan_ibu,
-                ot.pekerjaan_ibu,
-                b.nama_posyandu,
-                p.nama_puskesmas
-             FROM balita b
-             LEFT JOIN puskesmas p
-                ON b.id_puskesmas = p.id_puskesmas
-             LEFT JOIN orang_tua ot
-                ON b.id_user = ot.id_user
-             WHERE b.id_user = ?
-             ORDER BY b.id_balita DESC"
-        );
-
-        if (!$stmt) {
-            die("Gagal mengambil data balita.");
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "i",
-            $idUserAktif
-        );
+        $sql .= " AND b.id_puskesmas = ? ";
+        $tipe .= "i";
+        $parameter[] = $idPuskesmasAkun;
     }
-} else {
-    if ($cari !== "" && $filterPuskesmas > 0) {
-        $kataKunci = "%" . $cari . "%";
 
-        $stmt = mysqli_prepare(
-            $conn,
-            "SELECT
-                b.id_balita,
-                b.id_user,
-                b.id_puskesmas,
-                b.nik_balita,
-                b.nama_balita,
-                b.jenis_kelamin,
-                b.tanggal_lahir,
-                b.umur,
-                b.nama_ibu,
-                b.alamat,
-                ot.nama_ibu AS profil_nama_ibu,
-                ot.nik_ibu,
-                ot.pendidikan_ibu,
-                ot.pekerjaan_ibu,
-                b.nama_posyandu,
-                p.nama_puskesmas
-             FROM balita b
-             LEFT JOIN puskesmas p
-                ON b.id_puskesmas = p.id_puskesmas
-             LEFT JOIN orang_tua ot
-                ON b.id_user = ot.id_user
-             WHERE b.id_puskesmas = ?
-             AND (
-                b.nik_balita LIKE ?
-                OR b.nama_balita LIKE ?
-                OR b.nama_ibu LIKE ?
-                OR ot.nama_ibu LIKE ?
-                OR b.nama_posyandu LIKE ?
-                OR p.nama_puskesmas LIKE ?
-             )
-             ORDER BY b.id_balita DESC"
-        );
+/* Dinkes tidak dibatasi Puskesmas */
+} elseif ($roleAktif !== "dinkes") {
+    $sql .= " AND 1 = 0 ";
+}
 
-        if (!$stmt) {
-            die("Gagal menyiapkan filter data balita.");
-        }
+/* Pencarian tetap bekerja di dalam cakupan akses role */
+if ($cari !== "") {
 
-        mysqli_stmt_bind_param(
-            $stmt,
-            "issssss",
-            $filterPuskesmas,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci
-        );
-    } elseif ($cari !== "") {
-        $kataKunci = "%" . $cari . "%";
+    $kataKunci = "%" . $cari . "%";
 
-        $stmt = mysqli_prepare(
-            $conn,
-            "SELECT
-                b.id_balita,
-                b.id_user,
-                b.id_puskesmas,
-                b.nik_balita,
-                b.nama_balita,
-                b.jenis_kelamin,
-                b.tanggal_lahir,
-                b.umur,
-                b.nama_ibu,
-                b.alamat,
-                ot.nama_ibu AS profil_nama_ibu,
-                ot.nik_ibu,
-                ot.pendidikan_ibu,
-                ot.pekerjaan_ibu,
-                b.nama_posyandu,
-                p.nama_puskesmas
-             FROM balita b
-             LEFT JOIN puskesmas p
-                ON b.id_puskesmas = p.id_puskesmas
-             LEFT JOIN orang_tua ot
-                ON b.id_user = ot.id_user
-             WHERE
-                b.nik_balita LIKE ?
-                OR b.nama_balita LIKE ?
-                OR b.nama_ibu LIKE ?
-                OR ot.nama_ibu LIKE ?
-                OR b.nama_posyandu LIKE ?
-                OR p.nama_puskesmas LIKE ?
-             ORDER BY b.id_balita DESC"
-        );
+    $sql .= "
+        AND (
+            b.nik_balita LIKE ?
+            OR b.nama_balita LIKE ?
+            OR b.nama_ibu LIKE ?
+            OR ot.nama_ibu LIKE ?
+            OR b.nama_posyandu LIKE ?
+            OR p.nama_puskesmas LIKE ?
+        )
+    ";
 
-        if (!$stmt) {
-            die("Gagal menyiapkan pencarian data balita.");
-        }
+    $tipe .= "ssssss";
 
-        mysqli_stmt_bind_param(
-            $stmt,
-            "ssssss",
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci
-        );
-    } elseif ($filterPuskesmas > 0) {
-        $stmt = mysqli_prepare(
-            $conn,
-            "SELECT
-                b.id_balita,
-                b.id_user,
-                b.id_puskesmas,
-                b.nik_balita,
-                b.nama_balita,
-                b.jenis_kelamin,
-                b.tanggal_lahir,
-                b.umur,
-                b.nama_ibu,
-                b.alamat,
-                ot.nama_ibu AS profil_nama_ibu,
-                ot.nik_ibu,
-                ot.pendidikan_ibu,
-                ot.pekerjaan_ibu,
-                b.nama_posyandu,
-                p.nama_puskesmas
-             FROM balita b
-             LEFT JOIN puskesmas p
-                ON b.id_puskesmas = p.id_puskesmas
-             LEFT JOIN orang_tua ot
-                ON b.id_user = ot.id_user
-             WHERE b.id_puskesmas = ?
-             ORDER BY b.id_balita DESC"
-        );
-
-        if (!$stmt) {
-            die("Gagal menyiapkan filter data balita.");
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "i",
-            $filterPuskesmas
-        );
-    } else {
-        $stmt = mysqli_prepare(
-            $conn,
-            "SELECT
-                b.id_balita,
-                b.id_user,
-                b.id_puskesmas,
-                b.nik_balita,
-                b.nama_balita,
-                b.jenis_kelamin,
-                b.tanggal_lahir,
-                b.umur,
-                b.nama_ibu,
-                b.alamat,
-                ot.nama_ibu AS profil_nama_ibu,
-                ot.nik_ibu,
-                ot.pendidikan_ibu,
-                ot.pekerjaan_ibu,
-                b.nama_posyandu,
-                p.nama_puskesmas
-             FROM balita b
-             LEFT JOIN puskesmas p
-                ON b.id_puskesmas = p.id_puskesmas
-             LEFT JOIN orang_tua ot
-                ON b.id_user = ot.id_user
-             ORDER BY b.id_balita DESC"
-        );
-
-        if (!$stmt) {
-            die("Gagal mengambil data balita.");
-        }
+    for ($i = 0; $i < 6; $i++) {
+        $parameter[] = $kataKunci;
     }
+}
+
+$sql .= " ORDER BY b.id_balita DESC ";
+
+$stmt = mysqli_prepare(
+    $conn,
+    $sql
+);
+
+if (!$stmt) {
+    die(
+        "Gagal menyiapkan data balita: "
+        . mysqli_error($conn)
+    );
+}
+
+if ($parameter !== []) {
+    mysqli_stmt_bind_param(
+        $stmt,
+        $tipe,
+        ...$parameter
+    );
 }
 
 if (!mysqli_stmt_execute($stmt)) {
@@ -340,30 +226,48 @@ $query = mysqli_stmt_get_result($stmt);
 |--------------------------------------------------------------------------
 | Menghitung balita yang belum terhubung Profil Ibu
 |--------------------------------------------------------------------------
-|
-| Hanya informasi untuk Kader. Data lama tetap ditampilkan karena
-| relasi menggunakan LEFT JOIN.
-|
 */
 
 $jumlahBelumTerhubung = 0;
 
-if ($roleAktif === "kader") {
+if (
+    $roleAktif === "kader"
+    && !$puskesmasBelumTerhubung
+) {
 
-    $queryBelumTerhubung = mysqli_query(
+    $stmtBelumTerhubung = mysqli_prepare(
         $conn,
         "SELECT COUNT(*) AS total
          FROM balita AS b
          LEFT JOIN orang_tua AS ot
             ON b.id_user = ot.id_user
-         WHERE b.id_user IS NULL
-            OR ot.id_orang_tua IS NULL"
+         WHERE b.id_puskesmas = ?
+           AND (
+                b.id_user IS NULL
+                OR ot.id_orang_tua IS NULL
+           )"
     );
 
-    if ($queryBelumTerhubung) {
+    if ($stmtBelumTerhubung) {
+
+        mysqli_stmt_bind_param(
+            $stmtBelumTerhubung,
+            "i",
+            $idPuskesmasAkun
+        );
+
+        mysqli_stmt_execute(
+            $stmtBelumTerhubung
+        );
+
+        $hasilBelumTerhubung =
+            mysqli_stmt_get_result(
+                $stmtBelumTerhubung
+            );
+
         $dataBelumTerhubung =
             mysqli_fetch_assoc(
-                $queryBelumTerhubung
+                $hasilBelumTerhubung
             );
 
         $jumlahBelumTerhubung =
@@ -371,6 +275,10 @@ if ($roleAktif === "kader") {
                 $dataBelumTerhubung["total"]
                 ?? 0
             );
+
+        mysqli_stmt_close(
+            $stmtBelumTerhubung
+        );
     }
 }
 
@@ -384,6 +292,41 @@ require_once "../includes/navbar.php";
     <?php require_once "../includes/sidebar.php"; ?>
 
     <main class="main-content">
+
+        <?php if (
+            in_array(
+                $roleAktif,
+                $roleTerikatPuskesmas,
+                true
+            )
+            && $puskesmasBelumTerhubung
+        ): ?>
+
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                Akun ini belum terhubung dengan Puskesmas.
+                Hubungkan akun melalui menu Data Pengguna terlebih dahulu.
+            </div>
+
+        <?php elseif (
+            in_array(
+                $roleAktif,
+                $roleTerikatPuskesmas,
+                true
+            )
+        ): ?>
+
+            <div class="alert alert-info">
+                <i class="bi bi-hospital me-1"></i>
+                Wilayah data: <strong><?= htmlspecialchars(
+                    $namaPuskesmasAkun,
+                    ENT_QUOTES,
+                    "UTF-8"
+                ); ?></strong>.
+                Data dari Puskesmas lain tidak ditampilkan.
+            </div>
+
+        <?php endif; ?>
 
         <?php if (isset($_GET["pesan"])): ?>
 
@@ -504,14 +447,6 @@ require_once "../includes/navbar.php";
                     class="row g-2 mb-3"
                 >
 
-                    <?php if ($filterPuskesmas > 0): ?>
-                        <input
-                            type="hidden"
-                            name="puskesmas"
-                            value="<?= $filterPuskesmas; ?>"
-                        >
-                    <?php endif; ?>
-
                     <div class="col-12 col-lg-8">
 
                         <div class="input-group">
@@ -562,86 +497,8 @@ require_once "../includes/navbar.php";
 
                 </form>
 
-                <?php if ($roleAktif === "kader"): ?>
 
-                    <form
-                        method="GET"
-                        class="row g-2 mb-4 align-items-end"
-                    >
 
-                        <?php if ($cari !== ""): ?>
-                            <input
-                                type="hidden"
-                                name="cari"
-                                value="<?= htmlspecialchars(
-                                    $cari,
-                                    ENT_QUOTES,
-                                    "UTF-8"
-                                ); ?>"
-                            >
-                        <?php endif; ?>
-
-                        <div class="col-12 col-lg-8">
-
-                            <label
-                                for="filter_puskesmas"
-                                class="form-label small text-muted mb-1"
-                            >
-                                Filter berdasarkan Puskesmas
-                            </label>
-
-                            <select
-                                id="filter_puskesmas"
-                                name="puskesmas"
-                                class="form-select"
-                            >
-                                <option value="0">
-                                    Semua Puskesmas
-                                </option>
-
-                                <?php foreach ($daftarPuskesmas as $puskesmas): ?>
-                                    <option
-                                        value="<?= (int) $puskesmas["id_puskesmas"]; ?>"
-                                        <?= $filterPuskesmas === (int) $puskesmas["id_puskesmas"]
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= htmlspecialchars(
-                                            $puskesmas["nama_puskesmas"],
-                                            ENT_QUOTES,
-                                            "UTF-8"
-                                        ); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-
-                        </div>
-
-                        <div class="col-6 col-lg-2">
-                            <button
-                                type="submit"
-                                class="btn btn-primary w-100"
-                            >
-                                <i class="bi bi-funnel"></i>
-                                Filter
-                            </button>
-                        </div>
-
-                        <div class="col-6 col-lg-2">
-                            <a
-                                href="data_balita.php<?= $cari !== ""
-                                    ? "?cari=" . urlencode($cari)
-                                    : ""; ?>"
-                                class="btn btn-light w-100"
-                            >
-                                <i class="bi bi-x-circle"></i>
-                                Hapus Filter
-                            </a>
-                        </div>
-
-                    </form>
-
-                <?php endif; ?>
 
                 <div class="table-responsive">
 

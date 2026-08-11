@@ -12,12 +12,6 @@ require_once "../config/koneksi.php";
 
 cekRole(["kader"]);
 
-/*
-|--------------------------------------------------------------------------
-| Judul halaman
-|--------------------------------------------------------------------------
-*/
-
 $judulHalaman =
     "Tambah Pengukuran | Sistem Deteksi Stunting";
 
@@ -45,7 +39,6 @@ function amanPengukuran($nilai): string
 $error = "";
 
 $old = [
-    "id_puskesmas"            => "",
     "id_balita"               => "",
     "tanggal_pengukuran"      => date("Y-m-d"),
     "umur_bulan"              => "",
@@ -57,14 +50,161 @@ $old = [
 
 /*
 |--------------------------------------------------------------------------
+| Mengambil Puskesmas Kader aktif
+|--------------------------------------------------------------------------
+|
+| Kader TIDAK memilih Puskesmas secara manual.
+| Puskesmas selalu mengikuti pengguna.id_puskesmas akun Kader yang login.
+|
+*/
+
+$idKaderAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
+
+$stmtPuskesmasAktif = mysqli_prepare(
+    $conn,
+    "SELECT
+        u.id_puskesmas,
+        p.nama_puskesmas
+     FROM pengguna AS u
+     LEFT JOIN puskesmas AS p
+        ON u.id_puskesmas = p.id_puskesmas
+     WHERE u.id_user = ?
+       AND u.role = 'kader'
+     LIMIT 1"
+);
+
+if (!$stmtPuskesmasAktif) {
+    die(
+        "Gagal memeriksa Puskesmas Kader: "
+        . mysqli_error($conn)
+    );
+}
+
+mysqli_stmt_bind_param(
+    $stmtPuskesmasAktif,
+    "i",
+    $idKaderAktif
+);
+
+mysqli_stmt_execute(
+    $stmtPuskesmasAktif
+);
+
+$hasilPuskesmasAktif =
+    mysqli_stmt_get_result(
+        $stmtPuskesmasAktif
+    );
+
+$dataPuskesmasAktif =
+    mysqli_fetch_assoc(
+        $hasilPuskesmasAktif
+    );
+
+mysqli_stmt_close(
+    $stmtPuskesmasAktif
+);
+
+if (
+    !$dataPuskesmasAktif
+    || empty(
+        $dataPuskesmasAktif[
+            "id_puskesmas"
+        ]
+    )
+    || empty(
+        $dataPuskesmasAktif[
+            "nama_puskesmas"
+        ]
+    )
+) {
+    $puskesmasBelumTerhubung = true;
+} else {
+    $idPuskesmasAktif =
+        (int) $dataPuskesmasAktif[
+            "id_puskesmas"
+        ];
+
+    $namaPuskesmasAktif =
+        trim(
+            (string) $dataPuskesmasAktif[
+                "nama_puskesmas"
+            ]
+        );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mengambil balita khusus Puskesmas Kader
+|--------------------------------------------------------------------------
+*/
+
+$daftarBalita = [];
+
+if (!$puskesmasBelumTerhubung) {
+
+    $stmtBalita = mysqli_prepare(
+        $conn,
+        "SELECT
+            id_balita,
+            nik_balita,
+            nama_balita,
+            tanggal_lahir
+         FROM balita
+         WHERE id_puskesmas = ?
+         ORDER BY nama_balita ASC"
+    );
+
+    if (!$stmtBalita) {
+        die(
+            "Gagal mengambil daftar balita: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtBalita,
+        "i",
+        $idPuskesmasAktif
+    );
+
+    mysqli_stmt_execute(
+        $stmtBalita
+    );
+
+    $hasilBalita =
+        mysqli_stmt_get_result(
+            $stmtBalita
+        );
+
+    while (
+        $balita =
+            mysqli_fetch_assoc(
+                $hasilBalita
+            )
+    ) {
+        $daftarBalita[] = $balita;
+    }
+
+    mysqli_stmt_close(
+        $stmtBalita
+    );
+}
+
+$jumlahBalita =
+    count($daftarBalita);
+
+/*
+|--------------------------------------------------------------------------
 | Proses penyimpanan
 |--------------------------------------------------------------------------
 */
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-
-    $old["id_puskesmas"] =
-        trim($_POST["id_puskesmas"] ?? "");
 
     $old["id_balita"] =
         trim($_POST["id_balita"] ?? "");
@@ -74,8 +214,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     /*
     | Umur tidak diambil dari input manual.
-    | Nilainya akan dihitung otomatis dari tanggal lahir balita
-    | dan tanggal pengukuran setelah data balita divalidasi.
+    | Backend menghitung ulang dari tanggal_lahir balita
+    | dan tanggal_pengukuran.
     */
     $old["umur_bulan"] = "";
 
@@ -90,17 +230,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $old["lila"] =
         trim($_POST["lila"] ?? "");
-
-    /*
-    |--------------------------------------------------------------------------
-    | Mengubah dan memvalidasi input
-    |--------------------------------------------------------------------------
-    */
-
-    $idPuskesmas = filter_var(
-        $old["id_puskesmas"],
-        FILTER_VALIDATE_INT
-    );
 
     $idBalita = filter_var(
         $old["id_balita"],
@@ -138,12 +267,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 FILTER_VALIDATE_FLOAT
             );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Validasi tanggal
-    |--------------------------------------------------------------------------
-    */
-
     $objekTanggal = DateTime::createFromFormat(
         "Y-m-d",
         $tanggalPengukuran
@@ -156,26 +279,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     /*
     |--------------------------------------------------------------------------
-    | Validasi seluruh data
+    | Validasi
     |--------------------------------------------------------------------------
     */
 
-    if (
-        $old["id_puskesmas"] === ""
-        || $old["id_balita"] === ""
+    if ($puskesmasBelumTerhubung) {
+        $error =
+            "Akun Kader belum terhubung dengan Puskesmas. Hubungkan akun Kader ke Puskesmas terlebih dahulu.";
+
+    } elseif ($idPuskesmasAktif < 1) {
+        $error =
+            "Puskesmas akun Kader tidak valid.";
+
+    } elseif (
+        $old["id_balita"] === ""
         || $old["tanggal_pengukuran"] === ""
         || $old["berat_badan"] === ""
         || $old["tinggi_panjang_badan"] === ""
     ) {
         $error =
-            "Puskesmas, nama balita, tanggal, berat badan, dan tinggi badan wajib diisi.";
-
-    } elseif (
-        $idPuskesmas === false
-        || $idPuskesmas < 1
-    ) {
-        $error =
-            "Puskesmas yang dipilih tidak valid.";
+            "Nama balita, tanggal, berat badan, dan tinggi badan wajib diisi.";
 
     } elseif (
         $idBalita === false
@@ -229,7 +352,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     /*
     |--------------------------------------------------------------------------
-    | Memastikan balita tersedia
+    | Validasi balita harus benar-benar berasal dari Puskesmas Kader
     |--------------------------------------------------------------------------
     */
 
@@ -237,7 +360,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $stmtCekBalita = mysqli_prepare(
             $conn,
-            "SELECT id_balita, tanggal_lahir
+            "SELECT
+                id_balita,
+                tanggal_lahir
              FROM balita
              WHERE id_balita = ?
                AND id_puskesmas = ?
@@ -254,40 +379,44 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $stmtCekBalita,
                 "ii",
                 $idBalita,
-                $idPuskesmas
+                $idPuskesmasAktif
             );
 
-            mysqli_stmt_execute($stmtCekBalita);
+            mysqli_stmt_execute(
+                $stmtCekBalita
+            );
 
             $hasilCekBalita =
-                mysqli_stmt_get_result($stmtCekBalita);
+                mysqli_stmt_get_result(
+                    $stmtCekBalita
+                );
 
             $dataBalita =
-                mysqli_fetch_assoc($hasilCekBalita);
+                mysqli_fetch_assoc(
+                    $hasilCekBalita
+                );
 
-            mysqli_stmt_close($stmtCekBalita);
+            mysqli_stmt_close(
+                $stmtCekBalita
+            );
 
             if (!$dataBalita) {
                 $error =
-                    "Balita tidak ditemukan pada Puskesmas yang dipilih.";
+                    "Balita tidak ditemukan pada Puskesmas akun Kader.";
+
             } else {
 
                 /*
                 |--------------------------------------------------------------------------
                 | Hitung umur otomatis dalam bulan
                 |--------------------------------------------------------------------------
-                |
-                | Sumber umur:
-                | tanggal_lahir balita -> tanggal_pengukuran -> umur_bulan
-                |
-                | Umur tidak memakai kolom balita.umur dan tidak mempercayai
-                | input umur dari browser.
-                |
                 */
 
                 $tanggalLahir = DateTime::createFromFormat(
                     "Y-m-d",
-                    (string) $dataBalita["tanggal_lahir"]
+                    (string) $dataBalita[
+                        "tanggal_lahir"
+                    ]
                 );
 
                 $tanggalUkur = DateTime::createFromFormat(
@@ -302,14 +431,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $error =
                         "Tanggal lahir balita atau tanggal pengukuran tidak valid.";
 
-                } elseif ($tanggalUkur < $tanggalLahir) {
+                } elseif (
+                    $tanggalUkur
+                    < $tanggalLahir
+                ) {
                     $error =
                         "Tanggal pengukuran tidak boleh lebih awal dari tanggal lahir balita.";
 
                 } else {
 
                     $selisihUmur =
-                        $tanggalLahir->diff($tanggalUkur);
+                        $tanggalLahir->diff(
+                            $tanggalUkur
+                        );
 
                     $umurBulan =
                         ($selisihUmur->y * 12)
@@ -332,7 +466,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     /*
     |--------------------------------------------------------------------------
-    | Menyimpan dengan prepared statement
+    | Simpan pengukuran
     |--------------------------------------------------------------------------
     */
 
@@ -372,11 +506,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             );
 
             $berhasil =
-                mysqli_stmt_execute($stmtSimpan);
+                mysqli_stmt_execute(
+                    $stmtSimpan
+                );
 
             if ($berhasil) {
 
-                mysqli_stmt_close($stmtSimpan);
+                mysqli_stmt_close(
+                    $stmtSimpan
+                );
 
                 header(
                     "Location: data_pengukuran.php?pesan=tambah_berhasil"
@@ -387,59 +525,53 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             $error =
                 "Data pengukuran gagal disimpan: "
-                . mysqli_stmt_error($stmtSimpan);
+                . mysqli_stmt_error(
+                    $stmtSimpan
+                );
 
-            mysqli_stmt_close($stmtSimpan);
+            mysqli_stmt_close(
+                $stmtSimpan
+            );
         }
     }
 }
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil daftar Puskesmas dan balita
+| Menentukan label balita terpilih jika form kembali karena error
 |--------------------------------------------------------------------------
 */
 
-$queryPuskesmas = mysqli_query(
-    $conn,
-    "SELECT
-        id_puskesmas,
-        nama_puskesmas
-     FROM puskesmas
-     ORDER BY nama_puskesmas ASC"
-);
+$labelBalitaTerpilih =
+    "-- Pilih Balita --";
 
-if (!$queryPuskesmas) {
-    die(
-        "Gagal mengambil daftar Puskesmas: "
-        . mysqli_error($conn)
-    );
+$tanggalLahirTerpilih = "";
+
+foreach (
+    $daftarBalita as $balita
+) {
+    if (
+        (string) $old["id_balita"]
+        ===
+        (string) $balita["id_balita"]
+    ) {
+        $labelBalitaTerpilih =
+            $balita["nama_balita"]
+            . " — NIK "
+            . $balita["nik_balita"];
+
+        $tanggalLahirTerpilih =
+            (string) $balita[
+                "tanggal_lahir"
+            ];
+
+        break;
+    }
 }
-
-$queryBalita = mysqli_query(
-    $conn,
-    "SELECT
-        id_balita,
-        id_puskesmas,
-        nama_balita,
-        tanggal_lahir
-     FROM balita
-     ORDER BY nama_balita ASC"
-);
-
-if (!$queryBalita) {
-    die(
-        "Gagal mengambil daftar balita: "
-        . mysqli_error($conn)
-    );
-}
-
-$jumlahBalita =
-    mysqli_num_rows($queryBalita);
 
 /*
 |--------------------------------------------------------------------------
-| Memanggil template utama
+| Template
 |--------------------------------------------------------------------------
 */
 
@@ -454,7 +586,6 @@ require_once "../includes/navbar.php";
 
     <main class="main-content">
 
-        <!-- Judul halaman -->
         <div class="page-header">
 
             <div>
@@ -481,6 +612,21 @@ require_once "../includes/navbar.php";
 
         </div>
 
+        <?php if ($puskesmasBelumTerhubung): ?>
+
+            <div
+                class="alert alert-warning"
+                role="alert"
+            >
+                <i class="bi bi-exclamation-triangle me-1"></i>
+
+                Akun Kader belum terhubung dengan Puskesmas.
+                Hubungkan akun Kader melalui menu Data Pengguna
+                terlebih dahulu.
+            </div>
+
+        <?php endif; ?>
+
         <?php if ($error !== ""): ?>
 
             <div
@@ -501,7 +647,10 @@ require_once "../includes/navbar.php";
 
         <?php endif; ?>
 
-        <?php if ($jumlahBalita < 1): ?>
+        <?php if (
+            !$puskesmasBelumTerhubung
+            && $jumlahBalita < 1
+        ): ?>
 
             <div class="card content-card">
 
@@ -514,12 +663,15 @@ require_once "../includes/navbar.php";
                         </div>
 
                         <h3>
-                            Belum ada data balita
+                            Belum ada balita di
+                            <?= amanPengukuran(
+                                $namaPuskesmasAktif
+                            ); ?>
                         </h3>
 
                         <p>
-                            Tambahkan data balita terlebih dahulu
-                            sebelum membuat data pengukuran.
+                            Tambahkan data balita pada Puskesmas ini
+                            terlebih dahulu sebelum membuat pengukuran.
                         </p>
 
                         <a
@@ -536,7 +688,9 @@ require_once "../includes/navbar.php";
 
             </div>
 
-        <?php else: ?>
+        <?php elseif (
+            !$puskesmasBelumTerhubung
+        ): ?>
 
             <div class="card content-card">
 
@@ -564,107 +718,181 @@ require_once "../includes/navbar.php";
                         autocomplete="off"
                     >
 
-                        <!-- Puskesmas -->
+                        <!-- Puskesmas otomatis -->
                         <div class="form-group">
 
-                            <label
-                                for="id_puskesmas"
-                                class="form-label"
-                            >
+                            <label class="form-label">
                                 Puskesmas
-                                <span class="text-danger">*</span>
                             </label>
 
-                            <select
-                                name="id_puskesmas"
-                                id="id_puskesmas"
-                                class="form-select"
-                                required
+                            <div
+                                class="p-3 rounded border"
+                                style="background: #f8fafc;"
                             >
-                                <option value="">
-                                    -- Pilih Puskesmas --
-                                </option>
+                                <div
+                                    class="d-flex align-items-center gap-2"
+                                >
+                                    <i class="bi bi-hospital"></i>
 
-                                <?php while ($puskesmas = mysqli_fetch_assoc($queryPuskesmas)): ?>
-                                    <option
-                                        value="<?= (int) $puskesmas["id_puskesmas"]; ?>"
-                                        <?= (
-                                            (string) $old["id_puskesmas"]
-                                            === (string) $puskesmas["id_puskesmas"]
-                                        ) ? "selected" : ""; ?>
-                                    >
+                                    <strong>
                                         <?= amanPengukuran(
-                                            $puskesmas["nama_puskesmas"]
+                                            $namaPuskesmasAktif
                                         ); ?>
-                                    </option>
-                                <?php endwhile; ?>
-                            </select>
+                                    </strong>
+                                </div>
 
-                            <small class="text-muted">
-                                Pilih Puskesmas terlebih dahulu. Daftar balita akan menyesuaikan otomatis.
-                            </small>
+                                <small class="text-muted">
+                                    Puskesmas mengikuti akun Kader
+                                    secara otomatis dan tidak dapat
+                                    diubah dari form ini.
+                                </small>
+                            </div>
 
                         </div>
 
-                        <!-- Balita -->
+                        <!-- Balita searchable -->
                         <div class="form-group">
 
                             <label
-                                for="id_balita"
+                                for="balitaSearchTrigger"
                                 class="form-label"
                             >
                                 Nama Balita
                                 <span class="text-danger">*</span>
                             </label>
 
-                            <select
+                            <input
+                                type="hidden"
                                 name="id_balita"
                                 id="id_balita"
-                                class="form-select"
-                                required
+                                value="<?= amanPengukuran(
+                                    $old["id_balita"]
+                                ); ?>"
                             >
 
-                                <option value="">
-                                    -- Pilih Balita --
-                                </option>
+                            <div
+                                class="balita-search-select"
+                                id="balitaSearchSelect"
+                            >
 
-                                <?php
-                                while (
-                                    $balita =
-                                        mysqli_fetch_assoc(
-                                            $queryBalita
-                                        )
-                                ):
-                                ?>
-
-                                    <option
-                                        value="<?= (int) $balita["id_balita"]; ?>"
-                                        data-puskesmas="<?= (int) $balita["id_puskesmas"]; ?>"
-                                        data-tanggal-lahir="<?= amanPengukuran(
-                                            $balita["tanggal_lahir"]
-                                        ); ?>"
-                                        <?= (
-                                            (string) $old["id_balita"]
-                                            ===
-                                            (string) $balita["id_balita"]
-                                        )
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
+                                <button
+                                    type="button"
+                                    id="balitaSearchTrigger"
+                                    class="form-select text-start balita-search-trigger"
+                                    data-tanggal-lahir="<?= amanPengukuran(
+                                        $tanggalLahirTerpilih
+                                    ); ?>"
+                                >
+                                    <span id="balitaSearchSelected">
                                         <?= amanPengukuran(
-                                            $balita["nama_balita"]
+                                            $labelBalitaTerpilih
                                         ); ?>
-                                    </option>
+                                    </span>
+                                </button>
 
-                                <?php endwhile; ?>
+                                <div
+                                    class="balita-search-panel"
+                                    id="balitaSearchPanel"
+                                    hidden
+                                >
 
-                            </select>
+                                    <div class="p-2 border-bottom">
+
+                                        <div class="input-group">
+
+                                            <span class="input-group-text">
+                                                <i class="bi bi-search"></i>
+                                            </span>
+
+                                            <input
+                                                type="text"
+                                                class="form-control"
+                                                id="balitaSearchInput"
+                                                placeholder="Cari nama atau NIK balita..."
+                                                autocomplete="off"
+                                            >
+
+                                        </div>
+
+                                    </div>
+
+                                    <div
+                                        class="balita-search-list"
+                                        id="balitaSearchList"
+                                    >
+
+                                        <?php foreach (
+                                            $daftarBalita
+                                            as $balita
+                                        ): ?>
+
+                                            <?php
+                                            $labelBalita =
+                                                $balita["nama_balita"]
+                                                . " — NIK "
+                                                . $balita["nik_balita"];
+                                            ?>
+
+                                            <button
+                                                type="button"
+                                                class="balita-search-option"
+                                                data-value="<?= (int)
+                                                    $balita[
+                                                        "id_balita"
+                                                    ]; ?>"
+                                                data-tanggal-lahir="<?= amanPengukuran(
+                                                    $balita[
+                                                        "tanggal_lahir"
+                                                    ]
+                                                ); ?>"
+                                                data-search="<?= amanPengukuran(
+                                                    strtolower(
+                                                        $balita[
+                                                            "nama_balita"
+                                                        ]
+                                                        . " "
+                                                        . $balita[
+                                                            "nik_balita"
+                                                        ]
+                                                    )
+                                                ); ?>"
+                                                data-label="<?= amanPengukuran(
+                                                    $labelBalita
+                                                ); ?>"
+                                            >
+                                                <?= amanPengukuran(
+                                                    $labelBalita
+                                                ); ?>
+                                            </button>
+
+                                        <?php endforeach; ?>
+
+                                        <div
+                                            class="balita-search-empty text-muted text-center p-3"
+                                            id="balitaSearchEmpty"
+                                            hidden
+                                        >
+                                            Balita tidak ditemukan.
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <small class="text-muted">
+                                Daftar hanya menampilkan balita dari
+                                Puskesmas
+                                <?= amanPengukuran(
+                                    $namaPuskesmasAktif
+                                ); ?>.
+                            </small>
 
                         </div>
 
                         <div class="form-row">
 
-                            <!-- Tanggal -->
                             <div class="form-group">
 
                                 <label
@@ -681,7 +909,9 @@ require_once "../includes/navbar.php";
                                     id="tanggal_pengukuran"
                                     class="form-control"
                                     value="<?= amanPengukuran(
-                                        $old["tanggal_pengukuran"]
+                                        $old[
+                                            "tanggal_pengukuran"
+                                        ]
                                     ); ?>"
                                     max="<?= date("Y-m-d"); ?>"
                                     required
@@ -689,7 +919,6 @@ require_once "../includes/navbar.php";
 
                             </div>
 
-                            <!-- Umur -->
                             <div class="form-group">
 
                                 <label
@@ -724,7 +953,8 @@ require_once "../includes/navbar.php";
                                 </div>
 
                                 <small class="text-muted">
-                                    Umur dihitung otomatis dari tanggal lahir balita dan tanggal pengukuran.
+                                    Umur dihitung otomatis dari tanggal lahir
+                                    balita dan tanggal pengukuran.
                                 </small>
 
                             </div>
@@ -733,7 +963,6 @@ require_once "../includes/navbar.php";
 
                         <div class="form-row">
 
-                            <!-- Berat badan -->
                             <div class="form-group">
 
                                 <label
@@ -769,7 +998,6 @@ require_once "../includes/navbar.php";
 
                             </div>
 
-                            <!-- Tinggi badan -->
                             <div class="form-group">
 
                                 <label
@@ -811,7 +1039,6 @@ require_once "../includes/navbar.php";
 
                         <div class="form-row">
 
-                            <!-- Lingkar kepala -->
                             <div class="form-group">
 
                                 <label
@@ -829,7 +1056,9 @@ require_once "../includes/navbar.php";
                                         id="lingkar_kepala"
                                         class="form-control"
                                         value="<?= amanPengukuran(
-                                            $old["lingkar_kepala"]
+                                            $old[
+                                                "lingkar_kepala"
+                                            ]
                                         ); ?>"
                                         min="0.01"
                                         max="100"
@@ -845,7 +1074,6 @@ require_once "../includes/navbar.php";
 
                             </div>
 
-                            <!-- LiLA -->
                             <div class="form-group">
 
                                 <label
@@ -914,173 +1142,353 @@ require_once "../includes/navbar.php";
 
 </div>
 
+<style>
+.balita-search-select {
+    position: relative;
+}
+
+.balita-search-trigger {
+    min-height: 46px;
+}
+
+.balita-search-panel {
+    position: absolute;
+    z-index: 2000;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+    background: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    box-shadow: 0 14px 32px rgba(30, 41, 59, 0.16);
+    overflow: hidden;
+}
+
+.balita-search-list {
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 6px;
+}
+
+.balita-search-option {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #334155;
+    text-align: left;
+    cursor: pointer;
+}
+
+.balita-search-option:hover,
+.balita-search-option:focus {
+    background: #f4f7fb;
+    outline: none;
+}
+
+.balita-search-option.is-selected {
+    background: #eef4ff;
+    font-weight: 700;
+}
+</style>
+
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    const puskesmasSelect =
-        document.getElementById("id_puskesmas");
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
 
-    const balitaSelect =
-        document.getElementById("id_balita");
+        const wrapper =
+            document.getElementById(
+                "balitaSearchSelect"
+            );
 
-    const tanggalPengukuran =
-        document.getElementById("tanggal_pengukuran");
+        const trigger =
+            document.getElementById(
+                "balitaSearchTrigger"
+            );
 
-    const umurBulanInput =
-        document.getElementById("umur_bulan");
+        const panel =
+            document.getElementById(
+                "balitaSearchPanel"
+            );
 
-    if (
-        !puskesmasSelect
-        || !balitaSelect
-        || !tanggalPengukuran
-        || !umurBulanInput
-    ) {
-        return;
-    }
+        const searchInput =
+            document.getElementById(
+                "balitaSearchInput"
+            );
 
-    function filterBalita(resetPilihan = false) {
-        const idPuskesmas =
-            puskesmasSelect.value;
+        const hiddenBalita =
+            document.getElementById(
+                "id_balita"
+            );
 
-        const pilihanSekarang =
-            balitaSelect.value;
+        const selectedText =
+            document.getElementById(
+                "balitaSearchSelected"
+            );
 
-        let pilihanMasihValid = false;
+        const emptyState =
+            document.getElementById(
+                "balitaSearchEmpty"
+            );
 
-        Array.from(
-            balitaSelect.options
-        ).forEach(function (option, index) {
+        const tanggalPengukuran =
+            document.getElementById(
+                "tanggal_pengukuran"
+            );
 
-            if (index === 0) {
+        const umurBulanInput =
+            document.getElementById(
+                "umur_bulan"
+            );
+
+        if (
+            !wrapper
+            || !trigger
+            || !panel
+            || !searchInput
+            || !hiddenBalita
+            || !selectedText
+            || !tanggalPengukuran
+            || !umurBulanInput
+        ) {
+            return;
+        }
+
+        const options = Array.from(
+            wrapper.querySelectorAll(
+                ".balita-search-option"
+            )
+        );
+
+        function normalisasi(teks) {
+            return String(teks || "")
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(
+                    /[\u0300-\u036f]/g,
+                    ""
+                )
+                .trim();
+        }
+
+        function parseTanggal(tanggal) {
+            if (!tanggal) {
+                return null;
+            }
+
+            const bagian =
+                tanggal.split("-").map(Number);
+
+            if (bagian.length !== 3) {
+                return null;
+            }
+
+            return {
+                tahun: bagian[0],
+                bulan: bagian[1],
+                hari: bagian[2]
+            };
+        }
+
+        function hitungUmurBulan() {
+
+            const lahir =
+                parseTanggal(
+                    trigger.dataset
+                        .tanggalLahir
+                );
+
+            const ukur =
+                parseTanggal(
+                    tanggalPengukuran.value
+                );
+
+            if (!lahir || !ukur) {
+                umurBulanInput.value = "";
                 return;
             }
 
-            const cocok =
-                idPuskesmas !== ""
-                && option.dataset.puskesmas
-                    === idPuskesmas;
-
-            option.hidden = !cocok;
-            option.disabled = !cocok;
+            let umurBulan =
+                (
+                    ukur.tahun
+                    - lahir.tahun
+                ) * 12
+                + (
+                    ukur.bulan
+                    - lahir.bulan
+                );
 
             if (
-                cocok
-                && option.value === pilihanSekarang
+                ukur.hari
+                < lahir.hari
             ) {
-                pilihanMasihValid = true;
+                umurBulan--;
             }
-        });
 
-        if (
-            resetPilihan
-            || !pilihanMasihValid
-        ) {
-            balitaSelect.value = "";
-            umurBulanInput.value = "";
+            if (
+                umurBulan < 0
+                || umurBulan > 59
+            ) {
+                umurBulanInput.value = "";
+                return;
+            }
+
+            umurBulanInput.value =
+                umurBulan;
         }
 
-        balitaSelect.disabled =
-            idPuskesmas === "";
+        function bukaPanel() {
 
-        balitaSelect.options[0].textContent =
-            idPuskesmas === ""
-                ? "-- Pilih Puskesmas terlebih dahulu --"
-                : "-- Pilih Balita --";
-    }
+            panel.hidden = false;
+            searchInput.value = "";
 
-    function parseTanggal(tanggal) {
-        if (!tanggal) {
-            return null;
-        }
-
-        const bagian =
-            tanggal.split("-").map(Number);
-
-        if (bagian.length !== 3) {
-            return null;
-        }
-
-        return {
-            tahun: bagian[0],
-            bulan: bagian[1],
-            hari: bagian[2]
-        };
-    }
-
-    function hitungUmurBulan() {
-        const optionBalita =
-            balitaSelect.options[
-                balitaSelect.selectedIndex
-            ];
-
-        if (
-            !optionBalita
-            || !optionBalita.value
-            || !tanggalPengukuran.value
-        ) {
-            umurBulanInput.value = "";
-            return;
-        }
-
-        const lahir =
-            parseTanggal(
-                optionBalita.dataset.tanggalLahir
+            options.forEach(
+                function (option) {
+                    option.hidden = false;
+                }
             );
 
-        const ukur =
-            parseTanggal(
-                tanggalPengukuran.value
+            if (emptyState) {
+                emptyState.hidden = true;
+            }
+
+            setTimeout(
+                function () {
+                    searchInput.focus();
+                },
+                0
             );
-
-        if (!lahir || !ukur) {
-            umurBulanInput.value = "";
-            return;
         }
 
-        let umurBulan =
-            (ukur.tahun - lahir.tahun) * 12
-            + (ukur.bulan - lahir.bulan);
-
-        /*
-        | Jika tanggal pada bulan pengukuran belum mencapai
-        | tanggal lahir, satu bulan belum genap.
-        */
-        if (ukur.hari < lahir.hari) {
-            umurBulan--;
+        function tutupPanel() {
+            panel.hidden = true;
         }
 
-        if (
-            umurBulan < 0
-            || umurBulan > 59
-        ) {
-            umurBulanInput.value = "";
-            return;
-        }
+        trigger.addEventListener(
+            "click",
+            function () {
+                if (panel.hidden) {
+                    bukaPanel();
+                } else {
+                    tutupPanel();
+                }
+            }
+        );
 
-        umurBulanInput.value =
-            umurBulan;
+        searchInput.addEventListener(
+            "input",
+            function () {
+
+                const keyword =
+                    normalisasi(
+                        searchInput.value
+                    );
+
+                let jumlahTampil = 0;
+
+                options.forEach(
+                    function (option) {
+
+                        const dataSearch =
+                            normalisasi(
+                                option.dataset
+                                    .search
+                            );
+
+                        const cocok =
+                            keyword === ""
+                            || dataSearch.includes(
+                                keyword
+                            );
+
+                        option.hidden =
+                            !cocok;
+
+                        if (cocok) {
+                            jumlahTampil++;
+                        }
+                    }
+                );
+
+                if (emptyState) {
+                    emptyState.hidden =
+                        jumlahTampil > 0;
+                }
+            }
+        );
+
+        options.forEach(
+            function (option) {
+
+                option.addEventListener(
+                    "click",
+                    function () {
+
+                        hiddenBalita.value =
+                            option.dataset.value;
+
+                        selectedText.textContent =
+                            option.dataset.label;
+
+                        trigger.dataset
+                            .tanggalLahir =
+                            option.dataset
+                                .tanggalLahir;
+
+                        options.forEach(
+                            function (item) {
+                                item.classList
+                                    .remove(
+                                        "is-selected"
+                                    );
+                            }
+                        );
+
+                        option.classList.add(
+                            "is-selected"
+                        );
+
+                        hitungUmurBulan();
+                        tutupPanel();
+                    }
+                );
+
+                if (
+                    option.dataset.value
+                    === hiddenBalita.value
+                ) {
+                    option.classList.add(
+                        "is-selected"
+                    );
+                }
+            }
+        );
+
+        tanggalPengukuran.addEventListener(
+            "change",
+            hitungUmurBulan
+        );
+
+        document.addEventListener(
+            "click",
+            function (event) {
+
+                if (
+                    !wrapper.contains(
+                        event.target
+                    )
+                ) {
+                    tutupPanel();
+                }
+            }
+        );
+
+        hitungUmurBulan();
     }
-
-    puskesmasSelect.addEventListener(
-        "change",
-        function () {
-            filterBalita(true);
-            hitungUmurBulan();
-        }
-    );
-
-    balitaSelect.addEventListener(
-        "change",
-        hitungUmurBulan
-    );
-
-    tanggalPengukuran.addEventListener(
-        "change",
-        hitungUmurBulan
-    );
-
-    filterBalita(false);
-    hitungUmurBulan();
-});
+);
 </script>
 
 <?php require_once "../includes/footer.php"; ?>
