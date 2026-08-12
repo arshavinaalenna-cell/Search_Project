@@ -5,25 +5,174 @@ require_once "../config/koneksi.php";
 require_once "statistik.php";
 
 $rolePengguna = $_SESSION["role"] ?? "";
+$idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
 
-$filterPuskesmas = $rolePengguna === "kader"
-    ? max(0, (int) ($_GET["puskesmas"] ?? 0))
-    : 0;
+/*
+|--------------------------------------------------------------------------
+| Wilayah Puskesmas berdasarkan akun
+|--------------------------------------------------------------------------
+|
+| Kader, Petugas KIA, Petugas Gizi, dan Kepala Puskesmas tidak memilih
+| Puskesmas secara manual. Dashboard selalu mengikuti id_puskesmas yang
+| terhubung dengan akun yang sedang login.
+|
+*/
 
-$daftarPuskesmas = [];
+$roleTerikatPuskesmas = [
+    "kader",
+    "petugas_kia",
+    "petugas_gizi",
+    "kepala_puskesmas"
+];
 
-if ($rolePengguna === "kader") {
-    $queryPuskesmas = mysqli_query(
+$idPuskesmasAkun = 0;
+$namaPuskesmasAkun = "";
+$puskesmasBelumTerhubung = false;
+
+if (in_array($rolePengguna, $roleTerikatPuskesmas, true)) {
+    $stmtPuskesmasAkun = mysqli_prepare(
         $conn,
-        "SELECT id_puskesmas, nama_puskesmas
-         FROM puskesmas
-         ORDER BY nama_puskesmas ASC"
+        "SELECT
+            u.id_puskesmas,
+            p.nama_puskesmas
+         FROM pengguna AS u
+         LEFT JOIN puskesmas AS p
+            ON u.id_puskesmas = p.id_puskesmas
+         WHERE u.id_user = ?
+         LIMIT 1"
     );
 
-    if ($queryPuskesmas) {
-        while ($puskesmas = mysqli_fetch_assoc($queryPuskesmas)) {
-            $daftarPuskesmas[] = $puskesmas;
-        }
+    if (!$stmtPuskesmasAkun) {
+        die(
+            "Gagal memeriksa Puskesmas akun: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmasAkun,
+        "i",
+        $idUserAktif
+    );
+    mysqli_stmt_execute($stmtPuskesmasAkun);
+
+    $hasilPuskesmasAkun =
+        mysqli_stmt_get_result($stmtPuskesmasAkun);
+    $dataPuskesmasAkun =
+        mysqli_fetch_assoc($hasilPuskesmasAkun);
+
+    mysqli_stmt_close($stmtPuskesmasAkun);
+
+    if (
+        !$dataPuskesmasAkun
+        || empty($dataPuskesmasAkun["id_puskesmas"])
+    ) {
+        $puskesmasBelumTerhubung = true;
+    } else {
+        $idPuskesmasAkun =
+            (int) $dataPuskesmasAkun["id_puskesmas"];
+        $namaPuskesmasAkun = trim(
+            (string) (
+                $dataPuskesmasAkun["nama_puskesmas"]
+                ?? ""
+            )
+        );
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Statistik dashboard khusus wilayah akun
+|--------------------------------------------------------------------------
+|
+| statistik.php tetap dipakai untuk role lain. Untuk role yang terikat
+| Puskesmas, nilainya ditimpa dengan perhitungan yang memiliki pembatasan
+| b.id_puskesmas = id_puskesmas akun.
+|
+*/
+
+function hitungStatistikWilayah(
+    mysqli $conn,
+    string $sql,
+    int $idPuskesmas
+): int {
+    $stmt = mysqli_prepare($conn, $sql);
+
+    if (!$stmt) {
+        return 0;
+    }
+
+    mysqli_stmt_bind_param($stmt, "i", $idPuskesmas);
+
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return 0;
+    }
+
+    $hasil = mysqli_stmt_get_result($stmt);
+    $row = mysqli_fetch_assoc($hasil);
+    mysqli_stmt_close($stmt);
+
+    return (int) ($row["total"] ?? 0);
+}
+
+if (in_array($rolePengguna, $roleTerikatPuskesmas, true)) {
+    if ($puskesmasBelumTerhubung || $idPuskesmasAkun <= 0) {
+        $totalBalita = 0;
+        $totalPengukuran = 0;
+        $totalSkrining = 0;
+        $totalHasilDeteksi = 0;
+        $totalKonsultasi = 0;
+    } else {
+        $totalBalita = hitungStatistikWilayah(
+            $conn,
+            "SELECT COUNT(*) AS total
+             FROM balita AS b
+             WHERE b.id_puskesmas = ?",
+            $idPuskesmasAkun
+        );
+
+        $totalPengukuran = hitungStatistikWilayah(
+            $conn,
+            "SELECT COUNT(*) AS total
+             FROM pengukuran_antropometri AS pa
+             INNER JOIN balita AS b
+                ON pa.id_balita = b.id_balita
+             WHERE b.id_puskesmas = ?",
+            $idPuskesmasAkun
+        );
+
+        $totalSkrining = hitungStatistikWilayah(
+            $conn,
+            "SELECT COUNT(*) AS total
+             FROM skrining_awal AS sa
+             INNER JOIN balita AS b
+                ON sa.id_balita = b.id_balita
+             WHERE b.id_puskesmas = ?",
+            $idPuskesmasAkun
+        );
+
+        $totalHasilDeteksi = hitungStatistikWilayah(
+            $conn,
+            "SELECT COUNT(*) AS total
+             FROM hasil_deteksi AS hd
+             INNER JOIN pengukuran_antropometri AS pa
+                ON hd.id_pengukuran = pa.id_pengukuran
+             INNER JOIN balita AS b
+                ON pa.id_balita = b.id_balita
+             WHERE b.id_puskesmas = ?",
+            $idPuskesmasAkun
+        );
+
+        $totalKonsultasi = hitungStatistikWilayah(
+            $conn,
+            "SELECT COUNT(*) AS total
+             FROM konsultasi AS k
+             INNER JOIN balita AS b
+                ON k.id_balita = b.id_balita
+             WHERE b.id_puskesmas = ?",
+            $idPuskesmasAkun
+        );
     }
 }
 
@@ -36,31 +185,12 @@ $judulHalaman =
 |--------------------------------------------------------------------------
 */
 
-$idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
 $totalPerluKonsultasi = 0;
 $daftarNamaPerluKonsultasi = [];
-$idPuskesmasNotifikasi = 0;
-
-if (in_array($rolePengguna, ["kader", "petugas_kia"], true)) {
-    $stmtWilayahNotifikasi = mysqli_prepare(
-        $conn,
-        "SELECT id_puskesmas
-         FROM pengguna
-         WHERE id_user = ?
-         LIMIT 1"
-    );
-
-    if ($stmtWilayahNotifikasi) {
-        mysqli_stmt_bind_param($stmtWilayahNotifikasi, "i", $idUserAktif);
-        mysqli_stmt_execute($stmtWilayahNotifikasi);
-        $hasilWilayahNotifikasi = mysqli_stmt_get_result($stmtWilayahNotifikasi);
-        $dataWilayahNotifikasi = mysqli_fetch_assoc($hasilWilayahNotifikasi);
-        mysqli_stmt_close($stmtWilayahNotifikasi);
-
-        $idPuskesmasNotifikasi =
-            (int) ($dataWilayahNotifikasi["id_puskesmas"] ?? 0);
-    }
-}
+$idPuskesmasNotifikasi =
+    in_array($rolePengguna, ["kader", "petugas_kia"], true)
+        ? $idPuskesmasAkun
+        : 0;
 
 if ($rolePengguna === "orang_tua") {
     $stmtNotifikasi = mysqli_prepare(
@@ -544,19 +674,6 @@ switch ($rolePengguna) {
         break;
 }
 
-if ($rolePengguna === "kader" && $filterPuskesmas > 0) {
-    foreach ($aksiDashboard as &$aksi) {
-        if (
-            strpos($aksi["url"], "data_balita.php") !== false
-            || strpos($aksi["url"], "data_pengukuran.php") !== false
-            || strpos($aksi["url"], "hasil_skrining.php") !== false
-        ) {
-            $aksi["url"] .= "?puskesmas=" . $filterPuskesmas;
-        }
-    }
-    unset($aksi);
-}
-
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
 
@@ -684,78 +801,50 @@ require_once "../includes/navbar.php";
 
         <?php endif; ?>
 
-        <?php if ($rolePengguna === "kader"): ?>
+        <?php if (in_array($rolePengguna, $roleTerikatPuskesmas, true)): ?>
 
-            <div class="card content-card mb-4">
+            <?php if ($puskesmasBelumTerhubung): ?>
 
-                <div class="card-body">
-
-                    <form
-                        method="GET"
-                        class="row g-2 align-items-end"
-                    >
-
-                        <div class="col-12 col-lg-8">
-
-                            <label
-                                for="filter_puskesmas"
-                                class="form-label small text-muted mb-1"
-                            >
-                                Filter data dashboard berdasarkan Puskesmas
-                            </label>
-
-                            <select
-                                id="filter_puskesmas"
-                                name="puskesmas"
-                                class="form-select"
-                            >
-                                <option value="0">
-                                    Semua Puskesmas
-                                </option>
-
-                                <?php foreach ($daftarPuskesmas as $puskesmas): ?>
-                                    <option
-                                        value="<?= (int) $puskesmas["id_puskesmas"]; ?>"
-                                        <?= $filterPuskesmas === (int) $puskesmas["id_puskesmas"]
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= htmlspecialchars(
-                                            $puskesmas["nama_puskesmas"],
-                                            ENT_QUOTES,
-                                            "UTF-8"
-                                        ); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-
-                        </div>
-
-                        <div class="col-6 col-lg-2">
-                            <button
-                                type="submit"
-                                class="btn btn-primary w-100"
-                            >
-                                <i class="bi bi-funnel"></i>
-                                Filter
-                            </button>
-                        </div>
-
-                        <div class="col-6 col-lg-2">
-                            <a
-                                href="dashboard.php"
-                                class="btn btn-light w-100"
-                            >
-                                <i class="bi bi-x-circle"></i>
-                                Hapus Filter
-                            </a>
-                        </div>
-
-                    </form>
-
+                <div class="alert alert-danger mb-4">
+                    <div class="fw-bold mb-1">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        Puskesmas belum terhubung
+                    </div>
+                    <div>
+                        Akun ini belum memiliki wilayah Puskesmas. Data dashboard tidak ditampilkan sampai Puskesmas akun ditetapkan.
+                    </div>
                 </div>
 
-            </div>
+            <?php else: ?>
+
+                <div class="card content-card mb-4">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                            <div>
+                                <div class="small text-muted mb-1">
+                                    Data otomatis mengikuti Puskesmas akun
+                                </div>
+                                <div class="fw-bold">
+                                    <i class="bi bi-hospital me-1"></i>
+                                    <?= htmlspecialchars(
+                                        $namaPuskesmasAkun !== ""
+                                            ? $namaPuskesmasAkun
+                                            : "Puskesmas terhubung",
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>
+                                </div>
+                            </div>
+
+                            <span class="badge badge-info">
+                                <i class="bi bi-lock me-1"></i>
+                                Wilayah terkunci
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+            <?php endif; ?>
 
         <?php endif; ?>
 
