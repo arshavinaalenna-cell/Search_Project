@@ -125,6 +125,8 @@ $stmtKonsultasi = mysqli_prepare(
         k.keluhan,
         k.hasil_konsultasi,
         k.tindak_lanjut,
+        k.status_konsultasi,
+        k.tanggal_selesai,
         b.nama_balita,
         b.nik_balita,
         b.nama_ibu,
@@ -201,6 +203,23 @@ $hasilKonsultasiForm =
 $tindakLanjut =
     $dataKonsultasi["tindak_lanjut"] ?? "";
 
+$konsultasiSudahSelesai =
+    strtolower(
+        trim(
+            (string) (
+                $dataKonsultasi["status_konsultasi"]
+                ?? "aktif"
+            )
+        )
+    ) === "selesai";
+
+if ($konsultasiSudahSelesai) {
+    header(
+        "Location: riwayat_konsultasi.php?pesan=terkunci"
+    );
+    exit;
+}
+
 $belumDitanggapi = (
     trim(
         (string) $hasilKonsultasiForm
@@ -230,6 +249,27 @@ $ikonStatusKonsultasi = $belumDitanggapi
 */
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
+    $aksiForm =
+        strtolower(
+            trim(
+                (string) (
+                    $_POST["aksi"]
+                    ?? "simpan_sementara"
+                )
+            )
+        );
+
+    if (
+        !in_array(
+            $aksiForm,
+            ["simpan_sementara", "selesaikan"],
+            true
+        )
+    ) {
+        $aksiForm = "simpan_sementara";
+    }
+
     $hasilKonsultasiForm = trim(
         $_POST["hasil_konsultasi"] ?? ""
     );
@@ -238,15 +278,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $_POST["tindak_lanjut"] ?? ""
     );
 
-    if ($hasilKonsultasiForm === "") {
+    if (
+        $aksiForm === "selesaikan"
+        && $hasilKonsultasiForm === ""
+    ) {
         $pesanError =
-            "Hasil konsultasi wajib diisi.";
-    } elseif ($tindakLanjut === "") {
+            "Hasil konsultasi wajib diisi sebelum konsultasi diselesaikan.";
+    } elseif (
+        $aksiForm === "selesaikan"
+        && $tindakLanjut === ""
+    ) {
         $pesanError =
-            "Tindak lanjut wajib diisi.";
+            "Tindak lanjut wajib diisi sebelum konsultasi diselesaikan.";
     }
 
     if ($pesanError === "") {
+        $statusBaru =
+            $aksiForm === "selesaikan"
+                ? "selesai"
+                : "aktif";
+
         $stmtUpdate = mysqli_prepare(
             $conn,
             "UPDATE konsultasi AS k
@@ -256,7 +307,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 ON k.id_deteksi = hd.id_deteksi
              SET
                 k.hasil_konsultasi = ?,
-                k.tindak_lanjut = ?
+                k.tindak_lanjut = ?,
+                k.status_konsultasi = ?,
+                k.tanggal_selesai =
+                    CASE
+                        WHEN ? = 'selesai'
+                            THEN NOW()
+                        ELSE NULL
+                    END
              WHERE k.id_konsultasi = ?
              AND k.id_petugas = ?
              AND b.id_puskesmas = ?
@@ -271,9 +329,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         } else {
             mysqli_stmt_bind_param(
                 $stmtUpdate,
-                "ssiii",
+                "ssssiii",
                 $hasilKonsultasiForm,
                 $tindakLanjut,
+                $statusBaru,
+                $statusBaru,
                 $idKonsultasi,
                 $idUserAktif,
                 $idPuskesmasAktif
@@ -282,9 +342,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             if (mysqli_stmt_execute($stmtUpdate)) {
                 mysqli_stmt_close($stmtUpdate);
 
-                header(
-                    "Location: data_konsultasi.php?pesan=edit_berhasil"
-                );
+                if ($aksiForm === "selesaikan") {
+                    header(
+                        "Location: riwayat_konsultasi.php?pesan=selesai"
+                    );
+                } else {
+                    header(
+                        "Location: detail_konsultasi.php?id="
+                        . (int) $idKonsultasi
+                        . "&pesan=simpan_sementara"
+                    );
+                }
+
                 exit;
             }
 
@@ -578,9 +647,8 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        <?= $belumDitanggapi
-                            ? "Lengkapi hasil konsultasi dan rencana tindak lanjut balita."
-                            : "Perbarui hasil konsultasi dan tindak lanjut bila diperlukan."; ?>
+                        Simpan sementara jika konsultasi masih berjalan.
+                        Klik <strong>Selesaikan Konsultasi</strong> hanya jika pelayanan benar-benar sudah selesai.
                     </small>
 
                 </div>
@@ -664,13 +732,26 @@ require_once "../includes/navbar.php";
 
                         <button
                             type="submit"
-                            class="btn btn-primary"
+                            name="aksi"
+                            value="simpan_sementara"
+                            class="btn btn-outline-primary"
+                            formnovalidate
+                        >
+                            <i class="bi bi-save"></i>
+                            Simpan Sementara
+                        </button>
+
+                        <button
+                            type="submit"
+                            name="aksi"
+                            value="selesaikan"
+                            class="btn btn-success"
+                            onclick="return confirm(
+                                'Selesaikan konsultasi? Setelah selesai, konsultasi akan dikunci dan masuk ke Riwayat Konsultasi.'
+                            );"
                         >
                             <i class="bi bi-check-circle"></i>
-
-                            <?= $belumDitanggapi
-                                ? "Simpan Tanggapan"
-                                : "Simpan Perubahan"; ?>
+                            Selesaikan Konsultasi
                         </button>
 
                         <a

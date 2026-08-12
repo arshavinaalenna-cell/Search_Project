@@ -457,8 +457,15 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil data hasil deteksi
+| Mengambil hasil deteksi TERBARU per balita dalam periode
 |--------------------------------------------------------------------------
+|
+| Satu balita hanya dihitung satu kali pada laporan utama. Jika balita
+| mempunyai beberapa hasil deteksi dalam rentang tanggal yang dipilih,
+| sistem mengambil id_deteksi paling baru pada periode tersebut.
+|
+| Seluruh record lama tetap tersimpan di database sebagai riwayat.
+|
 */
 
 $sql = "
@@ -494,8 +501,21 @@ $sql = "
     LEFT JOIN puskesmas AS ps
         ON b.id_puskesmas = ps.id_puskesmas
 
-    WHERE hd.tanggal_deteksi
-        BETWEEN ? AND ?
+    INNER JOIN (
+        SELECT
+            pa2.id_balita,
+            MAX(hd2.id_deteksi) AS id_deteksi_terbaru
+
+        FROM hasil_deteksi AS hd2
+
+        INNER JOIN pengukuran_antropometri AS pa2
+            ON hd2.id_pengukuran = pa2.id_pengukuran
+
+        INNER JOIN balita AS b2
+            ON pa2.id_balita = b2.id_balita
+
+        WHERE hd2.tanggal_deteksi
+            BETWEEN ? AND ?
 ";
 
 if (
@@ -507,11 +527,17 @@ if (
     ";
 } elseif ($idPuskesmas > 0) {
     $sql .= "
-        AND b.id_puskesmas = ?
+        AND b2.id_puskesmas = ?
     ";
 }
 
 $sql .= "
+        GROUP BY pa2.id_balita
+    ) AS terbaru
+
+        ON terbaru.id_deteksi_terbaru =
+            hd.id_deteksi
+
     ORDER BY
         hd.tanggal_deteksi DESC,
         hd.id_deteksi DESC
@@ -795,9 +821,9 @@ $dataStatusGizi =
     array_values($grafikStatusGizi);
 
 $labelRisiko = [
-    "Risiko Rendah",
-    "Risiko Sedang",
-    "Risiko Tinggi"
+    "Normal",
+    "Risiko Stunting",
+    "Stunting / Stunting Berat"
 ];
 
 $dataRisiko = [
@@ -859,7 +885,7 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        Rekap hasil deteksi, status verifikasi,
+                        Rekap status terbaru per balita, status verifikasi,
                         periode, dan Puskesmas.
                     </small>
 
@@ -1150,6 +1176,14 @@ require_once "../includes/navbar.php";
 
         </div>
 
+        <div class="alert alert-info mb-4">
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>Perhitungan berdasarkan balita unik.</strong>
+            Setiap balita hanya dihitung satu kali menggunakan
+            <strong>hasil deteksi terbaru dalam periode yang dipilih</strong>.
+            Pengukuran dan hasil deteksi sebelumnya tetap tersimpan sebagai riwayat.
+        </div>
+
         <!-- Ringkasan statistik -->
         <div class="stat-grid">
 
@@ -1162,7 +1196,7 @@ require_once "../includes/navbar.php";
                 <div class="stat-content">
 
                     <p class="stat-label">
-                        Total Deteksi
+                        Total Balita Terpantau
                     </p>
 
                     <p class="stat-value">
@@ -1182,7 +1216,7 @@ require_once "../includes/navbar.php";
                 <div class="stat-content">
 
                     <p class="stat-label">
-                        Risiko Rendah
+                        Normal
                     </p>
 
                     <p class="stat-value">
@@ -1202,7 +1236,7 @@ require_once "../includes/navbar.php";
                 <div class="stat-content">
 
                     <p class="stat-label">
-                        Risiko Sedang
+                        Risiko Stunting
                     </p>
 
                     <p class="stat-value">
@@ -1222,7 +1256,7 @@ require_once "../includes/navbar.php";
                 <div class="stat-content">
 
                     <p class="stat-label">
-                        Risiko Tinggi
+                        Stunting / Stunting Berat
                     </p>
 
                     <p class="stat-value">
@@ -1274,7 +1308,7 @@ require_once "../includes/navbar.php";
                             >
 
                                 <span class="detail-label">
-                                    Komposisi Tingkat Risiko
+                                    Komposisi Status Stunting
                                 </span>
 
                                 <div
@@ -1285,7 +1319,7 @@ require_once "../includes/navbar.php";
                                 >
                                     <canvas
                                         id="grafikRisiko"
-                                        aria-label="Grafik komposisi tingkat risiko"
+                                        aria-label="Grafik komposisi status stunting"
                                     ></canvas>
                                 </div>
 
@@ -1301,7 +1335,7 @@ require_once "../includes/navbar.php";
                             >
 
                                 <span class="detail-label">
-                                    Tren Jumlah Deteksi per Bulan
+                                    Sebaran Hasil Terbaru per Bulan
                                 </span>
 
                                 <div
@@ -1490,7 +1524,7 @@ require_once "../includes/navbar.php";
                                 </th>
 
                                 <th class="text-center">
-                                    Status Risiko
+                                    Status Stunting
                                 </th>
 
                                 <th class="text-center">

@@ -21,6 +21,31 @@ $idKonsultasi = filter_input(
     FILTER_VALIDATE_INT
 );
 
+$kembali =
+    strtolower(
+        trim(
+            (string) (
+                $_GET["kembali"]
+                ?? ""
+            )
+        )
+    );
+
+if (
+    !in_array(
+        $kembali,
+        ["aktif", "riwayat"],
+        true
+    )
+) {
+    $kembali = "aktif";
+}
+
+$urlKembali =
+    $kembali === "riwayat"
+        ? "riwayat_konsultasi.php"
+        : "data_konsultasi.php";
+
 if (!$idKonsultasi) {
     header(
         "Location: data_konsultasi.php?pesan=tidak_ditemukan"
@@ -255,6 +280,34 @@ $tindakLanjutKosong = (
     ) === ""
 );
 
+$konsultasiSelesai =
+    strtolower(
+        trim(
+            (string) (
+                $data["status_konsultasi"]
+                ?? "aktif"
+            )
+        )
+    ) === "selesai";
+
+/*
+|--------------------------------------------------------------------------
+| Detail Riwayat selalu read-only
+|--------------------------------------------------------------------------
+|
+| Konsultasi yang sudah selesai atau dibuka dari menu Riwayat tidak boleh
+| menampilkan tombol Edit Hasil. Riwayat merupakan catatan pelayanan final.
+|
+*/
+
+if (
+    $konsultasiSelesai
+    || $kembali === "riwayat"
+) {
+    $bolehEdit = false;
+    $bolehMulaiKonsultasi = false;
+}
+
 if ($keluhanKosong) {
     $statusKonsultasi =
         "Menunggu Orang Tua";
@@ -274,14 +327,25 @@ if ($keluhanKosong) {
     $ikonStatusKonsultasi =
         "bi-hourglass-split";
 } else {
-    $statusKonsultasi =
-        "Sudah Ditanggapi";
+    if ($konsultasiSelesai) {
+        $statusKonsultasi =
+            "Selesai";
 
-    $kelasStatusKonsultasi =
-        "bg-success";
+        $kelasStatusKonsultasi =
+            "bg-success";
 
-    $ikonStatusKonsultasi =
-        "bi-check-circle";
+        $ikonStatusKonsultasi =
+            "bi-check-circle";
+    } else {
+        $statusKonsultasi =
+            "Tersimpan Sementara";
+
+        $kelasStatusKonsultasi =
+            "bg-info";
+
+        $ikonStatusKonsultasi =
+            "bi-save";
+    }
 }
 
 $tanggalTampil = "-";
@@ -342,7 +406,11 @@ require_once "../includes/navbar.php";
                     <?php endif; ?>
 
                     <a
-                        href="data_konsultasi.php"
+                        href="<?= htmlspecialchars(
+                            $urlKembali,
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?>"
                         class="btn btn-secondary btn-sm"
                     >
                         <i class="bi bi-arrow-left"></i>
@@ -381,6 +449,39 @@ require_once "../includes/navbar.php";
             </div>
 
             <div class="card-body">
+
+                <?php if ($kembali === "riwayat"): ?>
+
+                    <div class="alert alert-success">
+                        <i class="bi bi-lock-fill me-1"></i>
+                        <strong>Mode Riwayat.</strong>
+                        Konsultasi ini bersifat read-only dan tidak dapat diedit.
+                    </div>
+
+                <?php endif; ?>
+
+                <?php if (
+                    ($_GET["pesan"] ?? "") === "simpan_sementara"
+                ): ?>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-save me-1"></i>
+                        Hasil konsultasi berhasil disimpan sementara.
+                        Konsultasi masih aktif dan masih dapat diedit oleh Ahli Gizi.
+                    </div>
+
+                <?php endif; ?>
+
+                <?php if ($konsultasiSelesai): ?>
+
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill me-1"></i>
+                        <strong>Konsultasi selesai.</strong>
+                        Data ini sudah menjadi riwayat pelayanan dan
+                        tidak dapat diedit kembali.
+                    </div>
+
+                <?php endif; ?>
 
                 <div class="alert alert-warning">
                     <i class="bi bi-bell-fill me-1"></i>

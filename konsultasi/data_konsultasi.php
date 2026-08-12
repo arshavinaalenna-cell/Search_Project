@@ -13,7 +13,7 @@ cekRole([
     "dinkes"
 ]);
 
-$judulHalaman = "Data Konsultasi | Sistem Deteksi Stunting";
+$judulHalaman = "Konsultasi Aktif | Sistem Deteksi Stunting";
 
 $roleAktif = $_SESSION["role"] ?? "";
 $idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
@@ -158,8 +158,7 @@ if (
         [
             "",
             "menunggu_orang_tua",
-            "menunggu_ahli_gizi",
-            "ditanggapi"
+            "menunggu_ahli_gizi"
         ],
         true
     )
@@ -342,6 +341,8 @@ $selectKonsultasi = "
         k.keluhan,
         k.hasil_konsultasi,
         k.tindak_lanjut,
+        k.status_konsultasi,
+        k.tanggal_selesai,
         b.nama_balita,
         b.nik_balita,
         b.id_puskesmas,
@@ -362,7 +363,8 @@ $selectKonsultasi = "
 
 $whereKonsultasi = [
     "k.sumber_pengajuan = 'ahli_gizi'",
-    "hd.keputusan_konsultasi = 'Perlu konsultasi'"
+    "hd.keputusan_konsultasi = 'Perlu konsultasi'",
+    "LOWER(TRIM(COALESCE(k.status_konsultasi, 'aktif'))) <> 'selesai'"
 ];
 
 $tipeParameter = "";
@@ -615,13 +617,13 @@ require_once "../includes/navbar.php";
                 <div>
 
                     <h4 class="mb-1">
-                        Data Konsultasi
+                        Konsultasi Aktif
                     </h4>
 
                     <small class="text-muted">
 
                         <?php if ($modeMonitoring): ?>
-                            Pantau riwayat konsultasi gizi dan tindak lanjut balita.
+                            Pantau konsultasi yang masih berjalan dan tindak lanjut balita.
                         <?php elseif ($roleAktif === "orang_tua"): ?>
                             Lihat konsultasi yang telah direkomendasikan Ahli Gizi untuk balita Anda.
                         <?php elseif ($roleAktif === "petugas_gizi"): ?>
@@ -666,6 +668,14 @@ require_once "../includes/navbar.php";
                         </span>
 
                     <?php endif; ?>
+
+                    <a
+                        href="riwayat_konsultasi.php"
+                        class="btn btn-outline-primary btn-sm"
+                    >
+                        <i class="bi bi-clock-history"></i>
+                        Riwayat Konsultasi
+                    </a>
 
                     <a
                         href="../dashboard/dashboard.php"
@@ -833,15 +843,6 @@ require_once "../includes/navbar.php";
                                     : ""; ?>
                             >
                                 Menunggu Ahli Gizi
-                            </option>
-
-                            <option
-                                value="ditanggapi"
-                                <?= $filterStatus === "ditanggapi"
-                                    ? "selected"
-                                    : ""; ?>
-                            >
-                                Sudah Ditanggapi
                             </option>
                         </select>
 

@@ -25,6 +25,24 @@ cekRole([
 $roleAktif = $_SESSION["role"] ?? "";
 $sumber = trim((string) ($_GET["sumber"] ?? ""));
 
+/*
+|--------------------------------------------------------------------------
+| Halaman asal proses analisis
+|--------------------------------------------------------------------------
+| Petugas Gizi dapat memulai Analisis Ulang dari dua menu:
+| - Skrining & Analisis  -> kembali ke menu Skrining
+| - Hasil Deteksi       -> kembali ke menu Hasil Deteksi
+|
+| Kader selalu kembali ke menu Skrining.
+*/
+$kembali = strtolower(trim((string) ($_GET["kembali"] ?? "")));
+
+if (!in_array($kembali, ["skrining", "deteksi"], true)) {
+    $kembali = $roleAktif === "petugas_gizi"
+        ? "deteksi"
+        : "skrining";
+}
+
 $judulHalaman =
     "Analisis Risiko Stunting | Sistem Deteksi Stunting";
 
@@ -792,29 +810,118 @@ function hitungZScoreTbu(
     array $tabelPerempuan
 ): ?float {
 
-    $umurTerbatas = max(0, min(60, $umurBulan));
+    /*
+    |--------------------------------------------------------------------------
+    | Validasi antropometri PB/U atau TB/U
+    |--------------------------------------------------------------------------
+    |
+    | Standar WHO Child Growth Standards yang dipakai aplikasi ini adalah
+    | untuk usia 0-60 bulan. Umur di luar rentang tersebut TIDAK boleh
+    | dipaksa menjadi 0 atau 60 bulan karena dapat menghasilkan klasifikasi
+    | yang salah.
+    |
+    */
 
-    $tabel = (
-        strtolower(trim($jenisKelamin)) === "laki-laki"
-    ) ? $tabelLakiLaki : $tabelPerempuan;
-
-    if (!isset($tabel[$umurTerbatas])) {
+    if (
+        $tinggiBadan <= 0
+        || $umurBulan < 0
+        || $umurBulan > 60
+    ) {
         return null;
     }
 
-    $median = $tabel[$umurTerbatas]["M"];
-    $koefisienVariasi = $tabel[$umurTerbatas]["S"];
+    $jenisKelaminNormal = strtolower(
+        trim($jenisKelamin)
+    );
 
-    if ($median <= 0 || $koefisienVariasi <= 0) {
+    $lakiLaki = in_array(
+        $jenisKelaminNormal,
+        [
+            "laki-laki",
+            "laki laki",
+            "l",
+            "male",
+            "pria"
+        ],
+        true
+    );
+
+    $perempuan = in_array(
+        $jenisKelaminNormal,
+        [
+            "perempuan",
+            "p",
+            "female",
+            "wanita"
+        ],
+        true
+    );
+
+    /*
+    | Jangan otomatis menganggap nilai yang tidak dikenal sebagai perempuan.
+    | Data jenis kelamin yang tidak valid harus diperiksa terlebih dahulu.
+    */
+    if (!$lakiLaki && !$perempuan) {
         return null;
     }
+
+    $tabel = $lakiLaki
+        ? $tabelLakiLaki
+        : $tabelPerempuan;
+
+    if (!isset($tabel[$umurBulan])) {
+        return null;
+    }
+
+    $median =
+        (float) $tabel[$umurBulan]["M"];
+
+    $koefisienVariasi =
+        (float) $tabel[$umurBulan]["S"];
+
+    if (
+        $median <= 0
+        || $koefisienVariasi <= 0
+    ) {
+        return null;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Z-score PB/U atau TB/U
+    |--------------------------------------------------------------------------
+    |
+    | Untuk tabel length/height-for-age yang digunakan di sini, L = 1,
+    | sehingga bentuk LMS menyederhana menjadi:
+    |
+    | Z = (X - M) / (M x S)
+    |
+    */
 
     $zScore =
-        ($tinggiBadan - $median) / ($median * $koefisienVariasi);
+        ($tinggiBadan - $median)
+        / ($median * $koefisienVariasi);
 
     return round($zScore, 2);
 }
 
+/*
+|--------------------------------------------------------------------------
+| Klasifikasi status stunting aplikasi
+|--------------------------------------------------------------------------
+|
+| Nama fungsi klasifikasiStuntingWho() DIPERTAHANKAN untuk kompatibilitas
+| dengan kode lama.
+|
+| Batas WHO/Kemenkes utama:
+| - Z < -3 SD          : sangat pendek / severe stunting
+| - -3 sampai < -2 SD  : pendek / stunting
+|
+| Aplikasi mempertahankan kategori tambahan "Risiko Stunting" pada
+| -2 SD sampai < -1 SD sebagai peringatan dini internal aplikasi.
+| Kategori tambahan ini bukan pengganti klasifikasi antropometri resmi.
+|
+*/
 function klasifikasiStuntingWho(?float $zScore): array
 {
     if ($zScore === null) {
@@ -853,7 +960,7 @@ function klasifikasiStuntingWho(?float $zScore): array
             "badge" => "badge-warning",
             "stat" => "stat-warning",
             "ikon" => "bi-exclamation-triangle",
-            "keterangan" => "Tinggi badan balita mendekati ambang batas stunting (-2 SD <= Z-Score < -1 SD). Perlu diwaspadai dan dipantau lebih ketat agar tidak turun ke kategori stunting.",
+            "keterangan" => "Kategori peringatan dini aplikasi: tinggi/panjang badan berada pada -2 SD <= Z-Score < -1 SD. Balita belum termasuk stunting berdasarkan ambang < -2 SD, tetapi perlu pemantauan lebih ketat.",
         ];
     }
 
@@ -862,7 +969,7 @@ function klasifikasiStuntingWho(?float $zScore): array
         "badge" => "badge-success",
         "stat" => "stat-success",
         "ikon" => "bi-shield-check",
-        "keterangan" => "Tinggi badan balita sesuai dengan standar pertumbuhan WHO untuk usianya (Z-Score >= -1 SD).",
+        "keterangan" => "Status aplikasi Normal karena Z-Score >= -1 SD. Ambang ini digunakan agar kategori Risiko Stunting (-2 SD sampai < -1 SD) tetap dapat dipertahankan sebagai peringatan dini.",
     ];
 }
 
@@ -933,6 +1040,12 @@ function ambilLmsBbPbTb(
     |
     | Ini mengikuti asumsi metode pengukuran berdasarkan umur karena tabel
     | pengukuran aplikasi belum memiliki kolom "cara ukur".
+    |
+    | CATATAN:
+    | Patch ini sengaja tidak menambah kolom/metode pengukuran agar tidak
+    | mengubah database dan file lain. Jadi:
+    | - < 24 bulan  diasumsikan diukur terlentang (PB)
+    | - >= 24 bulan diasumsikan diukur berdiri (TB)
     |----------------------------------------------------------------------
     */
 
@@ -1023,6 +1136,176 @@ function ambilLmsBbPbTb(
 | y = berat badan (kg)
 */
 
+/*
+|--------------------------------------------------------------------------
+| Menghitung nilai antropometri pada Z-score tertentu dari parameter LMS
+|--------------------------------------------------------------------------
+*/
+
+function nilaiAntropometriDariLms(
+    float $z,
+    float $l,
+    float $median,
+    float $koefisienVariasi
+): ?float {
+
+    if (
+        $median <= 0
+        || $koefisienVariasi <= 0
+    ) {
+        return null;
+    }
+
+    if (abs($l) < 0.000001) {
+        return $median
+            * exp(
+                $koefisienVariasi * $z
+            );
+    }
+
+    $bagian =
+        1
+        + (
+            $l
+            * $koefisienVariasi
+            * $z
+        );
+
+    if ($bagian <= 0) {
+        return null;
+    }
+
+    return $median
+        * pow(
+            $bagian,
+            1 / $l
+        );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Menghitung Z-score LMS dengan penyesuaian nilai ekstrem WHO
+|--------------------------------------------------------------------------
+|
+| Pada rentang -3 sampai +3 SD digunakan formula LMS.
+| Untuk nilai di luar rentang tersebut digunakan jarak SD antara
+| titik +2/+3 atau -2/-3 agar nilai ekstrem tidak diekstrapolasi
+| terus-menerus hanya dengan kurva LMS.
+|
+*/
+
+function hitungZScoreLmsWho(
+    float $nilai,
+    float $l,
+    float $median,
+    float $koefisienVariasi
+): ?float {
+
+    if (
+        $nilai <= 0
+        || $median <= 0
+        || $koefisienVariasi <= 0
+    ) {
+        return null;
+    }
+
+    if (abs($l) < 0.000001) {
+        $zLms =
+            log($nilai / $median)
+            / $koefisienVariasi;
+    } else {
+        $zLms =
+            (
+                pow(
+                    $nilai / $median,
+                    $l
+                )
+                - 1
+            )
+            / (
+                $l
+                * $koefisienVariasi
+            );
+    }
+
+    /*
+    | Nilai dalam rentang utama LMS.
+    */
+    if (
+        $zLms >= -3
+        && $zLms <= 3
+    ) {
+        return $zLms;
+    }
+
+    if ($zLms > 3) {
+
+        $nilaiZ2 = nilaiAntropometriDariLms(
+            2,
+            $l,
+            $median,
+            $koefisienVariasi
+        );
+
+        $nilaiZ3 = nilaiAntropometriDariLms(
+            3,
+            $l,
+            $median,
+            $koefisienVariasi
+        );
+
+        if (
+            $nilaiZ2 === null
+            || $nilaiZ3 === null
+            || $nilaiZ3 <= $nilaiZ2
+        ) {
+            return $zLms;
+        }
+
+        $jarakSdPositif =
+            $nilaiZ3 - $nilaiZ2;
+
+        return
+            3
+            + (
+                ($nilai - $nilaiZ3)
+                / $jarakSdPositif
+            );
+    }
+
+    $nilaiMinus2 = nilaiAntropometriDariLms(
+        -2,
+        $l,
+        $median,
+        $koefisienVariasi
+    );
+
+    $nilaiMinus3 = nilaiAntropometriDariLms(
+        -3,
+        $l,
+        $median,
+        $koefisienVariasi
+    );
+
+    if (
+        $nilaiMinus2 === null
+        || $nilaiMinus3 === null
+        || $nilaiMinus2 <= $nilaiMinus3
+    ) {
+        return $zLms;
+    }
+
+    $jarakSdNegatif =
+        $nilaiMinus2 - $nilaiMinus3;
+
+    return
+        -3
+        + (
+            ($nilai - $nilaiMinus3)
+            / $jarakSdNegatif
+        );
+}
+
 function hitungZScoreBbPbTb(
     float $beratBadan,
     float $panjangTinggiBadan,
@@ -1063,20 +1346,15 @@ function hitungZScoreBbPbTb(
         return null;
     }
 
-    if (abs($l) < 0.000001) {
-        $zScore =
-            log($beratBadan / $median)
-            / $koefisienVariasi;
-    } else {
-        $zScore =
-            (
-                pow(
-                    $beratBadan / $median,
-                    $l
-                )
-                - 1
-            )
-            / ($l * $koefisienVariasi);
+    $zScore = hitungZScoreLmsWho(
+        $beratBadan,
+        $l,
+        $median,
+        $koefisienVariasi
+    );
+
+    if ($zScore === null) {
+        return null;
     }
 
     return round($zScore, 2);
@@ -1368,7 +1646,29 @@ $hasilKlasifikasiGizi = klasifikasiGiziWho(
 
 $statusGizi = $hasilKlasifikasiGizi["label"];
 
+/*
+|--------------------------------------------------------------------------
+| Kompatibilitas hasil_deteksi.id_skrining
+|--------------------------------------------------------------------------
+| Database lama belum tentu mempunyai kolom id_skrining.
+| Analisis tetap dapat disimpan tanpa kolom tersebut.
+*/
+$punyaIdSkriningPadaDeteksi = false;
+
+$cekKolomIdSkrining = mysqli_query(
+    $conn,
+    "SHOW COLUMNS FROM hasil_deteksi LIKE 'id_skrining'"
+);
+
+if (
+    $cekKolomIdSkrining
+    && mysqli_num_rows($cekKolomIdSkrining) > 0
+) {
+    $punyaIdSkriningPadaDeteksi = true;
+}
+
 $idPengukuran = (int) $pengukuran["id_pengukuran"];
+$idSkriningDipakai = (int) ($skrining["id_skrining"] ?? 0);
 
 if ($idPengukuran <= 0) {
     die("ID pengukuran tidak valid.");
@@ -1419,85 +1719,184 @@ mysqli_stmt_close($stmtCek);
 
 if ($jumlahData > 0) {
 
-    $sqlSimpan = "
-        UPDATE hasil_deteksi
-        SET
-            status_gizi = ?,
-            status_stunting = ?,
-            tanggal_deteksi = CURDATE(),
-            status_verifikasi = 'Belum diverifikasi',
-            catatan_verifikasi = NULL,
-            diverifikasi_oleh = NULL,
-            tanggal_verifikasi = NULL
-        WHERE id_pengukuran = ?
-    ";
+    if ($punyaIdSkriningPadaDeteksi) {
 
-    $stmtSimpan = mysqli_prepare(
-        $conn,
-        $sqlSimpan
-    );
+        $sqlSimpan = "
+            UPDATE hasil_deteksi
+            SET
+                id_skrining = ?,
+                status_gizi = ?,
+                status_stunting = ?,
+                tanggal_deteksi = CURDATE(),
+                status_verifikasi = 'Belum diverifikasi',
+                catatan_verifikasi = NULL,
+                diverifikasi_oleh = NULL,
+                tanggal_verifikasi = NULL
+            WHERE id_pengukuran = ?
+        ";
 
-    if (!$stmtSimpan) {
-        die(
-            "Gagal menyiapkan UPDATE: "
-            . mysqli_error($conn)
+        $stmtSimpan = mysqli_prepare(
+            $conn,
+            $sqlSimpan
+        );
+
+        if (!$stmtSimpan) {
+            die(
+                "Gagal menyiapkan UPDATE: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmtSimpan,
+            "issi",
+            $idSkriningDipakai,
+            $statusGizi,
+            $statusStunting,
+            $idPengukuran
+        );
+
+    } else {
+
+        /*
+        | Struktur database lama tanpa hasil_deteksi.id_skrining.
+        */
+        $sqlSimpan = "
+            UPDATE hasil_deteksi
+            SET
+                status_gizi = ?,
+                status_stunting = ?,
+                tanggal_deteksi = CURDATE(),
+                status_verifikasi = 'Belum diverifikasi',
+                catatan_verifikasi = NULL,
+                diverifikasi_oleh = NULL,
+                tanggal_verifikasi = NULL
+            WHERE id_pengukuran = ?
+        ";
+
+        $stmtSimpan = mysqli_prepare(
+            $conn,
+            $sqlSimpan
+        );
+
+        if (!$stmtSimpan) {
+            die(
+                "Gagal menyiapkan UPDATE: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmtSimpan,
+            "ssi",
+            $statusGizi,
+            $statusStunting,
+            $idPengukuran
         );
     }
-
-    mysqli_stmt_bind_param(
-        $stmtSimpan,
-        "ssi",
-        $statusGizi,
-        $statusStunting,
-        $idPengukuran
-    );
 
 } else {
 
-    $sqlSimpan = "
-        INSERT INTO hasil_deteksi
-        (
-            id_pengukuran,
-            status_gizi,
-            status_stunting,
-            tanggal_deteksi,
-            status_verifikasi,
-            catatan_verifikasi,
-            diverifikasi_oleh,
-            tanggal_verifikasi
-        )
-        VALUES
-        (
-            ?,
-            ?,
-            ?,
-            CURDATE(),
-            'Belum diverifikasi',
-            NULL,
-            NULL,
-            NULL
-        )
-    ";
+    if ($punyaIdSkriningPadaDeteksi) {
 
-    $stmtSimpan = mysqli_prepare(
-        $conn,
-        $sqlSimpan
-    );
+        $sqlSimpan = "
+            INSERT INTO hasil_deteksi
+            (
+                id_pengukuran,
+                id_skrining,
+                status_gizi,
+                status_stunting,
+                tanggal_deteksi,
+                status_verifikasi,
+                catatan_verifikasi,
+                diverifikasi_oleh,
+                tanggal_verifikasi
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                CURDATE(),
+                'Belum diverifikasi',
+                NULL,
+                NULL,
+                NULL
+            )
+        ";
 
-    if (!$stmtSimpan) {
-        die(
-            "Gagal menyiapkan INSERT: "
-            . mysqli_error($conn)
+        $stmtSimpan = mysqli_prepare(
+            $conn,
+            $sqlSimpan
+        );
+
+        if (!$stmtSimpan) {
+            die(
+                "Gagal menyiapkan INSERT: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmtSimpan,
+            "iiss",
+            $idPengukuran,
+            $idSkriningDipakai,
+            $statusGizi,
+            $statusStunting
+        );
+
+    } else {
+
+        /*
+        | Struktur database lama tanpa hasil_deteksi.id_skrining.
+        */
+        $sqlSimpan = "
+            INSERT INTO hasil_deteksi
+            (
+                id_pengukuran,
+                status_gizi,
+                status_stunting,
+                tanggal_deteksi,
+                status_verifikasi,
+                catatan_verifikasi,
+                diverifikasi_oleh,
+                tanggal_verifikasi
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                CURDATE(),
+                'Belum diverifikasi',
+                NULL,
+                NULL,
+                NULL
+            )
+        ";
+
+        $stmtSimpan = mysqli_prepare(
+            $conn,
+            $sqlSimpan
+        );
+
+        if (!$stmtSimpan) {
+            die(
+                "Gagal menyiapkan INSERT: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmtSimpan,
+            "iss",
+            $idPengukuran,
+            $statusGizi,
+            $statusStunting
         );
     }
-
-    mysqli_stmt_bind_param(
-        $stmtSimpan,
-        "iss",
-        $idPengukuran,
-        $statusGizi,
-        $statusStunting
-    );
 }
 
 if (!mysqli_stmt_execute($stmtSimpan)) {
@@ -1562,8 +1961,14 @@ if ($roleAktif === "kader") {
     exit;
 }
 
+if ($kembali === "skrining") {
+    header(
+        "Location: ../skrining/hasil_skrining.php?pesan=analisis_berhasil"
+    );
+    exit;
+}
+
 header(
     "Location: hasil_deteksi.php?pesan=analisis_berhasil"
 );
-
 exit;

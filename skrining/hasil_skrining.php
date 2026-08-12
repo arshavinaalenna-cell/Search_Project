@@ -4,6 +4,10 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+/* Tanggal pemantauan mengikuti WIB / Jakarta. */
+date_default_timezone_set("Asia/Jakarta");
+@mysqli_query($conn, "SET time_zone = '+07:00'");
+
 cekRole([
     "kader",
     "petugas_gizi",
@@ -68,6 +72,72 @@ function amanSkrining($nilai): string
         ENT_QUOTES,
         "UTF-8"
     );
+}
+
+function formatTanggalPemantauan($tanggal): string
+{
+    $tanggal = trim((string) ($tanggal ?? ""));
+
+    if (
+        $tanggal === ""
+        || $tanggal === "0000-00-00"
+        || $tanggal === "0000-00-00 00:00:00"
+    ) {
+        return "Belum tercatat";
+    }
+
+    try {
+        $objekTanggal = new DateTime($tanggal, new DateTimeZone("Asia/Jakarta"));
+    } catch (Exception $e) {
+        return "Belum tercatat";
+    }
+
+    $namaBulan = [
+        1 => "Januari",
+        2 => "Februari",
+        3 => "Maret",
+        4 => "April",
+        5 => "Mei",
+        6 => "Juni",
+        7 => "Juli",
+        8 => "Agustus",
+        9 => "September",
+        10 => "Oktober",
+        11 => "November",
+        12 => "Desember"
+    ];
+
+    $bulan = (int) $objekTanggal->format("n");
+
+    return $objekTanggal->format("j")
+        . " " . ($namaBulan[$bulan] ?? "")
+        . " " . $objekTanggal->format("Y");
+}
+
+function skriningDipakaiUlang($tanggalPengukuran, $tanggalSkrining): bool
+{
+    $tanggalPengukuran = trim((string) ($tanggalPengukuran ?? ""));
+    $tanggalSkrining = trim((string) ($tanggalSkrining ?? ""));
+
+    if ($tanggalPengukuran === "" || $tanggalSkrining === "") {
+        return false;
+    }
+
+    if (
+        strpos($tanggalPengukuran, "0000-00-00") === 0
+        || strpos($tanggalSkrining, "0000-00-00") === 0
+    ) {
+        return false;
+    }
+
+    try {
+        $pengukuran = new DateTime($tanggalPengukuran, new DateTimeZone("Asia/Jakarta"));
+        $skrining = new DateTime($tanggalSkrining, new DateTimeZone("Asia/Jakarta"));
+    } catch (Exception $e) {
+        return false;
+    }
+
+    return $skrining->format("Y-m") < $pengukuran->format("Y-m");
 }
 
 function teksStatusStunting($status): string
@@ -147,6 +217,14 @@ function teksStatusGizi($status): string
     */
     if ($statusNormal === "risiko gizi lebih") {
         return "Berisiko Gizi Lebih";
+    }
+
+    if (
+        $statusNormal === "perlu pemeriksaan"
+        || $statusNormal === "perlu pemeriksaan ulang"
+        || $statusNormal === "data antropometri perlu diperiksa"
+    ) {
+        return "Data Antropometri Perlu Diperiksa";
     }
 
     return $statusAsli;
@@ -247,6 +325,9 @@ $bolehTambahSkrining =
     $roleAktif === "kader";
 
 $bolehEditSkrining =
+    $roleAktif === "kader";
+
+$bolehPerbaikiAntropometri =
     $roleAktif === "kader";
 
 $bolehAnalisisSkrining =
@@ -378,8 +459,10 @@ if ($roleBerbasisPuskesmas) {
 |--------------------------------------------------------------------------
 |
 | Filter menggunakan GET agar pilihan tetap tersimpan di URL dan mudah
-| di-reset. Pencarian mencakup nama balita, Puskesmas, pendidikan,
-| pekerjaan, status gizi, status stunting, dan status verifikasi.
+| di-reset. Bulan/tahun mengikuti antropometri terbaru agar status bulanan
+| tetap terbaca walaupun skrining menggunakan data periode sebelumnya.
+| Pencarian mencakup nama balita, Puskesmas, pendidikan, pekerjaan,
+| status gizi, status stunting, dan status verifikasi.
 |
 */
 
@@ -421,6 +504,11 @@ $filterAktif =
 */
 
 $kolomTanggalSkrining = "";
+
+/*
+| Nilai kosong berarti tabel skrining_awal tidak memiliki kolom tanggal
+| yang dikenali. Jangan membentuk nama kolom SQL dari string kosong.
+*/
 $kandidatKolomTanggal = [
     "tanggal_skrining",
     "tanggal_input",
@@ -444,10 +532,11 @@ if ($hasilKolomSkrining) {
     }
 }
 
-$ekspresiTanggalFilter =
-    $kolomTanggalSkrining !== ""
-        ? "s.`" . $kolomTanggalSkrining . "`"
-        : "det.tanggal_deteksi";
+/*
+| Filter bulan/tahun mengikuti KUNJUNGAN ANTROPOMETRI terbaru,
+| bukan tanggal skrining. Skrining boleh memakai data bulan sebelumnya.
+*/
+$ekspresiTanggalFilter = "det.tanggal_pengukuran";
 
 /*
 |--------------------------------------------------------------------------
@@ -470,6 +559,98 @@ $ekspresiTanggalFilter =
 |--------------------------------------------------------------------------
 */
 
+/*
+|--------------------------------------------------------------------------
+| Kompatibilitas struktur database
+|--------------------------------------------------------------------------
+|
+| Versi database lama belum tentu memiliki:
+| - hasil_deteksi.id_skrining
+| - skrining_awal.tanggal_skrining
+|
+| Halaman ini mendeteksi struktur tabel lebih dulu sehingga tetap dapat
+| digunakan tanpa menghasilkan "Unknown column".
+|
+*/
+
+$punyaIdSkriningPadaDeteksi = false;
+
+$cekIdSkriningDeteksi = mysqli_query(
+    $conn,
+    "SHOW COLUMNS FROM hasil_deteksi LIKE 'id_skrining'"
+);
+
+if (
+    $cekIdSkriningDeteksi
+    && mysqli_num_rows($cekIdSkriningDeteksi) > 0
+) {
+    $punyaIdSkriningPadaDeteksi = true;
+}
+
+/*
+| Ekspresi tanggal skrining pada SELECT utama.
+| Jika kolom tanggal belum tersedia, hasilnya NULL dan tampilan tetap aman.
+*/
+$selectTanggalSkriningUtama = "NULL";
+
+if ($kolomTanggalSkrining !== "") {
+    $kolomTanggalSkriningAman = str_replace(
+        "`",
+        "``",
+        $kolomTanggalSkrining
+    );
+
+    $selectTanggalSkriningUtama =
+        "s.`{$kolomTanggalSkriningAman}`";
+}
+
+/*
+| Bagian relasi hasil_deteksi -> skrining_awal hanya dipakai bila
+| hasil_deteksi memang memiliki kolom id_skrining.
+*/
+if ($punyaIdSkriningPadaDeteksi) {
+
+    $selectIdSkriningDeteksi =
+        "hd.id_skrining";
+
+    if ($kolomTanggalSkrining !== "") {
+
+        $kolomTanggalSkriningAman = str_replace(
+            "`",
+            "``",
+            $kolomTanggalSkrining
+        );
+
+        $selectTanggalSkriningDipakai =
+            "skr_used.`{$kolomTanggalSkriningAman}`";
+
+    } else {
+
+        $selectTanggalSkriningDipakai =
+            "NULL";
+    }
+
+    $joinSkriningDipakai = "
+        LEFT JOIN skrining_awal AS skr_used
+            ON skr_used.id_skrining = hd.id_skrining
+    ";
+
+} else {
+
+    /*
+    | Database lama:
+    | tidak ada relasi langsung dari hasil_deteksi ke skrining_awal.
+    | Status tetap diambil dari hasil deteksi terbaru balita.
+    */
+    $selectIdSkriningDeteksi =
+        "NULL";
+
+    $selectTanggalSkriningDipakai =
+        "NULL";
+
+    $joinSkriningDipakai = "";
+}
+
 $sqlDasar = "
     SELECT
         s.id_skrining,
@@ -477,6 +658,8 @@ $sqlDasar = "
         s.tinggi_badan_ibu,
         s.pendidikan_ibu,
         s.pekerjaan_ibu,
+        {$selectTanggalSkriningUtama}
+            AS tanggal_skrining_terakhir,
 
         b.nama_balita,
         b.id_puskesmas,
@@ -484,6 +667,10 @@ $sqlDasar = "
         ps.nama_puskesmas,
 
         det.id_deteksi,
+        det.id_pengukuran,
+        det.id_skrining AS id_skrining_dipakai,
+        det.tanggal_pengukuran,
+        det.tanggal_skrining_dipakai,
         det.status_gizi,
         det.status_stunting,
         det.tanggal_deteksi,
@@ -504,7 +691,13 @@ $sqlDasar = "
 
         SELECT
             hd.id_deteksi,
+            hd.id_pengukuran,
+            {$selectIdSkriningDeteksi}
+                AS id_skrining,
             pa.id_balita,
+            pa.tanggal_pengukuran,
+            {$selectTanggalSkriningDipakai}
+                AS tanggal_skrining_dipakai,
             hd.status_gizi,
             hd.status_stunting,
             hd.tanggal_deteksi,
@@ -518,6 +711,8 @@ $sqlDasar = "
         INNER JOIN pengukuran_antropometri AS pa
             ON pa.id_pengukuran =
                 hd.id_pengukuran
+
+        {$joinSkriningDipakai}
 
         INNER JOIN (
 
@@ -591,12 +786,16 @@ if ($cariSkrining !== "") {
 
 if ($bulanFilter > 0) {
     $kondisiSkrining[] =
-        "MONTH({$ekspresiTanggalFilter}) = " . (int) $bulanFilter;
+        "SUBSTRING(CAST({$ekspresiTanggalFilter} AS CHAR), 6, 2) = '" .
+        str_pad((string) ((int) $bulanFilter), 2, "0", STR_PAD_LEFT) .
+        "'";
 }
 
 if ($tahunFilter > 0) {
     $kondisiSkrining[] =
-        "YEAR({$ekspresiTanggalFilter}) = " . (int) $tahunFilter;
+        "SUBSTRING(CAST({$ekspresiTanggalFilter} AS CHAR), 1, 4) = '" .
+        (int) $tahunFilter .
+        "'";
 }
 
 $sql = $sqlDasar;
@@ -620,7 +819,10 @@ $arahUrutan =
         ? "ASC"
         : "DESC";
 
-$sql .= "\nORDER BY s.id_skrining {$arahUrutan}";
+$sql .= "\nORDER BY
+    CASE WHEN det.tanggal_pengukuran IS NULL THEN 1 ELSE 0 END,
+    det.tanggal_pengukuran {$arahUrutan},
+    s.id_skrining {$arahUrutan}";
 
 $query = mysqli_query(
     $conn,
@@ -761,6 +963,13 @@ switch ($pesan) {
 
         $jenisAlert = "success";
         $isiPesan = "Hasil skrining berhasil diverifikasi oleh Ahli Gizi.";
+        break;
+
+    case "pemeriksaan_ulang_diperlukan":
+
+        $jenisAlert = "warning";
+        $isiPesan =
+            "Data antropometri perlu diperiksa ulang. Ahli Gizi tetap dapat melakukan verifikasi dengan memberikan catatan pada hasil verifikasi.";
         break;
 
     case "edit_berhasil":
@@ -1455,6 +1664,36 @@ require_once "../includes/navbar.php";
 
                 </form>
 
+                <div class="alert alert-light border mb-3">
+                    <div class="d-flex flex-wrap gap-3 align-items-center small">
+                        <strong>
+                            <i class="bi bi-info-circle me-1"></i>
+                            Keterangan:
+                        </strong>
+
+                        <span>
+                            <span class="badge text-bg-success">
+                                Diperbarui bulan ini
+                            </span>
+                            skrining diperbarui pada periode kunjungan terbaru.
+                        </span>
+
+                        <span>
+                            <span class="badge text-bg-info">
+                                Menggunakan skrining sebelumnya
+                            </span>
+                            faktor risiko belum berubah sehingga memakai data terakhir.
+                        </span>
+
+                        <span>
+                            <span class="badge text-bg-secondary">
+                                Skrining tersimpan
+                            </span>
+                            data tersedia tetapi tanggal belum tercatat pada database lama.
+                        </span>
+                    </div>
+                </div>
+
                 <!-- =================================================
                      TABEL SKRINING
                 ================================================== -->
@@ -1500,11 +1739,25 @@ require_once "../includes/navbar.php";
                                 </th>
 
                                 <th class="text-center">
-                                    Status Gizi
+                                    Antropometri Terakhir
                                 </th>
 
                                 <th class="text-center">
-                                    Status Stunting
+                                    Skrining Digunakan
+                                </th>
+
+                                <th class="text-center">
+                                    <div>Status Gizi</div>
+                                    <small class="text-muted fw-normal">
+                                        BB/PB atau BB/TB
+                                    </small>
+                                </th>
+
+                                <th class="text-center">
+                                    <div>Status Stunting</div>
+                                    <small class="text-muted fw-normal">
+                                        PB/U atau TB/U
+                                    </small>
                                 </th>
 
                                 <?php if ($tampilkanVerifikasi): ?>
@@ -1566,6 +1819,35 @@ require_once "../includes/navbar.php";
                                         ?? 0
                                     );
 
+                                $idPengukuranTerakhir =
+                                    (int) (
+                                        $data[
+                                            "id_pengukuran"
+                                        ]
+                                        ?? 0
+                                    );
+
+                                $statusGiziAsliNormal =
+                                    strtolower(
+                                        trim(
+                                            (string) (
+                                                $data["status_gizi"]
+                                                ?? ""
+                                            )
+                                        )
+                                    );
+
+                                $perluPemeriksaanAntropometri =
+                                    in_array(
+                                        $statusGiziAsliNormal,
+                                        [
+                                            "perlu pemeriksaan",
+                                            "perlu pemeriksaan ulang",
+                                            "data antropometri perlu diperiksa"
+                                        ],
+                                        true
+                                    );
+
                                 $statusGizi =
                                     teksStatusGizi(
                                         $data[
@@ -1596,6 +1878,20 @@ require_once "../includes/navbar.php";
                                     $idDeteksi > 0
                                     && strtolower(trim((string) ($data["status_verifikasi"] ?? "")))
                                         === "sudah diverifikasi";
+
+                                $tanggalPengukuranTerakhir =
+                                    $data["tanggal_pengukuran"] ?? null;
+
+                                $tanggalSkriningDipakai =
+                                    $data["tanggal_skrining_dipakai"]
+                                    ?? $data["tanggal_skrining_terakhir"]
+                                    ?? null;
+
+                                $pakaiSkriningSebelumnya =
+                                    skriningDipakaiUlang(
+                                        $tanggalPengukuranTerakhir,
+                                        $tanggalSkriningDipakai
+                                    );
 
                             ?>
 
@@ -1709,6 +2005,93 @@ require_once "../includes/navbar.php";
                                                 "pekerjaan_ibu"
                                             ]
                                         ); ?>
+
+                                    </td>
+
+                                    <!-- ANTROPOMETRI TERAKHIR -->
+                                    <td class="text-center">
+                                        <div class="fw-semibold">
+                                            <?= amanSkrining(
+                                                formatTanggalPemantauan(
+                                                    $tanggalPengukuranTerakhir
+                                                )
+                                            ); ?>
+                                        </div>
+                                        <?php if ($idDeteksi > 0): ?>
+                                            <small class="text-muted">
+                                                Status dihitung dari pengukuran ini
+                                            </small>
+                                        <?php else: ?>
+                                            <small class="text-muted">
+                                                Belum ada hasil deteksi
+                                            </small>
+                                        <?php endif; ?>
+                                    </td>
+
+                                    <!-- SKRINING YANG DIGUNAKAN -->
+                                    <td class="text-center">
+
+                                        <?php if ($tanggalSkriningDipakai): ?>
+
+                                            <div class="fw-semibold">
+                                                <?= amanSkrining(
+                                                    formatTanggalPemantauan(
+                                                        $tanggalSkriningDipakai
+                                                    )
+                                                ); ?>
+                                            </div>
+
+                                            <?php if ($pakaiSkriningSebelumnya): ?>
+
+                                                <span
+                                                    class="badge rounded-pill text-bg-info mt-1"
+                                                    title="Belum ada pembaruan skrining pada kunjungan antropometri terbaru."
+                                                >
+                                                    Menggunakan skrining sebelumnya
+                                                </span>
+
+                                                <small class="d-block text-muted mt-1">
+                                                    Faktor risiko memakai data skrining terakhir.
+                                                </small>
+
+                                            <?php else: ?>
+
+                                                <span
+                                                    class="badge rounded-pill text-bg-success mt-1"
+                                                >
+                                                    Diperbarui bulan ini
+                                                </span>
+
+                                            <?php endif; ?>
+
+                                        <?php elseif ($idSkrining > 0): ?>
+
+                                            <div class="fw-semibold text-muted">
+                                                Tanggal belum tercatat
+                                            </div>
+
+                                            <span
+                                                class="badge rounded-pill text-bg-secondary mt-1"
+                                                title="Data skrining tersedia, tetapi versi database lama belum mencatat tanggal skrining."
+                                            >
+                                                Skrining tersimpan
+                                            </span>
+
+                                            <small class="d-block text-muted mt-1">
+                                                Data skrining tersedia, tanggal belum tercatat.
+                                            </small>
+
+                                        <?php else: ?>
+
+                                            <div class="fw-semibold text-warning">
+                                                Belum pernah skrining
+                                            </div>
+
+                                            <span class="badge rounded-pill text-bg-warning mt-1">
+                                                Perlu skrining pertama
+                                            </span>
+
+                                        <?php endif; ?>
 
                                     </td>
 
@@ -1840,8 +2223,20 @@ require_once "../includes/navbar.php";
                                                         $idDeteksi > 0
                                                     ): ?>
 
+                                                        <?php if ($perluPemeriksaanAntropometri): ?>
+
+                                                            <span
+                                                                class="badge bg-warning text-dark"
+                                                                title="Data antropometri perlu diperiksa ulang oleh Kader"
+                                                            >
+                                                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                                                Perlu Pemeriksaan Ulang
+                                                            </span>
+
+                                                        <?php endif; ?>
+
                                                         <a
-                                                            href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
+                                                            href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>&kembali=skrining"
                                                             class="btn
                                                             btn-primary
                                                             btn-sm"
@@ -1876,7 +2271,7 @@ require_once "../includes/navbar.php";
                                                     <?php else: ?>
 
                                                         <a
-                                                            href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>"
+                                                            href="../deteksi/analisis_deteksi.php?id_balita=<?= $idBalita; ?>&kembali=skrining"
                                                             class="btn
                                                             btn-primary
                                                             btn-sm"
@@ -1893,6 +2288,22 @@ require_once "../includes/navbar.php";
                                                         </a>
 
                                                     <?php endif; ?>
+
+                                                <?php endif; ?>
+
+                                                <?php if (
+                                                    $bolehPerbaikiAntropometri
+                                                    && $perluPemeriksaanAntropometri
+                                                ): ?>
+
+                                                    <a
+                                                        href="../Pengukuran/tambah_pengukuran.php?id_balita=<?= $idBalita; ?>&pemeriksaan_ulang=1"
+                                                        class="btn btn-danger btn-sm"
+                                                        title="Input pengukuran ulang tanpa menghapus riwayat sebelumnya"
+                                                    >
+                                                        <i class="bi bi-rulers"></i>
+                                                        Perbaiki Antropometri
+                                                    </a>
 
                                                 <?php endif; ?>
 
@@ -1936,7 +2347,7 @@ require_once "../includes/navbar.php";
                             <tr>
 
                                 <td
-                                    colspan="<?= 8
+                                    colspan="<?= 10
                                         + ($tampilkanVerifikasi ? 1 : 0)
                                         + ($punyaAksiSkrining ? 1 : 0); ?>"
                                 >
@@ -2422,7 +2833,7 @@ require_once "../includes/navbar.php";
                     ?>
 
                         <a
-                            href="../deteksi/analisis_deteksi.php?id_balita=<?= $popupIdBalita; ?>"
+                            href="../deteksi/analisis_deteksi.php?id_balita=<?= $popupIdBalita; ?>&kembali=skrining"
                             class="btn btn-primary"
                         >
 

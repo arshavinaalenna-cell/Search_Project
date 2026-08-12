@@ -2,222 +2,533 @@
 
 /*
 |--------------------------------------------------------------------------
-| Fungsi menghitung total seluruh tabel
+| Statistik Dashboard
 |--------------------------------------------------------------------------
+|
+| Prinsip:
+| 1. Aktivitas/riwayat tetap dihitung sebagai jumlah record.
+| 2. Kondisi kesehatan dihitung berdasarkan HASIL DETEKSI TERBARU
+|    setiap balita, sehingga satu balita tidak dihitung berulang.
+| 3. Kader, Petugas KIA, Petugas Gizi, dan Kepala Puskesmas hanya
+|    menghitung data pada Puskesmas yang terhubung dengan akun.
+| 4. Dinkes melihat seluruh wilayah.
+| 5. Orang Tua hanya melihat data anak milik akunnya.
+|
 */
 
-function hitungTotal(mysqli $conn, string $namaTabel): int
-{
-    $tabelDiizinkan = [
-        "balita",
-        "pengguna",
-        "skrining_awal",
-        "hasil_deteksi",
-        "pengukuran_antropometri",
-        "konsultasi"
-    ];
+function statistikKolomAda(
+    mysqli $conn,
+    string $tabel,
+    string $kolom
+): bool {
+    $tabelAman = mysqli_real_escape_string($conn, $tabel);
+    $kolomAman = mysqli_real_escape_string($conn, $kolom);
 
-    if (!in_array($namaTabel, $tabelDiizinkan, true)) {
-        return 0;
-    }
-
-    $query = mysqli_query(
+    $hasil = mysqli_query(
         $conn,
-        "SELECT COUNT(*) AS total FROM {$namaTabel}"
+        "SELECT COUNT(*) AS total
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = '{$tabelAman}'
+           AND COLUMN_NAME = '{$kolomAman}'"
     );
 
-    if (!$query) {
+    if (!$hasil) {
+        return false;
+    }
+
+    $row = mysqli_fetch_assoc($hasil);
+
+    return (int) ($row["total"] ?? 0) > 0;
+}
+
+function statistikHitungPrepared(
+    mysqli $conn,
+    string $sql,
+    string $tipe = "",
+    array $parameter = []
+): int {
+    $stmt = mysqli_prepare($conn, $sql);
+
+    if (!$stmt) {
         return 0;
     }
 
-    $data = mysqli_fetch_assoc($query);
+    if ($tipe !== "" && !empty($parameter)) {
+        mysqli_stmt_bind_param(
+            $stmt,
+            $tipe,
+            ...$parameter
+        );
+    }
 
-    return (int) ($data["total"] ?? 0);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return 0;
+    }
+
+    $hasil = mysqli_stmt_get_result($stmt);
+    $row = mysqli_fetch_assoc($hasil);
+
+    mysqli_stmt_close($stmt);
+
+    return (int) ($row["total"] ?? 0);
 }
 
-/*
-|--------------------------------------------------------------------------
-| Fungsi menghitung data milik orang tua
-|--------------------------------------------------------------------------
-*/
+function statistikPuskesmasAkun(
+    mysqli $conn,
+    int $idUser
+): int {
+    if ($idUser <= 0) {
+        return 0;
+    }
 
-function hitungDataOrangTua(
+    return statistikHitungPrepared(
+        $conn,
+        "SELECT COALESCE(id_puskesmas, 0) AS total
+         FROM pengguna
+         WHERE id_user = ?
+         LIMIT 1",
+        "i",
+        [$idUser]
+    );
+}
+
+function statistikHitungOrangTua(
     mysqli $conn,
     string $jenisData,
     int $idUser
 ): int {
-    $querySql = "";
-
-    if ($jenisData === "balita") {
-        $querySql = "
-            SELECT COUNT(*) AS total
-            FROM balita
-            WHERE id_user = ?
-        ";
-    } elseif ($jenisData === "pengukuran") {
-        $querySql = "
-            SELECT COUNT(*) AS total
-            FROM pengukuran_antropometri pa
-            INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-            WHERE b.id_user = ?
-        ";
-    } elseif ($jenisData === "skrining") {
-        $querySql = "
-            SELECT COUNT(*) AS total
-            FROM skrining_awal sa
-            INNER JOIN balita b
-                ON sa.id_balita = b.id_balita
-            WHERE b.id_user = ?
-        ";
-    } elseif ($jenisData === "hasil_deteksi") {
-        $querySql = "
-            SELECT COUNT(*) AS total
-            FROM hasil_deteksi hd
-            INNER JOIN pengukuran_antropometri pa
-                ON hd.id_pengukuran = pa.id_pengukuran
-            INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-            WHERE b.id_user = ?
-        ";
-    } elseif ($jenisData === "konsultasi") {
-        $querySql = "
-            SELECT COUNT(*) AS total
-            FROM konsultasi k
-            INNER JOIN balita b
-                ON k.id_balita = b.id_balita
-            WHERE b.id_user = ?
-        ";
-    } else {
+    if ($idUser <= 0) {
         return 0;
     }
 
-    $stmt = mysqli_prepare($conn, $querySql);
+    $sql = "";
 
-    if (!$stmt) {
-        return 0;
+    switch ($jenisData) {
+        case "balita":
+            $sql = "
+                SELECT COUNT(*) AS total
+                FROM balita AS b
+                WHERE b.id_user = ?
+            ";
+            break;
+
+        case "pengukuran":
+            $sql = "
+                SELECT COUNT(*) AS total
+                FROM pengukuran_antropometri AS pa
+                INNER JOIN balita AS b
+                    ON pa.id_balita = b.id_balita
+                WHERE b.id_user = ?
+            ";
+            break;
+
+        case "skrining":
+            $sql = "
+                SELECT COUNT(*) AS total
+                FROM skrining_awal AS sa
+                INNER JOIN balita AS b
+                    ON sa.id_balita = b.id_balita
+                WHERE b.id_user = ?
+            ";
+            break;
+
+        case "hasil_deteksi":
+            $sql = "
+                SELECT COUNT(*) AS total
+                FROM hasil_deteksi AS hd
+                INNER JOIN pengukuran_antropometri AS pa
+                    ON hd.id_pengukuran = pa.id_pengukuran
+                INNER JOIN balita AS b
+                    ON pa.id_balita = b.id_balita
+                WHERE b.id_user = ?
+            ";
+            break;
+
+        case "konsultasi":
+            $sql = "
+                SELECT COUNT(*) AS total
+                FROM konsultasi AS k
+                INNER JOIN balita AS b
+                    ON k.id_balita = b.id_balita
+                WHERE b.id_user = ?
+            ";
+            break;
+
+        default:
+            return 0;
     }
 
-    mysqli_stmt_bind_param(
-        $stmt,
+    return statistikHitungPrepared(
+        $conn,
+        $sql,
         "i",
-        $idUser
+        [$idUser]
     );
-
-    if (!mysqli_stmt_execute($stmt)) {
-        mysqli_stmt_close($stmt);
-        return 0;
-    }
-
-    $hasil = mysqli_stmt_get_result($stmt);
-    $data = mysqli_fetch_assoc($hasil);
-
-    mysqli_stmt_close($stmt);
-
-    return (int) ($data["total"] ?? 0);
 }
 
-/*
-|--------------------------------------------------------------------------
-| Fungsi menghitung data berdasarkan Puskesmas
-|--------------------------------------------------------------------------
-*/
-
-function hitungDataPuskesmas(
+function statistikHitungWilayah(
     mysqli $conn,
     string $jenisData,
-    int $idPuskesmas
+    int $idPuskesmas = 0
 ): int {
-    if ($idPuskesmas <= 0) {
-        return 0;
+    $filter = "";
+    $tipe = "";
+    $parameter = [];
+
+    if ($idPuskesmas > 0) {
+        $filter = " WHERE b.id_puskesmas = ? ";
+        $tipe = "i";
+        $parameter = [$idPuskesmas];
     }
 
-    $querySql = "";
+    switch ($jenisData) {
+        case "balita":
+            $sql = "
+                SELECT COUNT(*) AS total
+                FROM balita AS b
+                {$filter}
+            ";
+            break;
 
-    if ($jenisData === "balita") {
-        $querySql = "
-            SELECT COUNT(*) AS total
-            FROM balita
-            WHERE id_puskesmas = ?
-        ";
-    } elseif ($jenisData === "pengukuran") {
-        $querySql = "
-            SELECT COUNT(*) AS total
-            FROM pengukuran_antropometri pa
-            INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-            WHERE b.id_puskesmas = ?
-        ";
-    } elseif ($jenisData === "skrining") {
-        $querySql = "
-            SELECT COUNT(*) AS total
-            FROM skrining_awal sa
-            INNER JOIN balita b
-                ON sa.id_balita = b.id_balita
-            WHERE b.id_puskesmas = ?
-        ";
-    } elseif ($jenisData === "hasil_deteksi") {
-        $querySql = "
-            SELECT COUNT(*) AS total
-            FROM hasil_deteksi hd
-            INNER JOIN pengukuran_antropometri pa
-                ON hd.id_pengukuran = pa.id_pengukuran
-            INNER JOIN balita b
-                ON pa.id_balita = b.id_balita
-            WHERE b.id_puskesmas = ?
-        ";
-    } elseif ($jenisData === "konsultasi") {
-        $querySql = "
-            SELECT COUNT(*) AS total
-            FROM konsultasi k
-            INNER JOIN balita b
-                ON k.id_balita = b.id_balita
-            WHERE b.id_puskesmas = ?
-        ";
-    } else {
-        return 0;
+        case "pengukuran":
+            $sql = "
+                SELECT COUNT(*) AS total
+                FROM pengukuran_antropometri AS pa
+                INNER JOIN balita AS b
+                    ON pa.id_balita = b.id_balita
+                {$filter}
+            ";
+            break;
+
+        case "skrining":
+            $sql = "
+                SELECT COUNT(*) AS total
+                FROM skrining_awal AS sa
+                INNER JOIN balita AS b
+                    ON sa.id_balita = b.id_balita
+                {$filter}
+            ";
+            break;
+
+        case "hasil_deteksi":
+            $sql = "
+                SELECT COUNT(*) AS total
+                FROM hasil_deteksi AS hd
+                INNER JOIN pengukuran_antropometri AS pa
+                    ON hd.id_pengukuran = pa.id_pengukuran
+                INNER JOIN balita AS b
+                    ON pa.id_balita = b.id_balita
+                {$filter}
+            ";
+            break;
+
+        case "konsultasi":
+            $sql = "
+                SELECT COUNT(*) AS total
+                FROM konsultasi AS k
+                INNER JOIN balita AS b
+                    ON k.id_balita = b.id_balita
+                {$filter}
+            ";
+            break;
+
+        case "pengguna":
+            if ($idPuskesmas > 0) {
+                $sql = "
+                    SELECT COUNT(*) AS total
+                    FROM pengguna AS b
+                    WHERE b.id_puskesmas = ?
+                ";
+            } else {
+                $sql = "
+                    SELECT COUNT(*) AS total
+                    FROM pengguna AS b
+                ";
+            }
+            break;
+
+        default:
+            return 0;
     }
 
-    $stmt = mysqli_prepare($conn, $querySql);
-
-    if (!$stmt) {
-        return 0;
-    }
-
-    mysqli_stmt_bind_param(
-        $stmt,
-        "i",
-        $idPuskesmas
+    return statistikHitungPrepared(
+        $conn,
+        $sql,
+        $tipe,
+        $parameter
     );
-
-    if (!mysqli_stmt_execute($stmt)) {
-        mysqli_stmt_close($stmt);
-        return 0;
-    }
-
-    $hasil = mysqli_stmt_get_result($stmt);
-    $data = mysqli_fetch_assoc($hasil);
-
-    mysqli_stmt_close($stmt);
-
-    return (int) ($data["total"] ?? 0);
 }
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil role dan ID pengguna
+| Statistik kondisi terbaru per balita
 |--------------------------------------------------------------------------
 */
 
-$roleAktif = $_SESSION["role"] ?? "";
-$idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
-$filterPuskesmasAktif = $roleAktif === "kader"
-    ? max(0, (int) ($_GET["puskesmas"] ?? 0))
-    : 0;
+function statistikStatusTerbaru(
+    mysqli $conn,
+    int $idPuskesmas,
+    array $statusDicari
+): int {
+    if (empty($statusDicari)) {
+        return 0;
+    }
+
+    $statusNormal = array_map(
+        static fn($status) => strtolower(trim((string) $status)),
+        $statusDicari
+    );
+
+    $placeholderStatus =
+        implode(
+            ",",
+            array_fill(0, count($statusNormal), "?")
+        );
+
+    $filterPuskesmas = "";
+    $tipe = "";
+    $parameter = [];
+
+    if ($idPuskesmas > 0) {
+        $filterPuskesmas =
+            " AND b.id_puskesmas = ? ";
+        $tipe .= "i";
+        $parameter[] = $idPuskesmas;
+    }
+
+    $tipe .= str_repeat("s", count($statusNormal));
+    foreach ($statusNormal as $status) {
+        $parameter[] = $status;
+    }
+
+    $sql = "
+        SELECT COUNT(*) AS total
+        FROM balita AS b
+        INNER JOIN (
+            SELECT
+                pa2.id_balita,
+                MAX(hd2.id_deteksi) AS id_deteksi_terbaru
+            FROM hasil_deteksi AS hd2
+            INNER JOIN pengukuran_antropometri AS pa2
+                ON hd2.id_pengukuran = pa2.id_pengukuran
+            GROUP BY pa2.id_balita
+        ) AS terbaru
+            ON terbaru.id_balita = b.id_balita
+        INNER JOIN hasil_deteksi AS hd
+            ON hd.id_deteksi = terbaru.id_deteksi_terbaru
+        WHERE 1 = 1
+        {$filterPuskesmas}
+          AND LOWER(TRIM(COALESCE(hd.status_stunting, '')))
+                IN ({$placeholderStatus})
+    ";
+
+    return statistikHitungPrepared(
+        $conn,
+        $sql,
+        $tipe,
+        $parameter
+    );
+}
+
+function statistikBelumDiverifikasiTerbaru(
+    mysqli $conn,
+    int $idPuskesmas
+): int {
+    $filterPuskesmas = "";
+    $tipe = "";
+    $parameter = [];
+
+    if ($idPuskesmas > 0) {
+        $filterPuskesmas =
+            " AND b.id_puskesmas = ? ";
+        $tipe = "i";
+        $parameter = [$idPuskesmas];
+    }
+
+    return statistikHitungPrepared(
+        $conn,
+        "
+        SELECT COUNT(*) AS total
+        FROM balita AS b
+        INNER JOIN (
+            SELECT
+                pa2.id_balita,
+                MAX(hd2.id_deteksi) AS id_deteksi_terbaru
+            FROM hasil_deteksi AS hd2
+            INNER JOIN pengukuran_antropometri AS pa2
+                ON hd2.id_pengukuran = pa2.id_pengukuran
+            GROUP BY pa2.id_balita
+        ) AS terbaru
+            ON terbaru.id_balita = b.id_balita
+        INNER JOIN hasil_deteksi AS hd
+            ON hd.id_deteksi = terbaru.id_deteksi_terbaru
+        WHERE 1 = 1
+        {$filterPuskesmas}
+          AND LOWER(
+                TRIM(
+                    COALESCE(
+                        hd.status_verifikasi,
+                        'Belum diverifikasi'
+                    )
+                )
+              ) <> 'sudah diverifikasi'
+        ",
+        $tipe,
+        $parameter
+    );
+}
+
+function statistikPerluKonsultasiBalita(
+    mysqli $conn,
+    int $idPuskesmas
+): int {
+    $filterPuskesmas = "";
+    $tipe = "";
+    $parameter = [];
+
+    if ($idPuskesmas > 0) {
+        $filterPuskesmas =
+            " AND b.id_puskesmas = ? ";
+        $tipe = "i";
+        $parameter = [$idPuskesmas];
+    }
+
+    return statistikHitungPrepared(
+        $conn,
+        "
+        SELECT COUNT(*) AS total
+        FROM balita AS b
+        INNER JOIN (
+            SELECT
+                pa2.id_balita,
+                MAX(hd2.id_deteksi) AS id_deteksi_terbaru
+            FROM hasil_deteksi AS hd2
+            INNER JOIN pengukuran_antropometri AS pa2
+                ON hd2.id_pengukuran = pa2.id_pengukuran
+            GROUP BY pa2.id_balita
+        ) AS terbaru
+            ON terbaru.id_balita = b.id_balita
+        INNER JOIN hasil_deteksi AS hd
+            ON hd.id_deteksi = terbaru.id_deteksi_terbaru
+        WHERE 1 = 1
+        {$filterPuskesmas}
+          AND LOWER(
+                TRIM(
+                    COALESCE(
+                        hd.keputusan_konsultasi,
+                        ''
+                    )
+                )
+              ) = 'perlu konsultasi'
+        ",
+        $tipe,
+        $parameter
+    );
+}
+
+function statistikKonsultasiAktif(
+    mysqli $conn,
+    int $idPuskesmas
+): int {
+    $punyaKolomStatus =
+        statistikKolomAda(
+            $conn,
+            "konsultasi",
+            "status_konsultasi"
+        );
+
+    $filterPuskesmas = "";
+    $tipe = "";
+    $parameter = [];
+
+    if ($idPuskesmas > 0) {
+        $filterPuskesmas =
+            " AND b.id_puskesmas = ? ";
+        $tipe = "i";
+        $parameter = [$idPuskesmas];
+    }
+
+    if ($punyaKolomStatus) {
+        $filterAktif = "
+            AND LOWER(
+                TRIM(
+                    COALESCE(
+                        k.status_konsultasi,
+                        'aktif'
+                    )
+                )
+            ) <> 'selesai'
+        ";
+    } else {
+        /*
+         * Kompatibilitas database lama sebelum status_konsultasi ditambahkan.
+         * Konsultasi dianggap selesai hanya jika hasil DAN tindak lanjut
+         * sudah sama-sama terisi.
+         */
+        $filterAktif = "
+            AND NOT (
+                TRIM(COALESCE(k.hasil_konsultasi, '')) <> ''
+                AND TRIM(COALESCE(k.tindak_lanjut, '')) <> ''
+            )
+        ";
+    }
+
+    return statistikHitungPrepared(
+        $conn,
+        "
+        SELECT COUNT(*) AS total
+        FROM konsultasi AS k
+        INNER JOIN balita AS b
+            ON k.id_balita = b.id_balita
+        WHERE 1 = 1
+        {$filterPuskesmas}
+        {$filterAktif}
+        ",
+        $tipe,
+        $parameter
+    );
+}
 
 /*
 |--------------------------------------------------------------------------
-| Nilai awal statistik
+| Menentukan cakupan akun
+|--------------------------------------------------------------------------
+*/
+
+$roleAktif =
+    $_SESSION["role"] ?? "";
+
+$idUserAktif =
+    (int) ($_SESSION["id_user"] ?? 0);
+
+$roleTerikatPuskesmasStatistik = [
+    "kader",
+    "petugas_kia",
+    "petugas_gizi",
+    "kepala_puskesmas"
+];
+
+$idPuskesmasStatistik = 0;
+
+if (
+    in_array(
+        $roleAktif,
+        $roleTerikatPuskesmasStatistik,
+        true
+    )
+) {
+    $idPuskesmasStatistik =
+        statistikPuskesmasAkun(
+            $conn,
+            $idUserAktif
+        );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Nilai awal
 |--------------------------------------------------------------------------
 */
 
@@ -228,108 +539,187 @@ $totalHasilDeteksi = 0;
 $totalPengukuran = 0;
 $totalKonsultasi = 0;
 
+$totalNormalTerbaru = 0;
+$totalRisikoStuntingTerbaru = 0;
+$totalStuntingTerbaru = 0;
+$totalStuntingBeratTerbaru = 0;
+$totalRisikoAtauStuntingTerbaru = 0;
+
+$totalBelumDiverifikasiTerbaru = 0;
+$totalPerluKonsultasiBalita = 0;
+$totalKonsultasiAktif = 0;
+
 /*
 |--------------------------------------------------------------------------
-| Statistik untuk Orang Tua
+| Orang Tua = riwayat milik anak sendiri
 |--------------------------------------------------------------------------
 */
 
 if ($roleAktif === "orang_tua") {
-    $totalBalita = hitungDataOrangTua(
-        $conn,
-        "balita",
-        $idUserAktif
-    );
 
-    $totalPengukuran = hitungDataOrangTua(
-        $conn,
-        "pengukuran",
-        $idUserAktif
-    );
-
-    $totalSkrining = hitungDataOrangTua(
-        $conn,
-        "skrining",
-        $idUserAktif
-    );
-
-    $totalHasilDeteksi = hitungDataOrangTua(
-        $conn,
-        "hasil_deteksi",
-        $idUserAktif
-    );
-
-    $totalKonsultasi = hitungDataOrangTua(
-        $conn,
-        "konsultasi",
-        $idUserAktif
-    );
-} else {
-    /*
-     * Kader dapat memfilter statistik berdasarkan Puskesmas.
-     * Role lain tetap melihat total data keseluruhan.
-     */
-    if ($roleAktif === "kader" && $filterPuskesmasAktif > 0) {
-        $totalBalita = hitungDataPuskesmas(
+    $totalBalita =
+        statistikHitungOrangTua(
             $conn,
             "balita",
-            $filterPuskesmasAktif
+            $idUserAktif
         );
 
-        $totalSkrining = hitungDataPuskesmas(
-            $conn,
-            "skrining",
-            $filterPuskesmasAktif
-        );
-
-        $totalHasilDeteksi = hitungDataPuskesmas(
-            $conn,
-            "hasil_deteksi",
-            $filterPuskesmasAktif
-        );
-
-        $totalPengukuran = hitungDataPuskesmas(
+    $totalPengukuran =
+        statistikHitungOrangTua(
             $conn,
             "pengukuran",
-            $filterPuskesmasAktif
+            $idUserAktif
         );
 
-        $totalKonsultasi = hitungDataPuskesmas(
+    $totalSkrining =
+        statistikHitungOrangTua(
+            $conn,
+            "skrining",
+            $idUserAktif
+        );
+
+    $totalHasilDeteksi =
+        statistikHitungOrangTua(
+            $conn,
+            "hasil_deteksi",
+            $idUserAktif
+        );
+
+    $totalKonsultasi =
+        statistikHitungOrangTua(
             $conn,
             "konsultasi",
-            $filterPuskesmasAktif
-        );
-    } else {
-        $totalBalita = hitungTotal(
-            $conn,
-            "balita"
+            $idUserAktif
         );
 
-        $totalSkrining = hitungTotal(
-            $conn,
-            "skrining_awal"
+} else {
+
+    /*
+     * Jika role terikat Puskesmas tetapi akun belum punya id_puskesmas,
+     * semua statistik wilayah dibuat 0. Tidak boleh jatuh ke statistik global.
+     */
+    $roleWajibPuskesmas =
+        in_array(
+            $roleAktif,
+            $roleTerikatPuskesmasStatistik,
+            true
         );
 
-        $totalHasilDeteksi = hitungTotal(
-            $conn,
-            "hasil_deteksi"
-        );
+    $cakupanValid =
+        !$roleWajibPuskesmas
+        || $idPuskesmasStatistik > 0;
 
-        $totalPengukuran = hitungTotal(
-            $conn,
-            "pengukuran_antropometri"
-        );
+    if ($cakupanValid) {
 
-        $totalKonsultasi = hitungTotal(
-            $conn,
-            "konsultasi"
-        );
+        $totalBalita =
+            statistikHitungWilayah(
+                $conn,
+                "balita",
+                $idPuskesmasStatistik
+            );
+
+        $totalPengukuran =
+            statistikHitungWilayah(
+                $conn,
+                "pengukuran",
+                $idPuskesmasStatistik
+            );
+
+        $totalSkrining =
+            statistikHitungWilayah(
+                $conn,
+                "skrining",
+                $idPuskesmasStatistik
+            );
+
+        $totalHasilDeteksi =
+            statistikHitungWilayah(
+                $conn,
+                "hasil_deteksi",
+                $idPuskesmasStatistik
+            );
+
+        $totalKonsultasi =
+            statistikHitungWilayah(
+                $conn,
+                "konsultasi",
+                $idPuskesmasStatistik
+            );
+
+        $totalNormalTerbaru =
+            statistikStatusTerbaru(
+                $conn,
+                $idPuskesmasStatistik,
+                [
+                    "Normal",
+                    "Normal/Sehat",
+                    "Tidak Stunting"
+                ]
+            );
+
+        $totalRisikoStuntingTerbaru =
+            statistikStatusTerbaru(
+                $conn,
+                $idPuskesmasStatistik,
+                [
+                    "Risiko Stunting"
+                ]
+            );
+
+        $totalStuntingTerbaru =
+            statistikStatusTerbaru(
+                $conn,
+                $idPuskesmasStatistik,
+                [
+                    "Stunting"
+                ]
+            );
+
+        $totalStuntingBeratTerbaru =
+            statistikStatusTerbaru(
+                $conn,
+                $idPuskesmasStatistik,
+                [
+                    "Stunting Berat"
+                ]
+            );
+
+        $totalRisikoAtauStuntingTerbaru =
+            statistikStatusTerbaru(
+                $conn,
+                $idPuskesmasStatistik,
+                [
+                    "Risiko Stunting",
+                    "Stunting",
+                    "Stunting Berat"
+                ]
+            );
+
+        $totalBelumDiverifikasiTerbaru =
+            statistikBelumDiverifikasiTerbaru(
+                $conn,
+                $idPuskesmasStatistik
+            );
+
+        $totalPerluKonsultasiBalita =
+            statistikPerluKonsultasiBalita(
+                $conn,
+                $idPuskesmasStatistik
+            );
+
+        $totalKonsultasiAktif =
+            statistikKonsultasiAktif(
+                $conn,
+                $idPuskesmasStatistik
+            );
     }
 
     if ($roleAktif === "dinkes") {
-        $totalPengguna = hitungTotal(
-            $conn,
-            "pengguna"
-        );
+        $totalPengguna =
+            statistikHitungWilayah(
+                $conn,
+                "pengguna",
+                0
+            );
     }
 }

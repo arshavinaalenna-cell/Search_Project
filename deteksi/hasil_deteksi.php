@@ -637,6 +637,13 @@ require_once "../includes/navbar.php";
                             Proses deteksi gagal dilakukan.
                         </div>
 
+                    <?php elseif ($_GET["pesan"] === "pemeriksaan_ulang_diperlukan"): ?>
+
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Data antropometri perlu diperiksa ulang oleh Kader. Ahli Gizi tetap dapat melakukan verifikasi dengan memberikan catatan.
+                        </div>
+
                     <?php endif; ?>
 
                 <?php endif; ?>
@@ -1109,6 +1116,27 @@ require_once "../includes/navbar.php";
 
                                 $sudahDiverifikasi =
                                     $statusVerifikasiNormal === "sudah diverifikasi";
+
+                                $statusGiziNormal =
+                                    strtolower(
+                                        trim(
+                                            (string) (
+                                                $data["status_gizi"]
+                                                ?? ""
+                                            )
+                                        )
+                                    );
+
+                                $perluPemeriksaanAntropometri =
+                                    in_array(
+                                        $statusGiziNormal,
+                                        [
+                                            "perlu pemeriksaan",
+                                            "perlu pemeriksaan ulang",
+                                            "data antropometri perlu diperiksa"
+                                        ],
+                                        true
+                                    );
                             ?>
 
                                 <tr>
@@ -1218,8 +1246,9 @@ require_once "../includes/navbar.php";
 
                                     <td class="text-center">
                                         <?= htmlspecialchars(
-                                            $data["status_gizi"]
-                                                ?? "Belum tersedia",
+                                            $perluPemeriksaanAntropometri
+                                                ? "Data Antropometri Perlu Diperiksa"
+                                                : ($data["status_gizi"] ?? "Belum tersedia"),
                                             ENT_QUOTES,
                                             "UTF-8"
                                         ); ?>
@@ -1281,6 +1310,18 @@ require_once "../includes/navbar.php";
 
                                             <?php if ($roleAktif === "petugas_gizi"): ?>
 
+                                                <?php if ($perluPemeriksaanAntropometri): ?>
+
+                                                    <span
+                                                        class="badge bg-warning text-dark"
+                                                        title="Data antropometri perlu diperiksa ulang oleh Kader"
+                                                    >
+                                                        <i class="bi bi-exclamation-triangle me-1"></i>
+                                                        Perlu Pemeriksaan Ulang
+                                                    </span>
+
+                                                <?php endif; ?>
+
                                                 <?php if (!$sudahDiverifikasi): ?>
                                                     <a
                                                         href="verifikasi_deteksi.php?id=<?= (int) $data["id_deteksi"]; ?>&kembali=deteksi"
@@ -1292,7 +1333,7 @@ require_once "../includes/navbar.php";
                                                 <?php endif; ?>
 
                                                 <a
-                                                    href="analisis_deteksi.php?id_balita=<?= (int) $data["id_balita"]; ?>"
+                                                    href="analisis_deteksi.php?id_balita=<?= (int) $data["id_balita"]; ?>&kembali=deteksi"
                                                     class="btn btn-primary btn-sm"
                                                     onclick="return confirm('Analisis ulang akan menghitung kembali status dan mengubah verifikasi menjadi Belum diverifikasi. Lanjutkan?');"
                                                 >

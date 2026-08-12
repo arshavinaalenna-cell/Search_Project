@@ -499,8 +499,9 @@ if ($stmtNotifikasi) {
 | Statistik yang ditampilkan berdasarkan role
 |--------------------------------------------------------------------------
 |
-| Bagian ini hanya mengatur tampilan dashboard.
-| Query dan perhitungan tetap menggunakan statistik.php.
+| Bagian ini mengatur kartu yang tampil pada masing-masing role.
+| Statistik kondisi kesehatan menggunakan hasil terbaru per balita dari
+| statistik.php sehingga riwayat lama tidak menyebabkan perhitungan ganda.
 |
 */
 
@@ -545,16 +546,22 @@ switch ($rolePengguna) {
                 "kelas" => "stat-info"
             ],
             [
-                "label" => "Riwayat Pengukuran",
-                "nilai" => $totalPengukuran ?? 0,
-                "ikon" => "bi-graph-up-arrow",
-                "kelas" => "stat-success"
+                "label" => "Risiko / Stunting",
+                "nilai" => $totalRisikoAtauStuntingTerbaru ?? 0,
+                "ikon" => "bi-exclamation-triangle",
+                "kelas" => "stat-warning"
             ],
             [
-                "label" => "Hasil Deteksi",
-                "nilai" => $totalHasilDeteksi ?? 0,
-                "ikon" => "bi-clipboard2-pulse",
-                "kelas" => "stat-warning"
+                "label" => "Perlu Konsultasi",
+                "nilai" => $totalPerluKonsultasiBalita ?? 0,
+                "ikon" => "bi-bell",
+                "kelas" => "stat-info"
+            ],
+            [
+                "label" => "Konsultasi Aktif",
+                "nilai" => $totalKonsultasiAktif ?? 0,
+                "ikon" => "bi-chat-heart",
+                "kelas" => "stat-success"
             ]
         ];
         break;
@@ -562,32 +569,26 @@ switch ($rolePengguna) {
     case "petugas_gizi":
         $statistikDashboard = [
             [
-                "label" => "Data Balita",
+                "label" => "Total Balita Terpantau",
                 "nilai" => $totalBalita ?? 0,
                 "ikon" => "bi-person-check",
                 "kelas" => "stat-info"
             ],
             [
-                "label" => "Pengukuran",
-                "nilai" => $totalPengukuran ?? 0,
-                "ikon" => "bi-graph-up-arrow",
-                "kelas" => "stat-success"
-            ],
-            [
-                "label" => "Skrining",
-                "nilai" => $totalSkrining ?? 0,
-                "ikon" => "bi-clipboard2-check",
+                "label" => "Perlu Verifikasi",
+                "nilai" => $totalBelumDiverifikasiTerbaru ?? 0,
+                "ikon" => "bi-patch-question",
                 "kelas" => "stat-warning"
             ],
             [
-                "label" => "Hasil Deteksi",
-                "nilai" => $totalHasilDeteksi ?? 0,
+                "label" => "Risiko / Stunting",
+                "nilai" => $totalRisikoAtauStuntingTerbaru ?? 0,
                 "ikon" => "bi-heart-pulse",
                 "kelas" => "stat-info"
             ],
             [
-                "label" => "Konsultasi",
-                "nilai" => $totalKonsultasi ?? 0,
+                "label" => "Konsultasi Aktif",
+                "nilai" => $totalKonsultasiAktif ?? 0,
                 "ikon" => "bi-chat-heart",
                 "kelas" => "stat-success"
             ]
@@ -603,13 +604,13 @@ switch ($rolePengguna) {
                 "kelas" => "stat-info"
             ],
             [
-                "label" => "Riwayat Pertumbuhan",
+                "label" => "Pengukuran Tercatat",
                 "nilai" => $totalPengukuran ?? 0,
                 "ikon" => "bi-graph-up-arrow",
                 "kelas" => "stat-success"
             ],
             [
-                "label" => "Hasil Deteksi",
+                "label" => "Riwayat Deteksi",
                 "nilai" => $totalHasilDeteksi ?? 0,
                 "ikon" => "bi-heart-pulse",
                 "kelas" => "stat-warning"
@@ -632,21 +633,24 @@ switch ($rolePengguna) {
                 "kelas" => "stat-info"
             ],
             [
-                "label" => "Pengukuran",
-                "nilai" => $totalPengukuran ?? 0,
-                "ikon" => "bi-graph-up-arrow",
+                "label" => "Normal",
+                "nilai" => $totalNormalTerbaru ?? 0,
+                "ikon" => "bi-shield-check",
                 "kelas" => "stat-success"
             ],
             [
-                "label" => "Hasil Deteksi",
-                "nilai" => $totalHasilDeteksi ?? 0,
-                "ikon" => "bi-clipboard2-pulse",
+                "label" => "Risiko Stunting",
+                "nilai" => $totalRisikoStuntingTerbaru ?? 0,
+                "ikon" => "bi-exclamation-triangle",
                 "kelas" => "stat-warning"
             ],
             [
-                "label" => "Konsultasi",
-                "nilai" => $totalKonsultasi ?? 0,
-                "ikon" => "bi-chat-dots",
+                "label" => "Stunting / Stunting Berat",
+                "nilai" => (
+                    ($totalStuntingTerbaru ?? 0)
+                    + ($totalStuntingBeratTerbaru ?? 0)
+                ),
+                "ikon" => "bi-exclamation-octagon",
                 "kelas" => "stat-info"
             ]
         ];
@@ -655,27 +659,30 @@ switch ($rolePengguna) {
     case "dinkes":
         $statistikDashboard = [
             [
-                "label" => "Total Pengguna",
-                "nilai" => $totalPengguna ?? 0,
-                "ikon" => "bi-people-fill",
-                "kelas" => "stat-info"
-            ],
-            [
                 "label" => "Total Balita",
                 "nilai" => $totalBalita ?? 0,
                 "ikon" => "bi-person-heart",
+                "kelas" => "stat-info"
+            ],
+            [
+                "label" => "Normal",
+                "nilai" => $totalNormalTerbaru ?? 0,
+                "ikon" => "bi-shield-check",
                 "kelas" => "stat-success"
             ],
             [
-                "label" => "Total Pengukuran",
-                "nilai" => $totalPengukuran ?? 0,
-                "ikon" => "bi-graph-up-arrow",
+                "label" => "Risiko Stunting",
+                "nilai" => $totalRisikoStuntingTerbaru ?? 0,
+                "ikon" => "bi-exclamation-triangle",
                 "kelas" => "stat-warning"
             ],
             [
-                "label" => "Hasil Deteksi",
-                "nilai" => $totalHasilDeteksi ?? 0,
-                "ikon" => "bi-clipboard2-data",
+                "label" => "Stunting / Stunting Berat",
+                "nilai" => (
+                    ($totalStuntingTerbaru ?? 0)
+                    + ($totalStuntingBeratTerbaru ?? 0)
+                ),
+                "ikon" => "bi-exclamation-octagon",
                 "kelas" => "stat-info"
             ]
         ];

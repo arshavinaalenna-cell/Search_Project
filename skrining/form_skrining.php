@@ -4,6 +4,10 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+/* Waktu pencatatan skrining mengikuti WIB / Jakarta. */
+date_default_timezone_set("Asia/Jakarta");
+@mysqli_query($conn, "SET time_zone = '+07:00'");
+
 cekRole(["kader"]);
 
 $roleAktif = $_SESSION["role"] ?? "";
@@ -97,6 +101,32 @@ if (
 
 $judulHalaman =
     "Tambah Skrining | Sistem Deteksi Stunting";
+
+/*
+|--------------------------------------------------------------------------
+| Pastikan kolom tanggal_skrining tersedia
+|--------------------------------------------------------------------------
+|
+| Kolom ini diperlukan agar setiap snapshot Skrining memiliki tanggal yang
+| jelas. Jika migration SQL belum dijalankan, form tidak akan menyebabkan
+| fatal error; pengguna akan menerima pesan yang jelas.
+|
+*/
+
+$kolomTanggalSkriningTersedia = false;
+
+$cekKolomTanggalSkrining = mysqli_query(
+    $conn,
+    "SHOW COLUMNS FROM skrining_awal LIKE 'tanggal_skrining'"
+);
+
+if (
+    $cekKolomTanggalSkrining
+    && mysqli_num_rows($cekKolomTanggalSkrining) > 0
+) {
+    $kolomTanggalSkriningTersedia = true;
+}
+
 
 /*
 |--------------------------------------------------------------------------
@@ -538,7 +568,29 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     |--------------------------------------------------------------------------
     */
 
+    if (
+        $error === ""
+        && !$kolomTanggalSkriningTersedia
+    ) {
+        $error =
+            "Kolom tanggal_skrining belum tersedia pada database. "
+            . "Jalankan file update_tanggal_skrining.sql terlebih dahulu.";
+    }
+
     if ($error === "") {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Tanggal Skrining WIB
+        |--------------------------------------------------------------------------
+        |
+        | Tanggal berasal dari PHP Asia/Jakarta, bukan NOW() MySQL, sehingga
+        | tidak bergantung pada timezone server database.
+        |
+        */
+
+        $tanggalSkrining =
+            date("Y-m-d");
 
         /*
         |--------------------------------------------------------------------------
@@ -580,6 +632,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             "INSERT INTO skrining_awal
             (
                 id_balita,
+                tanggal_skrining,
                 tinggi_badan_ibu,
                 pendidikan_ibu,
                 pekerjaan_ibu,
@@ -591,7 +644,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 sanitasi,
                 air_bersih
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
 
         if (!$stmtSimpan) {
@@ -602,8 +655,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             mysqli_stmt_bind_param(
                 $stmtSimpan,
-                "idssissssss",
+                "isdssissssss",
                 $idBalita,
+                $tanggalSkrining,
                 $tinggiBadanIbu,
                 $pendidikanIbu,
                 $pekerjaanIbu,

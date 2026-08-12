@@ -394,8 +394,12 @@ if ($aksesPuskesmasTerbatas) {
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil data laporan
+| Mengambil hasil deteksi TERBARU per balita dalam periode
 |--------------------------------------------------------------------------
+|
+| Cetak laporan menggunakan aturan yang sama dengan laporan utama:
+| satu balita = satu baris, berdasarkan hasil deteksi terbaru di periode.
+|
 */
 
 $sqlLaporan = "
@@ -429,20 +433,39 @@ $sqlLaporan = "
      LEFT JOIN puskesmas AS ps
         ON b.id_puskesmas = ps.id_puskesmas
 
-     WHERE hd.tanggal_deteksi
-        BETWEEN ? AND ?
+     INNER JOIN (
+        SELECT
+            pa2.id_balita,
+            MAX(hd2.id_deteksi) AS id_deteksi_terbaru
+
+        FROM hasil_deteksi AS hd2
+
+        INNER JOIN pengukuran_antropometri AS pa2
+            ON hd2.id_pengukuran = pa2.id_pengukuran
+
+        INNER JOIN balita AS b2
+            ON pa2.id_balita = b2.id_balita
+
+        WHERE hd2.tanggal_deteksi
+            BETWEEN ? AND ?
 ";
 
 if ($idPuskesmas > 0) {
     $sqlLaporan .= "
-        AND b.id_puskesmas = ?
+        AND b2.id_puskesmas = ?
     ";
 }
 
 $sqlLaporan .= "
+        GROUP BY pa2.id_balita
+     ) AS terbaru
+
+        ON terbaru.id_deteksi_terbaru =
+            hd.id_deteksi
+
      ORDER BY
-        hd.tanggal_deteksi ASC,
         b.nama_balita ASC,
+        hd.tanggal_deteksi ASC,
         hd.id_deteksi ASC
 ";
 
@@ -715,9 +738,9 @@ $dataStatusGizi =
     array_values($grafikStatusGizi);
 
 $labelRisiko = [
-    "Risiko Rendah",
-    "Risiko Sedang",
-    "Risiko Tinggi"
+    "Normal",
+    "Risiko Stunting",
+    "Stunting / Stunting Berat"
 ];
 
 $dataRisiko = [
@@ -1568,7 +1591,7 @@ if ($formatCetakDinkes) {
 
             <div class="summary-item">
                 <span class="summary-label">
-                    Total Deteksi
+                    Total Balita Terpantau
                 </span>
 
                 <span class="summary-value">
@@ -1578,7 +1601,7 @@ if ($formatCetakDinkes) {
 
             <div class="summary-item">
                 <span class="summary-label">
-                    Risiko Rendah
+                    Normal
                 </span>
 
                 <span class="summary-value">
@@ -1588,7 +1611,7 @@ if ($formatCetakDinkes) {
 
             <div class="summary-item">
                 <span class="summary-label">
-                    Risiko Sedang
+                    Risiko Stunting
                 </span>
 
                 <span class="summary-value">
@@ -1598,7 +1621,7 @@ if ($formatCetakDinkes) {
 
             <div class="summary-item">
                 <span class="summary-label">
-                    Risiko Tinggi
+                    Stunting / Stunting Berat
                 </span>
 
                 <span class="summary-value">
@@ -1636,14 +1659,14 @@ if ($formatCetakDinkes) {
                     <div class="chart-card">
 
                         <span class="chart-title">
-                            Komposisi Tingkat Risiko
+                            Komposisi Status Stunting
                         </span>
 
                         <div class="chart-box">
 
                             <canvas
                                 id="grafikRisiko"
-                                aria-label="Grafik komposisi tingkat risiko"
+                                aria-label="Grafik komposisi status stunting"
                             ></canvas>
 
                         </div>
@@ -1653,7 +1676,7 @@ if ($formatCetakDinkes) {
                     <div class="chart-card">
 
                         <span class="chart-title">
-                            Tren Jumlah Deteksi per Bulan
+                            Sebaran Hasil Terbaru per Bulan
                         </span>
 
                         <div class="chart-box">
@@ -1741,7 +1764,7 @@ if ($formatCetakDinkes) {
                         </th>
 
                         <th>
-                            Status Risiko
+                            Status Stunting
                         </th>
 
                         <th>
