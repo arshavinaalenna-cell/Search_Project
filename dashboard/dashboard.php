@@ -32,6 +32,103 @@ $judulHalaman =
 
 /*
 |--------------------------------------------------------------------------
+| Pemberitahuan konsultasi yang telah disetujui Ahli Gizi
+|--------------------------------------------------------------------------
+*/
+
+$idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
+$totalPerluKonsultasi = 0;
+$daftarNamaPerluKonsultasi = [];
+$idPuskesmasNotifikasi = 0;
+
+if (in_array($rolePengguna, ["kader", "petugas_kia"], true)) {
+    $stmtWilayahNotifikasi = mysqli_prepare(
+        $conn,
+        "SELECT id_puskesmas
+         FROM pengguna
+         WHERE id_user = ?
+         LIMIT 1"
+    );
+
+    if ($stmtWilayahNotifikasi) {
+        mysqli_stmt_bind_param($stmtWilayahNotifikasi, "i", $idUserAktif);
+        mysqli_stmt_execute($stmtWilayahNotifikasi);
+        $hasilWilayahNotifikasi = mysqli_stmt_get_result($stmtWilayahNotifikasi);
+        $dataWilayahNotifikasi = mysqli_fetch_assoc($hasilWilayahNotifikasi);
+        mysqli_stmt_close($stmtWilayahNotifikasi);
+
+        $idPuskesmasNotifikasi =
+            (int) ($dataWilayahNotifikasi["id_puskesmas"] ?? 0);
+    }
+}
+
+if ($rolePengguna === "orang_tua") {
+    $stmtNotifikasi = mysqli_prepare(
+        $conn,
+        "SELECT b.nama_balita
+         FROM konsultasi k
+         INNER JOIN balita b
+            ON k.id_balita = b.id_balita
+         INNER JOIN hasil_deteksi hd
+            ON k.id_deteksi = hd.id_deteksi
+         WHERE b.id_user = ?
+         AND k.sumber_pengajuan = 'ahli_gizi'
+         AND hd.keputusan_konsultasi = 'Perlu konsultasi'
+         AND (k.hasil_konsultasi IS NULL OR TRIM(k.hasil_konsultasi) = '')
+         GROUP BY b.id_balita, b.nama_balita
+         ORDER BY MAX(k.id_konsultasi) DESC"
+    );
+
+    if ($stmtNotifikasi) {
+        mysqli_stmt_bind_param($stmtNotifikasi, "i", $idUserAktif);
+    }
+
+} elseif (
+    in_array($rolePengguna, ["kader", "petugas_kia"], true)
+    && $idPuskesmasNotifikasi > 0
+) {
+    $stmtNotifikasi = mysqli_prepare(
+        $conn,
+        "SELECT b.nama_balita
+         FROM konsultasi k
+         INNER JOIN balita b
+            ON k.id_balita = b.id_balita
+         INNER JOIN hasil_deteksi hd
+            ON k.id_deteksi = hd.id_deteksi
+         WHERE b.id_puskesmas = ?
+         AND k.sumber_pengajuan = 'ahli_gizi'
+         AND hd.keputusan_konsultasi = 'Perlu konsultasi'
+         AND (k.keluhan IS NULL OR TRIM(k.keluhan) = '')
+         GROUP BY b.id_balita, b.nama_balita
+         ORDER BY MAX(k.id_konsultasi) DESC"
+    );
+
+    if ($stmtNotifikasi) {
+        mysqli_stmt_bind_param(
+            $stmtNotifikasi,
+            "i",
+            $idPuskesmasNotifikasi
+        );
+    }
+} else {
+    $stmtNotifikasi = null;
+}
+
+if ($stmtNotifikasi) {
+    mysqli_stmt_execute($stmtNotifikasi);
+    $hasilNotifikasi = mysqli_stmt_get_result($stmtNotifikasi);
+
+    while ($rowNotifikasi = mysqli_fetch_assoc($hasilNotifikasi)) {
+        $daftarNamaPerluKonsultasi[] =
+            (string) ($rowNotifikasi["nama_balita"] ?? "");
+    }
+
+    mysqli_stmt_close($stmtNotifikasi);
+    $totalPerluKonsultasi = count($daftarNamaPerluKonsultasi);
+}
+
+/*
+|--------------------------------------------------------------------------
 | Statistik yang ditampilkan berdasarkan role
 |--------------------------------------------------------------------------
 |
@@ -257,6 +354,14 @@ switch ($rolePengguna) {
                 "ikon" => "bi-clipboard2-heart",
                 "url" => "../skrining/hasil_skrining.php",
                 "tombol" => "Buka Skrining"
+            ],
+            [
+                "judul" => "Perlu Konsultasi",
+                "deskripsi" =>
+                    "Lihat balita yang telah ditetapkan Ahli Gizi perlu konsultasi dan informasikan kepada Orang Tua.",
+                "ikon" => "bi-bell",
+                "url" => "../konsultasi/data_konsultasi.php",
+                "tombol" => "Lihat Daftar"
             ]
         ];
         break;
@@ -302,6 +407,14 @@ switch ($rolePengguna) {
                 "ikon" => "bi-heart-pulse",
                 "url" => "../deteksi/hasil_deteksi.php",
                 "tombol" => "Lihat Hasil"
+            ],
+            [
+                "judul" => "Perlu Konsultasi",
+                "deskripsi" =>
+                    "Lihat balita yang telah ditetapkan Ahli Gizi perlu konsultasi dan bantu menginformasikan Orang Tua.",
+                "ikon" => "bi-bell",
+                "url" => "../konsultasi/data_konsultasi.php",
+                "tombol" => "Lihat Daftar"
             ]
         ];
         break;
@@ -364,7 +477,7 @@ switch ($rolePengguna) {
             [
                 "judul" => "Konsultasi & Monitoring",
                 "deskripsi" =>
-                    "Sampaikan keluhan dan berdiskusi dengan Petugas Gizi.",
+                    "Lihat konsultasi yang telah direkomendasikan Ahli Gizi dan hasil tindak lanjutnya.",
                 "ikon" => "bi-chat-heart",
                 "url" => "../konsultasi/data_konsultasi.php",
                 "tombol" => "Buka Konsultasi"
@@ -535,6 +648,41 @@ require_once "../includes/navbar.php";
     <?php require_once "../includes/sidebar.php"; ?>
 
     <main class="main-content">
+
+        <?php if ($totalPerluKonsultasi > 0): ?>
+
+            <div class="alert alert-warning mb-4">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div>
+                        <div class="fw-bold mb-1">
+                            <i class="bi bi-bell-fill me-1"></i>
+                            <?= $totalPerluKonsultasi; ?> balita perlu konsultasi Ahli Gizi
+                        </div>
+
+                        <div>
+                            <?php if (in_array($rolePengguna, ["kader", "petugas_kia"], true)): ?>
+                                Ahli Gizi telah menetapkan
+                                <strong><?= htmlspecialchars(implode(", ", $daftarNamaPerluKonsultasi), ENT_QUOTES, "UTF-8"); ?></strong>
+                                perlu konsultasi. Mohon informasikan kepada Orang Tua agar segera menghubungi Ahli Gizi Puskesmas.
+                            <?php elseif ($rolePengguna === "orang_tua"): ?>
+                                Ahli Gizi telah menetapkan bahwa
+                                <strong><?= htmlspecialchars(implode(", ", $daftarNamaPerluKonsultasi), ENT_QUOTES, "UTF-8"); ?></strong>
+                                perlu konsultasi. Silakan buka menu konsultasi untuk melihat informasi dan tindak lanjut.
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <a
+                        href="../konsultasi/data_konsultasi.php"
+                        class="btn btn-warning btn-sm"
+                    >
+                        <i class="bi bi-chat-heart me-1"></i>
+                        Buka Konsultasi
+                    </a>
+                </div>
+            </div>
+
+        <?php endif; ?>
 
         <?php if ($rolePengguna === "kader"): ?>
 

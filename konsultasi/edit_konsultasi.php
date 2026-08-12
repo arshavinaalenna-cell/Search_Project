@@ -117,6 +117,8 @@ $stmtKonsultasi = mysqli_prepare(
     $conn,
     "SELECT
         k.id_konsultasi,
+        k.id_deteksi,
+        k.sumber_pengajuan,
         k.id_balita,
         k.id_petugas,
         k.tanggal,
@@ -127,13 +129,19 @@ $stmtKonsultasi = mysqli_prepare(
         b.nik_balita,
         b.nama_ibu,
         b.id_puskesmas,
-        p.nama_puskesmas
+        p.nama_puskesmas,
+        hd.status_stunting,
+        hd.keputusan_konsultasi
      FROM konsultasi k
      INNER JOIN balita b
         ON k.id_balita = b.id_balita
      LEFT JOIN puskesmas p
         ON b.id_puskesmas = p.id_puskesmas
+     INNER JOIN hasil_deteksi hd
+        ON k.id_deteksi = hd.id_deteksi
      WHERE k.id_konsultasi = ?
+     AND k.sumber_pengajuan = 'ahli_gizi'
+     AND hd.keputusan_konsultasi = 'Perlu konsultasi' 
      AND k.id_petugas = ?
      AND b.id_puskesmas = ?
      LIMIT 1"
@@ -169,6 +177,14 @@ mysqli_stmt_close($stmtKonsultasi);
 if (!$dataKonsultasi) {
     header(
         "Location: data_konsultasi.php?pesan=tidak_ditemukan"
+    );
+    exit;
+}
+
+/* Ahli Gizi menanggapi setelah Orang Tua memulai konsultasi. */
+if (trim((string) ($dataKonsultasi["keluhan"] ?? "")) === "") {
+    header(
+        "Location: data_konsultasi.php?pesan=menunggu_orang_tua"
     );
     exit;
 }
@@ -236,12 +252,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             "UPDATE konsultasi AS k
              INNER JOIN balita AS b
                 ON k.id_balita = b.id_balita
+             INNER JOIN hasil_deteksi AS hd
+                ON k.id_deteksi = hd.id_deteksi
              SET
                 k.hasil_konsultasi = ?,
                 k.tindak_lanjut = ?
              WHERE k.id_konsultasi = ?
              AND k.id_petugas = ?
-             AND b.id_puskesmas = ?"
+             AND b.id_puskesmas = ?
+             AND k.sumber_pengajuan = 'ahli_gizi'
+             AND hd.keputusan_konsultasi = 'Perlu konsultasi'"
         );
 
         if (!$stmtUpdate) {
@@ -335,9 +355,9 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        Keluhan Orang Tua bersifat tetap.
-                        Petugas Gizi hanya mengisi atau memperbarui
-                        hasil konsultasi dan tindak lanjut.
+                        Konsultasi ini telah direkomendasikan oleh Ahli Gizi.
+                        Isi hasil konsultasi dan rencana tindak lanjut
+                        setelah konsultasi dengan Orang Tua dilakukan.
                     </small>
 
                 </div>
@@ -388,6 +408,12 @@ require_once "../includes/navbar.php";
             </div>
 
             <div class="card-body">
+
+                <div class="alert alert-warning">
+                    <i class="bi bi-bell-fill me-1"></i>
+                    Dasar konsultasi: <strong><?= htmlspecialchars($dataKonsultasi["status_stunting"] ?? "-", ENT_QUOTES, "UTF-8"); ?></strong>.
+                    Tiket ini dibuat otomatis setelah Ahli Gizi menetapkan anak perlu konsultasi.
+                </div>
 
                 <?php if ($pesanError !== ""): ?>
 

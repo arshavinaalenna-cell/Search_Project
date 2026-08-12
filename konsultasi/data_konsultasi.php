@@ -7,6 +7,8 @@ require_once "../config/koneksi.php";
 cekRole([
     "orang_tua",
     "petugas_gizi",
+    "petugas_kia",
+    "kader",
     "kepala_puskesmas",
     "dinkes"
 ]);
@@ -30,7 +32,7 @@ $puskesmasBelumTerhubung = false;
 if (
     in_array(
         $roleAktif,
-        ["petugas_gizi", "kepala_puskesmas"],
+        ["petugas_gizi", "petugas_kia", "kader", "kepala_puskesmas"],
         true
     )
 ) {
@@ -102,13 +104,13 @@ if (
 |
 */
 
-$bolehTambah =
-    $roleAktif === "orang_tua";
+/* Orang Tua tidak dapat mengajukan konsultasi sendiri. */
+$bolehTambah = false;
 
 $bolehMengelola = $roleAktif === "petugas_gizi";
 $modeMonitoring = in_array(
     $roleAktif,
-    ["kepala_puskesmas", "dinkes"],
+    ["petugas_kia", "kader", "kepala_puskesmas", "dinkes"],
     true
 );
 
@@ -282,6 +284,8 @@ function amanKonsultasi($nilai): string
 $selectKonsultasi = "
     SELECT
         k.id_konsultasi,
+        k.id_deteksi,
+        k.sumber_pengajuan,
         k.id_balita,
         k.id_petugas,
         k.tanggal,
@@ -292,7 +296,9 @@ $selectKonsultasi = "
         b.nik_balita,
         b.id_puskesmas,
         ps.nama_puskesmas,
-        p.nama AS nama_petugas
+        p.nama AS nama_petugas,
+        hd.status_stunting,
+        hd.keputusan_konsultasi
     FROM konsultasi AS k
     INNER JOIN balita AS b
         ON k.id_balita = b.id_balita
@@ -300,6 +306,8 @@ $selectKonsultasi = "
         ON b.id_puskesmas = ps.id_puskesmas
     LEFT JOIN pengguna AS p
         ON k.id_petugas = p.id_user
+    INNER JOIN hasil_deteksi AS hd
+        ON k.id_deteksi = hd.id_deteksi
 ";
 
 if ($roleAktif === "orang_tua") {
@@ -309,7 +317,9 @@ if ($roleAktif === "orang_tua") {
         $stmt = mysqli_prepare(
             $conn,
             $selectKonsultasi . "
-             WHERE b.id_user = ?
+             WHERE k.sumber_pengajuan = 'ahli_gizi'
+               AND hd.keputusan_konsultasi = 'Perlu konsultasi'
+               AND b.id_user = ?
                AND (
                     b.nama_balita LIKE ?
                     OR b.nik_balita LIKE ?
@@ -345,7 +355,9 @@ if ($roleAktif === "orang_tua") {
         $stmt = mysqli_prepare(
             $conn,
             $selectKonsultasi . "
-             WHERE b.id_user = ?
+             WHERE k.sumber_pengajuan = 'ahli_gizi'
+               AND hd.keputusan_konsultasi = 'Perlu konsultasi'
+               AND b.id_user = ?
              ORDER BY k.id_konsultasi DESC"
         );
 
@@ -366,7 +378,7 @@ if ($roleAktif === "orang_tua") {
 } elseif (
     in_array(
         $roleAktif,
-        ["petugas_gizi", "kepala_puskesmas"],
+        ["petugas_gizi", "petugas_kia", "kader", "kepala_puskesmas"],
         true
     )
 ) {
@@ -376,7 +388,9 @@ if ($roleAktif === "orang_tua") {
         $stmt = mysqli_prepare(
             $conn,
             $selectKonsultasi . "
-             WHERE 1 = 0
+             WHERE k.sumber_pengajuan = 'ahli_gizi'
+               AND hd.keputusan_konsultasi = 'Perlu konsultasi'
+               AND 1 = 0
              ORDER BY k.id_konsultasi DESC"
         );
 
@@ -392,7 +406,9 @@ if ($roleAktif === "orang_tua") {
         $stmt = mysqli_prepare(
             $conn,
             $selectKonsultasi . "
-             WHERE b.id_puskesmas = ?
+             WHERE k.sumber_pengajuan = 'ahli_gizi'
+               AND hd.keputusan_konsultasi = 'Perlu konsultasi'
+               AND b.id_puskesmas = ?
                AND (
                     b.nama_balita LIKE ?
                     OR b.nik_balita LIKE ?
@@ -428,7 +444,9 @@ if ($roleAktif === "orang_tua") {
         $stmt = mysqli_prepare(
             $conn,
             $selectKonsultasi . "
-             WHERE b.id_puskesmas = ?
+             WHERE k.sumber_pengajuan = 'ahli_gizi'
+               AND hd.keputusan_konsultasi = 'Perlu konsultasi'
+               AND b.id_puskesmas = ?
              ORDER BY k.id_konsultasi DESC"
         );
 
@@ -462,6 +480,9 @@ if ($roleAktif === "orang_tua") {
         $conn,
         $selectKonsultasi . "
          WHERE
+            k.sumber_pengajuan = 'ahli_gizi'
+         AND hd.keputusan_konsultasi = 'Perlu konsultasi'
+         AND
             (? = 0 OR b.id_puskesmas = ?)
          AND
             (? = 0 OR MONTH(k.tanggal) = ?)
@@ -583,6 +604,21 @@ switch ($pesan) {
         $jenisAlert = "warning";
         $isiPesan = "Data konsultasi tidak ditemukan.";
         break;
+
+    case "pengajuan_dikunci":
+        $jenisAlert = "info";
+        $isiPesan = "Orang Tua tidak dapat mengajukan konsultasi sendiri. Konsultasi tersedia setelah Ahli Gizi menetapkan anak perlu konsultasi.";
+        break;
+
+    case "keluhan_berhasil":
+        $jenisAlert = "success";
+        $isiPesan = "Keluhan berhasil dikirim. Ahli Gizi dapat menindaklanjuti konsultasi Anda.";
+        break;
+
+    case "menunggu_orang_tua":
+        $jenisAlert = "warning";
+        $isiPesan = "Konsultasi sudah disetujui, tetapi Orang Tua belum mengisi keluhan atau hal yang ingin dikonsultasikan.";
+        break;
 }
 
 require_once "../includes/header.php";
@@ -611,9 +647,9 @@ require_once "../includes/navbar.php";
                         <?php if ($modeMonitoring): ?>
                             Pantau riwayat konsultasi gizi dan tindak lanjut balita.
                         <?php elseif ($roleAktif === "orang_tua"): ?>
-                            Lihat dan ajukan konsultasi gizi untuk balita Anda.
+                            Lihat konsultasi yang telah direkomendasikan Ahli Gizi untuk balita Anda.
                         <?php elseif ($roleAktif === "petugas_gizi"): ?>
-                            Tinjau keluhan Orang Tua dan berikan tanggapan gizi.
+                            Tindak lanjuti konsultasi yang telah Anda tetapkan untuk balita berisiko.
                         <?php else: ?>
                             Pantau konsultasi gizi dan tindak lanjut balita.
                         <?php endif; ?>
@@ -627,7 +663,7 @@ require_once "../includes/navbar.php";
                     <?php if (
                         in_array(
                             $roleAktif,
-                            ["petugas_gizi", "kepala_puskesmas"],
+                            ["petugas_gizi", "petugas_kia", "kader", "kepala_puskesmas"],
                             true
                         )
                         && !$puskesmasBelumTerhubung
@@ -680,6 +716,28 @@ require_once "../includes/navbar.php";
             </div>
 
             <div class="card-body">
+
+                <?php if ($roleAktif === "orang_tua"): ?>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Konsultasi tidak diajukan oleh Orang Tua. Menu ini akan
+                        menampilkan konsultasi setelah <strong>Ahli Gizi</strong>
+                        memverifikasi hasil deteksi dan menetapkan bahwa anak
+                        <strong>perlu konsultasi</strong>.
+                    </div>
+
+                <?php elseif (in_array($roleAktif, ["kader", "petugas_kia"], true)): ?>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-bell-fill me-1"></i>
+                        Daftar berikut berisi balita yang telah ditetapkan oleh
+                        <strong>Ahli Gizi</strong> sebagai perlu konsultasi.
+                        Mohon informasikan kepada Orang Tua agar melakukan
+                        konsultasi dengan Ahli Gizi Puskesmas.
+                    </div>
+
+                <?php endif; ?>
 
                 <?php if ($puskesmasBelumTerhubung): ?>
 
@@ -1103,6 +1161,10 @@ require_once "../includes/navbar.php";
                                     Puskesmas
                                 </th>
 
+                                <th class="text-center">
+                                    Status Stunting
+                                </th>
+
                                 <th>
                                     Petugas Gizi
                                 </th>
@@ -1157,6 +1219,15 @@ require_once "../includes/navbar.php";
                                         );
                                     }
                                 }
+
+                                $keluhanKosong =
+                                    trim(
+                                        (string) (
+                                            $data[
+                                                "keluhan"
+                                            ] ?? ""
+                                        )
+                                    ) === "";
 
                                 $hasilKosong =
                                     trim(
@@ -1274,6 +1345,21 @@ require_once "../includes/navbar.php";
                                         ); ?>
                                     </td>
 
+                                    <td class="text-center">
+                                        <?php
+                                            $statusStuntingTabel = strtolower(
+                                                trim((string) ($data["status_stunting"] ?? ""))
+                                            );
+                                            $kelasStuntingTabel =
+                                                $statusStuntingTabel === "risiko stunting"
+                                                    ? "bg-warning text-dark"
+                                                    : "bg-danger";
+                                        ?>
+                                        <span class="badge <?= $kelasStuntingTabel; ?>">
+                                            <?= amanKonsultasi($data["status_stunting"] ?? "-"); ?>
+                                        </span>
+                                    </td>
+
                                     <td>
 
                                         <?php if (
@@ -1305,20 +1391,18 @@ require_once "../includes/navbar.php";
 
                                     <td class="text-center">
 
-                                        <?php if (
-                                            $belumDitangani
-                                        ): ?>
+                                        <?php if ($keluhanKosong): ?>
 
-                                            <span
-                                                class="badge
-                                                bg-warning text-dark"
-                                            >
-                                                <i
-                                                    class="bi
-                                                    bi-hourglass-split
-                                                    me-1"
-                                                ></i>
-                                                Menunggu Tanggapan
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="bi bi-person-exclamation me-1"></i>
+                                                Menunggu Orang Tua
+                                            </span>
+
+                                        <?php elseif ($belumDitangani): ?>
+
+                                            <span class="badge bg-info text-dark">
+                                                <i class="bi bi-hourglass-split me-1"></i>
+                                                Menunggu Ahli Gizi
                                             </span>
 
                                         <?php elseif (
@@ -1433,6 +1517,21 @@ require_once "../includes/navbar.php";
                                             </a>
 
                                             <?php if (
+                                                $roleAktif === "orang_tua"
+                                                && $keluhanKosong
+                                            ): ?>
+
+                                                <a
+                                                    href="tambah_konsultasi.php?id=<?= $idKonsultasi; ?>"
+                                                    class="btn btn-primary btn-sm"
+                                                >
+                                                    <i class="bi bi-chat-heart"></i>
+                                                    Mulai Konsultasi
+                                                </a>
+
+                                            <?php endif; ?>
+
+                                            <?php if (
                                                 $bolehMengelola
                                                 && $petugasDitugaskanKeAkunIni
                                             ): ?>
@@ -1465,7 +1564,7 @@ require_once "../includes/navbar.php";
 
                             <tr>
 
-                                <td colspan="9">
+                                <td colspan="10">
 
                                     <div class="empty-state">
 

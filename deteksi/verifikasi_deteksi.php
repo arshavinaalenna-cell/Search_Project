@@ -117,6 +117,9 @@ $stmtData = mysqli_prepare(
         hd.status_stunting,
         hd.status_verifikasi,
         hd.catatan_verifikasi,
+        hd.keputusan_konsultasi,
+        hd.konsultasi_ditetapkan_oleh,
+        hd.tanggal_keputusan_konsultasi,
 
         pa.tanggal_pengukuran,
         pa.umur_bulan,
@@ -190,8 +193,14 @@ if (!$dataDeteksi) {
 
 /*
 |--------------------------------------------------------------------------
-| Proses verifikasi
+| Proses verifikasi dan keputusan kebutuhan konsultasi
 |--------------------------------------------------------------------------
+|
+| Hanya hasil dengan kategori Risiko Stunting, Stunting, atau Stunting Berat
+| yang dapat ditetapkan "Perlu konsultasi". Jika Petugas Gizi memilih
+| "Perlu konsultasi" dan hasil sudah diverifikasi, sistem otomatis membuat
+| satu tiket konsultasi untuk anak tersebut. Orang Tua tidak membuat tiket.
+|
 */
 
 $error = "";
@@ -203,6 +212,24 @@ $statusVerifikasi =
 $catatanVerifikasi =
     $dataDeteksi["catatan_verifikasi"]
     ?? "";
+
+$keputusanKonsultasi =
+    $dataDeteksi["keputusan_konsultasi"]
+    ?? "Belum ditentukan";
+
+$statusStuntingNormalisasi = strtolower(
+    trim((string) ($dataDeteksi["status_stunting"] ?? ""))
+);
+
+$kategoriBerisikoKonsultasi = in_array(
+    $statusStuntingNormalisasi,
+    [
+        "risiko stunting",
+        "stunting",
+        "stunting berat"
+    ],
+    true
+);
 
 $daftarStatus = [
     "Belum diverifikasi",
@@ -219,6 +246,11 @@ $labelStatusVerifikasi = [
         "Perlu Pemeriksaan Ulang"
 ];
 
+$daftarKeputusanKonsultasi = [
+    "Perlu konsultasi",
+    "Tidak perlu konsultasi"
+];
+
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $statusVerifikasi =
@@ -227,6 +259,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $catatanVerifikasi =
         trim($_POST["catatan_verifikasi"] ?? "");
 
+    $keputusanKonsultasi =
+        trim($_POST["keputusan_konsultasi"] ?? "");
+
     if (
         !in_array(
             $statusVerifikasi,
@@ -234,120 +269,334 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             true
         )
     ) {
-        $error =
-            "Status verifikasi tidak valid.";
+        $error = "Status verifikasi tidak valid.";
+
     } elseif (
-        $statusVerifikasi ===
-            "Perlu pemeriksaan ulang"
+        $statusVerifikasi === "Perlu pemeriksaan ulang"
         && $catatanVerifikasi === ""
     ) {
         $error =
             "Catatan Petugas Gizi wajib diisi jika hasil memerlukan pemeriksaan ulang.";
+
+    } elseif (
+        $kategoriBerisikoKonsultasi
+        && $statusVerifikasi === "Sudah diverifikasi"
+        && !in_array(
+            $keputusanKonsultasi,
+            $daftarKeputusanKonsultasi,
+            true
+        )
+    ) {
+        $error =
+            "Tentukan apakah balita perlu konsultasi dengan Ahli Gizi.";
+    }
+
+    /*
+    |------------------------------------------------------------------------
+    | Status selain kategori risiko tidak membuka konsultasi
+    |------------------------------------------------------------------------
+    */
+    if (!$kategoriBerisikoKonsultasi) {
+        $keputusanKonsultasi =
+            $statusVerifikasi === "Sudah diverifikasi"
+                ? "Tidak perlu konsultasi"
+                : "Belum ditentukan";
+    } elseif ($statusVerifikasi !== "Sudah diverifikasi") {
+        $keputusanKonsultasi = "Belum ditentukan";
+    }
+
+    /*
+    |------------------------------------------------------------------------
+    | Konsultasi yang sudah dimulai tidak boleh dibatalkan dari verifikasi
+    |------------------------------------------------------------------------
+    */
+    if ($error === "" && $kategoriBerisikoKonsultasi) {
+        $stmtCekAktif = mysqli_prepare(
+            $conn,
+            "SELECT
+                id_konsultasi,
+                keluhan,
+                hasil_konsultasi,
+                tindak_lanjut
+             FROM konsultasi
+             WHERE id_deteksi = ?
+             AND sumber_pengajuan = 'ahli_gizi'
+             LIMIT 1"
+        );
+
+        if ($stmtCekAktif) {
+            mysqli_stmt_bind_param($stmtCekAktif, "i", $id);
+            mysqli_stmt_execute($stmtCekAktif);
+            $hasilCekAktif = mysqli_stmt_get_result($stmtCekAktif);
+            $dataCekAktif = mysqli_fetch_assoc($hasilCekAktif);
+            mysqli_stmt_close($stmtCekAktif);
+
+            if ($dataCekAktif) {
+                $konsultasiSudahDimulai = (
+                    trim((string) ($dataCekAktif["keluhan"] ?? "")) !== ""
+                    || trim((string) ($dataCekAktif["hasil_konsultasi"] ?? "")) !== ""
+                    || trim((string) ($dataCekAktif["tindak_lanjut"] ?? "")) !== ""
+                );
+
+                if (
+                    $konsultasiSudahDimulai
+                    && !(
+                        $statusVerifikasi === "Sudah diverifikasi"
+                        && $keputusanKonsultasi === "Perlu konsultasi"
+                    )
+                ) {
+                    $error =
+                        "Konsultasi sudah dimulai oleh Orang Tua sehingga keputusan konsultasi tidak dapat dibatalkan.";
+                }
+            }
+        }
     }
 
     if ($error === "") {
 
-        if (
-            $statusVerifikasi ===
-            "Belum diverifikasi"
-        ) {
+        try {
 
-            $stmt = mysqli_prepare(
-                $conn,
-                "UPDATE hasil_deteksi AS hd
-                 INNER JOIN pengukuran_antropometri AS pa
-                    ON hd.id_pengukuran = pa.id_pengukuran
-                 INNER JOIN balita AS b
-                    ON pa.id_balita = b.id_balita
-                 SET
-                    hd.status_verifikasi = ?,
-                    hd.catatan_verifikasi = ?,
-                    hd.diverifikasi_oleh = NULL,
-                    hd.tanggal_verifikasi = NULL
-                 WHERE hd.id_deteksi = ?
-                 AND b.id_puskesmas = ?"
-            );
+            mysqli_begin_transaction($conn);
 
-            if (!$stmt) {
-                die(
-                    "Gagal menyiapkan verifikasi hasil deteksi: "
-                    . mysqli_error($conn)
+            if ($statusVerifikasi === "Belum diverifikasi") {
+
+                $stmt = mysqli_prepare(
+                    $conn,
+                    "UPDATE hasil_deteksi AS hd
+                     INNER JOIN pengukuran_antropometri AS pa
+                        ON hd.id_pengukuran = pa.id_pengukuran
+                     INNER JOIN balita AS b
+                        ON pa.id_balita = b.id_balita
+                     SET
+                        hd.status_verifikasi = ?,
+                        hd.catatan_verifikasi = ?,
+                        hd.diverifikasi_oleh = NULL,
+                        hd.tanggal_verifikasi = NULL,
+                        hd.keputusan_konsultasi = 'Belum ditentukan',
+                        hd.konsultasi_ditetapkan_oleh = NULL,
+                        hd.tanggal_keputusan_konsultasi = NULL
+                     WHERE hd.id_deteksi = ?
+                     AND b.id_puskesmas = ?"
+                );
+
+                if (!$stmt) {
+                    throw new Exception(
+                        "Gagal menyiapkan verifikasi hasil deteksi: "
+                        . mysqli_error($conn)
+                    );
+                }
+
+                mysqli_stmt_bind_param(
+                    $stmt,
+                    "ssii",
+                    $statusVerifikasi,
+                    $catatanVerifikasi,
+                    $id,
+                    $idPuskesmasAktif
+                );
+
+            } else {
+
+                $stmt = mysqli_prepare(
+                    $conn,
+                    "UPDATE hasil_deteksi AS hd
+                     INNER JOIN pengukuran_antropometri AS pa
+                        ON hd.id_pengukuran = pa.id_pengukuran
+                     INNER JOIN balita AS b
+                        ON pa.id_balita = b.id_balita
+                     SET
+                        hd.status_verifikasi = ?,
+                        hd.catatan_verifikasi = ?,
+                        hd.diverifikasi_oleh = ?,
+                        hd.tanggal_verifikasi = NOW(),
+                        hd.keputusan_konsultasi = ?,
+                        hd.konsultasi_ditetapkan_oleh = ?,
+                        hd.tanggal_keputusan_konsultasi = NOW()
+                     WHERE hd.id_deteksi = ?
+                     AND b.id_puskesmas = ?"
+                );
+
+                if (!$stmt) {
+                    throw new Exception(
+                        "Gagal menyiapkan verifikasi hasil deteksi: "
+                        . mysqli_error($conn)
+                    );
+                }
+
+                mysqli_stmt_bind_param(
+                    $stmt,
+                    "ssisiii",
+                    $statusVerifikasi,
+                    $catatanVerifikasi,
+                    $idUserAktif,
+                    $keputusanKonsultasi,
+                    $idUserAktif,
+                    $id,
+                    $idPuskesmasAktif
                 );
             }
 
-            mysqli_stmt_bind_param(
-                $stmt,
-                "ssii",
-                $statusVerifikasi,
-                $catatanVerifikasi,
-                $id,
-                $idPuskesmasAktif
-            );
-
-        } else {
-
-            $stmt = mysqli_prepare(
-                $conn,
-                "UPDATE hasil_deteksi AS hd
-                 INNER JOIN pengukuran_antropometri AS pa
-                    ON hd.id_pengukuran = pa.id_pengukuran
-                 INNER JOIN balita AS b
-                    ON pa.id_balita = b.id_balita
-                 SET
-                    hd.status_verifikasi = ?,
-                    hd.catatan_verifikasi = ?,
-                    hd.diverifikasi_oleh = ?,
-                    hd.tanggal_verifikasi = NOW()
-                 WHERE hd.id_deteksi = ?
-                 AND b.id_puskesmas = ?"
-            );
-
-            if (!$stmt) {
-                die(
-                    "Gagal menyiapkan verifikasi hasil deteksi: "
-                    . mysqli_error($conn)
+            if (!mysqli_stmt_execute($stmt)) {
+                throw new Exception(
+                    "Verifikasi hasil deteksi gagal disimpan: "
+                    . mysqli_stmt_error($stmt)
                 );
             }
 
-            mysqli_stmt_bind_param(
-                $stmt,
-                "ssiii",
-                $statusVerifikasi,
-                $catatanVerifikasi,
-                $idUserAktif,
-                $id,
-                $idPuskesmasAktif
-            );
-        }
+            mysqli_stmt_close($stmt);
 
-        if (
-            !mysqli_stmt_execute(
-                $stmt
-            )
-        ) {
-            $error =
-                "Verifikasi hasil deteksi gagal disimpan.";
-        }
+            /*
+            |------------------------------------------------------------------
+            | Jika disetujui perlu konsultasi, buat tiket otomatis
+            |------------------------------------------------------------------
+            */
+            if (
+                $kategoriBerisikoKonsultasi
+                && $statusVerifikasi === "Sudah diverifikasi"
+                && $keputusanKonsultasi === "Perlu konsultasi"
+            ) {
 
-        $jumlahBerubah =
-            mysqli_stmt_affected_rows(
-                $stmt
-            );
+                $stmtCek = mysqli_prepare(
+                    $conn,
+                    "SELECT id_konsultasi
+                     FROM konsultasi
+                     WHERE id_deteksi = ?
+                     LIMIT 1"
+                );
 
-        mysqli_stmt_close(
-            $stmt
-        );
+                if (!$stmtCek) {
+                    throw new Exception(
+                        "Gagal memeriksa tiket konsultasi: "
+                        . mysqli_error($conn)
+                    );
+                }
 
-        if (
-            $error === ""
-            && $jumlahBerubah >= 0
-        ) {
+                mysqli_stmt_bind_param($stmtCek, "i", $id);
+                mysqli_stmt_execute($stmtCek);
+                $hasilCek = mysqli_stmt_get_result($stmtCek);
+                $tiketAda = mysqli_fetch_assoc($hasilCek);
+                mysqli_stmt_close($stmtCek);
+
+                if ($tiketAda) {
+                    $stmtTiket = mysqli_prepare(
+                        $conn,
+                        "UPDATE konsultasi
+                         SET
+                            id_balita = ?,
+                            id_petugas = ?,
+                            tanggal = CURDATE(),
+                            sumber_pengajuan = 'ahli_gizi'
+                         WHERE id_deteksi = ?"
+                    );
+
+                    if (!$stmtTiket) {
+                        throw new Exception(
+                            "Gagal memperbarui tiket konsultasi: "
+                            . mysqli_error($conn)
+                        );
+                    }
+
+                    mysqli_stmt_bind_param(
+                        $stmtTiket,
+                        "iii",
+                        $dataDeteksi["id_balita"],
+                        $idUserAktif,
+                        $id
+                    );
+                } else {
+                    $stmtTiket = mysqli_prepare(
+                        $conn,
+                        "INSERT INTO konsultasi
+                        (
+                            id_deteksi,
+                            id_balita,
+                            id_petugas,
+                            tanggal,
+                            keluhan,
+                            hasil_konsultasi,
+                            tindak_lanjut,
+                            sumber_pengajuan
+                        )
+                        VALUES
+                        (
+                            ?,
+                            ?,
+                            ?,
+                            CURDATE(),
+                            '',
+                            NULL,
+                            NULL,
+                            'ahli_gizi'
+                        )"
+                    );
+
+                    if (!$stmtTiket) {
+                        throw new Exception(
+                            "Gagal membuat tiket konsultasi: "
+                            . mysqli_error($conn)
+                        );
+                    }
+
+                    mysqli_stmt_bind_param(
+                        $stmtTiket,
+                        "iii",
+                        $id,
+                        $dataDeteksi["id_balita"],
+                        $idUserAktif
+                    );
+                }
+
+                if (!mysqli_stmt_execute($stmtTiket)) {
+                    throw new Exception(
+                        "Tiket konsultasi gagal disimpan: "
+                        . mysqli_stmt_error($stmtTiket)
+                    );
+                }
+
+                mysqli_stmt_close($stmtTiket);
+
+            } else {
+
+                /*
+                |--------------------------------------------------------------
+                | Jika keputusan dibatalkan, hapus hanya tiket otomatis
+                | yang belum pernah ditanggapi. Riwayat yang sudah selesai
+                | tidak dihapus.
+                |--------------------------------------------------------------
+                */
+                $stmtBatal = mysqli_prepare(
+                    $conn,
+                    "DELETE FROM konsultasi
+                     WHERE id_deteksi = ?
+                     AND sumber_pengajuan = 'ahli_gizi'
+                     AND (hasil_konsultasi IS NULL OR TRIM(hasil_konsultasi) = '')
+                     AND (tindak_lanjut IS NULL OR TRIM(tindak_lanjut) = '')"
+                );
+
+                if (!$stmtBatal) {
+                    throw new Exception(
+                        "Gagal memperbarui keputusan konsultasi: "
+                        . mysqli_error($conn)
+                    );
+                }
+
+                mysqli_stmt_bind_param($stmtBatal, "i", $id);
+                mysqli_stmt_execute($stmtBatal);
+                mysqli_stmt_close($stmtBatal);
+            }
+
+            mysqli_commit($conn);
+
             header(
                 "Location: detail_deteksi.php?id="
                 . $id
                 . "&pesan=verifikasi_berhasil"
             );
             exit;
+
+        } catch (Throwable $e) {
+            mysqli_rollback($conn);
+            $error = $e->getMessage();
         }
     }
 }
@@ -674,6 +923,32 @@ require_once "../includes/navbar.php";
 
                 </div>
 
+                <?php if ($kategoriBerisikoKonsultasi): ?>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-bell-fill me-1"></i>
+                        Status anak adalah
+                        <strong><?= htmlspecialchars(
+                            $dataDeteksi["status_stunting"] ?? "-",
+                            ENT_QUOTES,
+                            "UTF-8"
+                        ); ?></strong>.
+                        Setelah hasil dinyatakan <strong>Terverifikasi</strong>,
+                        Ahli Gizi wajib menentukan apakah Orang Tua perlu
+                        melakukan konsultasi gizi.
+                    </div>
+
+                <?php else: ?>
+
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle me-1"></i>
+                        Status stunting anak saat ini tidak termasuk kategori
+                        Risiko Stunting, Stunting, atau Stunting Berat sehingga
+                        sistem tidak membuka kebutuhan konsultasi otomatis.
+                    </div>
+
+                <?php endif; ?>
+
                 <form method="POST">
 
                     <div class="form-group">
@@ -725,6 +1000,55 @@ require_once "../includes/navbar.php";
                         </div>
 
                     </div>
+
+                    <?php if ($kategoriBerisikoKonsultasi): ?>
+
+                        <div class="form-group" id="blokKeputusanKonsultasi">
+
+                            <label
+                                for="keputusan_konsultasi"
+                                class="form-label"
+                            >
+                                Kebutuhan Konsultasi Orang Tua
+                                <span id="tandaKonsultasiWajib" class="text-danger">*</span>
+                            </label>
+
+                            <select
+                                name="keputusan_konsultasi"
+                                id="keputusan_konsultasi"
+                                class="form-select"
+                            >
+                                <option value="">
+                                    -- Tentukan kebutuhan konsultasi --
+                                </option>
+                                <option
+                                    value="Perlu konsultasi"
+                                    <?= $keputusanKonsultasi === "Perlu konsultasi"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Perlu Konsultasi
+                                </option>
+                                <option
+                                    value="Tidak perlu konsultasi"
+                                    <?= $keputusanKonsultasi === "Tidak perlu konsultasi"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Tidak Perlu Konsultasi
+                                </option>
+                            </select>
+
+                            <div class="form-text">
+                                Jika memilih <strong>Perlu Konsultasi</strong>,
+                                sistem otomatis membuat tiket konsultasi dan
+                                menampilkan pemberitahuan pada akun Kader,
+                                Petugas KIA, serta Orang Tua.
+                            </div>
+
+                        </div>
+
+                    <?php endif; ?>
 
                     <div class="form-group">
 
@@ -810,6 +1134,16 @@ document.addEventListener(
                 "tandaCatatanWajib"
             );
 
+        const keputusanKonsultasi =
+            document.getElementById(
+                "keputusan_konsultasi"
+            );
+
+        const tandaKonsultasiWajib =
+            document.getElementById(
+                "tandaKonsultasiWajib"
+            );
+
         function aturCatatan() {
 
             if (!status || !catatan) {
@@ -833,8 +1167,32 @@ document.addEventListener(
 
         status.addEventListener(
             "change",
-            aturCatatan
+            function () {
+                aturCatatan();
+                aturKonsultasi();
+            }
         );
+
+        function aturKonsultasi() {
+            if (!keputusanKonsultasi || !status) {
+                return;
+            }
+
+            const wajib =
+                status.value === "Sudah diverifikasi";
+
+            keputusanKonsultasi.disabled = !wajib;
+            keputusanKonsultasi.required = wajib;
+
+            if (tandaKonsultasiWajib) {
+                tandaKonsultasiWajib.classList.toggle(
+                    "d-none",
+                    !wajib
+                );
+            }
+        }
+
+        aturKonsultasi();
 
         aturCatatan();
     }

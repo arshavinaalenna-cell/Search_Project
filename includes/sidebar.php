@@ -186,6 +186,15 @@ $menuSidebar = [
                 "form_skrining.php",
                 "edit_skrining.php"
             ]
+        ],
+        [
+            "nama" => "Perlu Konsultasi",
+            "ikon" => "✦",
+            "url" => "../konsultasi/data_konsultasi.php",
+            "halaman" => [
+                "data_konsultasi.php",
+                "detail_konsultasi.php"
+            ]
         ]
     ],
 
@@ -243,6 +252,15 @@ $menuSidebar = [
             "halaman" => [
                 "hasil_deteksi.php",
                 "detail_deteksi.php"
+            ]
+        ],
+        [
+            "nama" => "Perlu Konsultasi",
+            "ikon" => "✦",
+            "url" => "../konsultasi/data_konsultasi.php",
+            "halaman" => [
+                "data_konsultasi.php",
+                "detail_konsultasi.php"
             ]
         ]
     ],
@@ -330,7 +348,7 @@ $menuSidebar = [
             ]
         ],
         [
-            "nama" => "Konsultasi",
+            "nama" => "Konsultasi Ahli Gizi",
             "ikon" => "✦",
             "url" => "../konsultasi/data_konsultasi.php",
             "halaman" => [

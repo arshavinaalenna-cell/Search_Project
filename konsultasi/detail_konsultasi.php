@@ -7,6 +7,8 @@ require_once "../config/koneksi.php";
 cekRole([
     "orang_tua",
     "petugas_gizi",
+    "petugas_kia",
+    "kader",
     "kepala_puskesmas",
     "dinkes"
 ]);
@@ -44,7 +46,7 @@ $idPuskesmasAktif = null;
 if (
     in_array(
         $roleAktif,
-        ["petugas_gizi", "kepala_puskesmas"],
+        ["petugas_gizi", "petugas_kia", "kader", "kepala_puskesmas"],
         true
     )
 ) {
@@ -100,6 +102,8 @@ $stmt = mysqli_prepare(
     $conn,
     "SELECT
         k.id_konsultasi,
+        k.id_deteksi,
+        k.sumber_pengajuan,
         k.id_balita,
         k.id_petugas,
         k.tanggal,
@@ -113,7 +117,9 @@ $stmt = mysqli_prepare(
         b.id_puskesmas,
         ps.nama_puskesmas,
         p.nama AS nama_petugas,
-        p.username AS username_petugas
+        p.username AS username_petugas,
+        hd.status_stunting,
+        hd.keputusan_konsultasi
      FROM konsultasi k
      INNER JOIN balita b
         ON k.id_balita = b.id_balita
@@ -121,7 +127,11 @@ $stmt = mysqli_prepare(
         ON b.id_puskesmas = ps.id_puskesmas
      LEFT JOIN pengguna p
         ON k.id_petugas = p.id_user
+     INNER JOIN hasil_deteksi hd
+        ON k.id_deteksi = hd.id_deteksi
      WHERE k.id_konsultasi = ?
+     AND k.sumber_pengajuan = 'ahli_gizi'
+     AND hd.keputusan_konsultasi = 'Perlu konsultasi' 
      LIMIT 1"
 );
 
@@ -182,7 +192,7 @@ if (
 if (
     in_array(
         $roleAktif,
-        ["petugas_gizi", "kepala_puskesmas"],
+        ["petugas_gizi", "petugas_kia", "kader", "kepala_puskesmas"],
         true
     )
 ) {
@@ -220,6 +230,15 @@ $bolehEdit = (
     && (int) $data["id_petugas"] === $idUserAktif
 );
 
+$keluhanKosong = (
+    trim((string) ($data["keluhan"] ?? "")) === ""
+);
+
+$bolehMulaiKonsultasi = (
+    $roleAktif === "orang_tua"
+    && $keluhanKosong
+);
+
 $hasilKosong = (
     trim(
         (string) (
@@ -236,12 +255,21 @@ $tindakLanjutKosong = (
     ) === ""
 );
 
-if ($hasilKosong) {
+if ($keluhanKosong) {
     $statusKonsultasi =
-        "Menunggu Tanggapan";
+        "Menunggu Orang Tua";
 
     $kelasStatusKonsultasi =
         "bg-warning text-dark";
+
+    $ikonStatusKonsultasi =
+        "bi-person-exclamation";
+} elseif ($hasilKosong) {
+    $statusKonsultasi =
+        "Menunggu Ahli Gizi";
+
+    $kelasStatusKonsultasi =
+        "bg-info text-dark";
 
     $ikonStatusKonsultasi =
         "bi-hourglass-split";
@@ -321,6 +349,18 @@ require_once "../includes/navbar.php";
                         Kembali
                     </a>
 
+                    <?php if ($bolehMulaiKonsultasi): ?>
+
+                        <a
+                            href="tambah_konsultasi.php?id=<?= (int) $data["id_konsultasi"]; ?>"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-chat-heart"></i>
+                            Mulai Konsultasi
+                        </a>
+
+                    <?php endif; ?>
+
                     <?php if ($bolehEdit): ?>
 
                         <a
@@ -341,6 +381,14 @@ require_once "../includes/navbar.php";
             </div>
 
             <div class="card-body">
+
+                <div class="alert alert-warning">
+                    <i class="bi bi-bell-fill me-1"></i>
+                    Konsultasi ini dibuka berdasarkan keputusan
+                    <strong>Ahli Gizi</strong> setelah hasil deteksi
+                    <strong><?= htmlspecialchars($data["status_stunting"] ?? "-", ENT_QUOTES, "UTF-8"); ?></strong>
+                    diverifikasi.
+                </div>
 
                 <div class="row g-3 mb-3">
 
