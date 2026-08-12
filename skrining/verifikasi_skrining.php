@@ -98,6 +98,7 @@ $idDeteksi =
 header(
     "Location: ../deteksi/verifikasi_deteksi.php?id="
     . $idDeteksi
+    . "&kembali=skrining"
 );
 
 exit;

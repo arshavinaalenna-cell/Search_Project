@@ -114,50 +114,92 @@ $modeMonitoring = in_array(
     true
 );
 
+/*
+|--------------------------------------------------------------------------
+| FILTER KONSULTASI - SEMUA ROLE
+|--------------------------------------------------------------------------
+| Semua akun yang mempunyai menu Konsultasi mendapat filter:
+| - Pencarian
+| - Bulan
+| - Tahun
+| - Status konsultasi
+| - Urutan terbaru / terlama
+|
+| Khusus Dinkes tetap mendapat filter Puskesmas lintas wilayah.
+| Role wilayah lainnya tetap terkunci pada Puskesmas akun.
+*/
+
 $cari = trim($_GET["cari"] ?? "");
 $kataKunci = "%" . $cari . "%";
 
+$filterStatus = trim($_GET["status"] ?? "");
+$filterBulan =
+    filter_input(
+        INPUT_GET,
+        "bulan",
+        FILTER_VALIDATE_INT
+    ) ?: 0;
+
+$filterTahun =
+    filter_input(
+        INPUT_GET,
+        "tahun",
+        FILTER_VALIDATE_INT
+    ) ?: 0;
+
+$filterUrutan =
+    trim($_GET["urutan"] ?? "terbaru");
+
+$filterPuskesmas = 0;
+
+if (
+    !in_array(
+        $filterStatus,
+        [
+            "",
+            "menunggu_orang_tua",
+            "menunggu_ahli_gizi",
+            "ditanggapi"
+        ],
+        true
+    )
+) {
+    $filterStatus = "";
+}
+
+if (
+    $filterBulan < 1
+    || $filterBulan > 12
+) {
+    $filterBulan = 0;
+}
+
+if (
+    $filterTahun < 2000
+    || $filterTahun > 2100
+) {
+    $filterTahun = 0;
+}
+
+if (
+    !in_array(
+        $filterUrutan,
+        ["terbaru", "terlama"],
+        true
+    )
+) {
+    $filterUrutan = "terbaru";
+}
+
 /*
 |--------------------------------------------------------------------------
-| Filter khusus Dinkes
+| Filter Puskesmas hanya untuk Dinkes
 |--------------------------------------------------------------------------
-|
-| Filter berikut hanya tampil dan digunakan pada role Dinkes:
-| - Status konsultasi
-| - Puskesmas
-| - Bulan
-| - Tahun
-|
 */
 
-$filterStatus = "";
-$filterPuskesmas = 0;
-$filterBulan = 0;
-$filterTahun = 0;
-
 $daftarPuskesmasFilter = [];
-$daftarTahunFilter = [];
 
 if ($roleAktif === "dinkes") {
-
-    $filterStatus =
-        trim(
-            $_GET["status"] ?? ""
-        );
-
-    if (
-        !in_array(
-            $filterStatus,
-            [
-                "",
-                "menunggu",
-                "ditanggapi"
-            ],
-            true
-        )
-    ) {
-        $filterStatus = "";
-    }
 
     $filterPuskesmas =
         filter_input(
@@ -165,40 +207,6 @@ if ($roleAktif === "dinkes") {
             "puskesmas",
             FILTER_VALIDATE_INT
         ) ?: 0;
-
-    $filterBulan =
-        filter_input(
-            INPUT_GET,
-            "bulan",
-            FILTER_VALIDATE_INT
-        ) ?: 0;
-
-    $filterTahun =
-        filter_input(
-            INPUT_GET,
-            "tahun",
-            FILTER_VALIDATE_INT
-        ) ?: 0;
-
-    if (
-        $filterBulan < 1
-        || $filterBulan > 12
-    ) {
-        $filterBulan = 0;
-    }
-
-    if (
-        $filterTahun < 2000
-        || $filterTahun > 2100
-    ) {
-        $filterTahun = 0;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Pilihan Puskesmas
-    |--------------------------------------------------------------------------
-    */
 
     $queryPuskesmasFilter = mysqli_query(
         $conn,
@@ -221,36 +229,77 @@ if ($roleAktif === "dinkes") {
                 $itemPuskesmas;
         }
     }
+}
 
-    /*
-    |--------------------------------------------------------------------------
-    | Pilihan Tahun
-    |--------------------------------------------------------------------------
-    */
+/*
+|--------------------------------------------------------------------------
+| Pilihan Tahun
+|--------------------------------------------------------------------------
+| Dibaca sebagai karakter agar database lama yang masih memiliki
+| tanggal 0000-00-00 tidak memicu error DATE pada MySQL strict mode.
+*/
 
-    $queryTahunFilter = mysqli_query(
-        $conn,
-        "SELECT DISTINCT
-            YEAR(tanggal) AS tahun
-         FROM konsultasi
-         WHERE tanggal IS NOT NULL
-         ORDER BY tahun DESC"
-    );
+$daftarTahunFilter = [];
 
-    if ($queryTahunFilter) {
+$queryTahunFilter = mysqli_query(
+    $conn,
+    "SELECT DISTINCT
+        LEFT(CAST(tanggal AS CHAR), 4) AS tahun
+     FROM konsultasi
+     WHERE tanggal IS NOT NULL
+       AND LEFT(CAST(tanggal AS CHAR), 4) <> '0000'
+     ORDER BY tahun DESC"
+);
 
-        while (
-            $itemTahun =
-                mysqli_fetch_assoc(
-                    $queryTahunFilter
-                )
+if ($queryTahunFilter) {
+
+    while (
+        $itemTahun =
+            mysqli_fetch_assoc(
+                $queryTahunFilter
+            )
+    ) {
+        $tahunItem =
+            (int) (
+                $itemTahun["tahun"]
+                ?? 0
+            );
+
+        if (
+            $tahunItem >= 2000
+            && $tahunItem <= 2100
         ) {
-            if (!empty($itemTahun["tahun"])) {
-                $daftarTahunFilter[] =
-                    (int) $itemTahun["tahun"];
-            }
+            $daftarTahunFilter[] =
+                $tahunItem;
         }
     }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Helper bind parameter dinamis
+|--------------------------------------------------------------------------
+*/
+
+function bindParameterKonsultasi(
+    mysqli_stmt $stmt,
+    string $tipe,
+    array &$parameter
+): void {
+    if ($tipe === "" || empty($parameter)) {
+        return;
+    }
+
+    $argumen = [$tipe];
+
+    foreach ($parameter as &$nilaiParameter) {
+        $argumen[] = &$nilaiParameter;
+    }
+
+    call_user_func_array(
+        [$stmt, "bind_param"],
+        $argumen
+    );
 }
 
 /*
@@ -276,9 +325,10 @@ function amanKonsultasi($nilai): string
 | DATA KONSULTASI
 |--------------------------------------------------------------------------
 | Orang Tua       : hanya konsultasi anak miliknya.
-| Petugas Gizi    : hanya konsultasi balita di Puskesmas yang sama.
-| Kepala Puskesmas: hanya monitoring Puskesmas yang sama.
-| Dinkes          : seluruh konsultasi.
+| Petugas wilayah : hanya konsultasi balita di Puskesmas akun.
+| Dinkes          : seluruh konsultasi, dapat filter Puskesmas.
+|
+| Filter Bulan/Tahun/Status/Urutan/Pencarian berlaku untuk semua role.
 */
 
 $selectKonsultasi = "
@@ -310,70 +360,25 @@ $selectKonsultasi = "
         ON k.id_deteksi = hd.id_deteksi
 ";
 
+$whereKonsultasi = [
+    "k.sumber_pengajuan = 'ahli_gizi'",
+    "hd.keputusan_konsultasi = 'Perlu konsultasi'"
+];
+
+$tipeParameter = "";
+$parameterKonsultasi = [];
+
+/*
+|--------------------------------------------------------------------------
+| Batas data berdasarkan role
+|--------------------------------------------------------------------------
+*/
+
 if ($roleAktif === "orang_tua") {
 
-    if ($cari !== "") {
-
-        $stmt = mysqli_prepare(
-            $conn,
-            $selectKonsultasi . "
-             WHERE k.sumber_pengajuan = 'ahli_gizi'
-               AND hd.keputusan_konsultasi = 'Perlu konsultasi'
-               AND b.id_user = ?
-               AND (
-                    b.nama_balita LIKE ?
-                    OR b.nik_balita LIKE ?
-                    OR p.nama LIKE ?
-                    OR k.keluhan LIKE ?
-                    OR k.hasil_konsultasi LIKE ?
-                    OR k.tindak_lanjut LIKE ?
-               )
-             ORDER BY k.id_konsultasi DESC"
-        );
-
-        if (!$stmt) {
-            die(
-                "Gagal menyiapkan pencarian konsultasi: "
-                . mysqli_error($conn)
-            );
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "issssss",
-            $idUserAktif,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci
-        );
-
-    } else {
-
-        $stmt = mysqli_prepare(
-            $conn,
-            $selectKonsultasi . "
-             WHERE k.sumber_pengajuan = 'ahli_gizi'
-               AND hd.keputusan_konsultasi = 'Perlu konsultasi'
-               AND b.id_user = ?
-             ORDER BY k.id_konsultasi DESC"
-        );
-
-        if (!$stmt) {
-            die(
-                "Gagal mengambil data konsultasi: "
-                . mysqli_error($conn)
-            );
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "i",
-            $idUserAktif
-        );
-    }
+    $whereKonsultasi[] = "b.id_user = ?";
+    $tipeParameter .= "i";
+    $parameterKonsultasi[] = $idUserAktif;
 
 } elseif (
     in_array(
@@ -384,173 +389,144 @@ if ($roleAktif === "orang_tua") {
 ) {
 
     if ($puskesmasBelumTerhubung) {
-
-        $stmt = mysqli_prepare(
-            $conn,
-            $selectKonsultasi . "
-             WHERE k.sumber_pengajuan = 'ahli_gizi'
-               AND hd.keputusan_konsultasi = 'Perlu konsultasi'
-               AND 1 = 0
-             ORDER BY k.id_konsultasi DESC"
-        );
-
-        if (!$stmt) {
-            die(
-                "Gagal menyiapkan data konsultasi: "
-                . mysqli_error($conn)
-            );
-        }
-
-    } elseif ($cari !== "") {
-
-        $stmt = mysqli_prepare(
-            $conn,
-            $selectKonsultasi . "
-             WHERE k.sumber_pengajuan = 'ahli_gizi'
-               AND hd.keputusan_konsultasi = 'Perlu konsultasi'
-               AND b.id_puskesmas = ?
-               AND (
-                    b.nama_balita LIKE ?
-                    OR b.nik_balita LIKE ?
-                    OR p.nama LIKE ?
-                    OR k.keluhan LIKE ?
-                    OR k.hasil_konsultasi LIKE ?
-                    OR k.tindak_lanjut LIKE ?
-               )
-             ORDER BY k.id_konsultasi DESC"
-        );
-
-        if (!$stmt) {
-            die(
-                "Gagal menyiapkan pencarian konsultasi: "
-                . mysqli_error($conn)
-            );
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "issssss",
-            $idPuskesmasAktif,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci,
-            $kataKunci
-        );
-
+        $whereKonsultasi[] = "1 = 0";
     } else {
-
-        $stmt = mysqli_prepare(
-            $conn,
-            $selectKonsultasi . "
-             WHERE k.sumber_pengajuan = 'ahli_gizi'
-               AND hd.keputusan_konsultasi = 'Perlu konsultasi'
-               AND b.id_puskesmas = ?
-             ORDER BY k.id_konsultasi DESC"
-        );
-
-        if (!$stmt) {
-            die(
-                "Gagal mengambil data konsultasi: "
-                . mysqli_error($conn)
-            );
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "i",
-            $idPuskesmasAktif
-        );
+        $whereKonsultasi[] = "b.id_puskesmas = ?";
+        $tipeParameter .= "i";
+        $parameterKonsultasi[] = $idPuskesmasAktif;
     }
 
-} else {
+} elseif ($roleAktif === "dinkes") {
 
-    /*
-    |--------------------------------------------------------------------------
-    | Dinkes
-    |--------------------------------------------------------------------------
-    |
-    | Dinkes dapat memonitor seluruh Puskesmas dan memfilter data
-    | berdasarkan status, Puskesmas, bulan, tahun, serta pencarian.
-    |
-    */
+    if ($filterPuskesmas > 0) {
+        $whereKonsultasi[] = "b.id_puskesmas = ?";
+        $tipeParameter .= "i";
+        $parameterKonsultasi[] = $filterPuskesmas;
+    }
+}
 
-    $stmt = mysqli_prepare(
+/*
+|--------------------------------------------------------------------------
+| Filter bulan dan tahun
+|--------------------------------------------------------------------------
+| Menggunakan potongan karakter dari tanggal supaya aman jika database lama
+| memiliki nilai tanggal 0000-00-00.
+*/
+
+if ($filterBulan > 0) {
+
+    $bulanDuaDigit =
+        str_pad(
+            (string) $filterBulan,
+            2,
+            "0",
+            STR_PAD_LEFT
+        );
+
+    $whereKonsultasi[] =
+        "SUBSTRING(CAST(k.tanggal AS CHAR), 6, 2) = ?";
+
+    $tipeParameter .= "s";
+    $parameterKonsultasi[] = $bulanDuaDigit;
+}
+
+if ($filterTahun > 0) {
+
+    $tahunEmpatDigit =
+        (string) $filterTahun;
+
+    $whereKonsultasi[] =
+        "LEFT(CAST(k.tanggal AS CHAR), 4) = ?";
+
+    $tipeParameter .= "s";
+    $parameterKonsultasi[] = $tahunEmpatDigit;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Filter status konsultasi
+|--------------------------------------------------------------------------
+*/
+
+if ($filterStatus === "menunggu_orang_tua") {
+
+    $whereKonsultasi[] =
+        "TRIM(COALESCE(k.keluhan, '')) = ''";
+
+} elseif ($filterStatus === "menunggu_ahli_gizi") {
+
+    $whereKonsultasi[] =
+        "TRIM(COALESCE(k.keluhan, '')) <> ''
+         AND TRIM(COALESCE(k.hasil_konsultasi, '')) = ''";
+
+} elseif ($filterStatus === "ditanggapi") {
+
+    $whereKonsultasi[] =
+        "TRIM(COALESCE(k.hasil_konsultasi, '')) <> ''";
+}
+
+/*
+|--------------------------------------------------------------------------
+| Pencarian
+|--------------------------------------------------------------------------
+*/
+
+if ($cari !== "") {
+
+    $whereKonsultasi[] = "
+        (
+            b.nama_balita LIKE ?
+            OR b.nik_balita LIKE ?
+            OR p.nama LIKE ?
+            OR ps.nama_puskesmas LIKE ?
+            OR hd.status_stunting LIKE ?
+            OR k.keluhan LIKE ?
+            OR k.hasil_konsultasi LIKE ?
+            OR k.tindak_lanjut LIKE ?
+        )
+    ";
+
+    $tipeParameter .= "ssssssss";
+
+    for ($iCari = 0; $iCari < 8; $iCari++) {
+        $parameterKonsultasi[] = $kataKunci;
+    }
+}
+
+$arahUrutan =
+    $filterUrutan === "terlama"
+        ? "ASC"
+        : "DESC";
+
+$sqlKonsultasi =
+    $selectKonsultasi
+    . " WHERE "
+    . implode(
+        " AND ",
+        $whereKonsultasi
+    )
+    . " ORDER BY
+        k.tanggal {$arahUrutan},
+        k.id_konsultasi {$arahUrutan}";
+
+$stmt =
+    mysqli_prepare(
         $conn,
-        $selectKonsultasi . "
-         WHERE
-            k.sumber_pengajuan = 'ahli_gizi'
-         AND hd.keputusan_konsultasi = 'Perlu konsultasi'
-         AND
-            (? = 0 OR b.id_puskesmas = ?)
-         AND
-            (? = 0 OR MONTH(k.tanggal) = ?)
-         AND
-            (? = 0 OR YEAR(k.tanggal) = ?)
-         AND
-            (
-                ? = ''
-                OR (
-                    ? = 'menunggu'
-                    AND TRIM(
-                        COALESCE(
-                            k.hasil_konsultasi,
-                            ''
-                        )
-                    ) = ''
-                )
-                OR (
-                    ? = 'ditanggapi'
-                    AND TRIM(
-                        COALESCE(
-                            k.hasil_konsultasi,
-                            ''
-                        )
-                    ) <> ''
-                )
-            )
-         AND
-            (
-                ? = ''
-                OR b.nama_balita LIKE ?
-                OR b.nik_balita LIKE ?
-                OR p.nama LIKE ?
-                OR k.keluhan LIKE ?
-                OR k.hasil_konsultasi LIKE ?
-                OR k.tindak_lanjut LIKE ?
-            )
-         ORDER BY k.id_konsultasi DESC"
+        $sqlKonsultasi
     );
 
-    if (!$stmt) {
-        die(
-            "Gagal menyiapkan filter konsultasi Dinkes: "
-            . mysqli_error($conn)
-        );
-    }
-
-    mysqli_stmt_bind_param(
-        $stmt,
-        "iiiiiissssssssss",
-        $filterPuskesmas,
-        $filterPuskesmas,
-        $filterBulan,
-        $filterBulan,
-        $filterTahun,
-        $filterTahun,
-        $filterStatus,
-        $filterStatus,
-        $filterStatus,
-        $cari,
-        $kataKunci,
-        $kataKunci,
-        $kataKunci,
-        $kataKunci,
-        $kataKunci,
-        $kataKunci
+if (!$stmt) {
+    die(
+        "Gagal menyiapkan data konsultasi: "
+        . mysqli_error($conn)
     );
 }
+
+bindParameterKonsultasi(
+    $stmt,
+    $tipeParameter,
+    $parameterKonsultasi
+);
 
 if (!mysqli_stmt_execute($stmt)) {
     die(
@@ -786,85 +762,222 @@ require_once "../includes/navbar.php";
 
                 <?php endif; ?>
 
-                <?php if ($roleAktif === "dinkes"): ?>
+                <form
+                    method="GET"
+                    class="row g-2 mb-4 align-items-end"
+                >
 
-                    <form
-                        method="GET"
-                        class="row g-2 mb-4 align-items-end"
-                    >
+                    <div class="col-12 col-xl-4">
 
-                        <div class="col-12 col-lg-4">
+                        <label
+                            for="cari"
+                            class="form-label small text-muted mb-1"
+                        >
+                            Cari
+                        </label>
 
-                            <label
-                                for="cari"
-                                class="form-label small text-muted mb-1"
+                        <div class="input-group">
+
+                            <span class="input-group-text">
+                                <i class="bi bi-search"></i>
+                            </span>
+
+                            <input
+                                type="text"
+                                id="cari"
+                                name="cari"
+                                class="form-control"
+                                placeholder="Cari balita, NIK, petugas, status, hasil, atau tindak lanjut"
+                                value="<?= htmlspecialchars(
+                                    $cari,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                ); ?>"
                             >
-                                Pencarian
-                            </label>
-
-                            <div class="input-group">
-
-                                <span class="input-group-text">
-                                    <i class="bi bi-search"></i>
-                                </span>
-
-                                <input
-                                    type="text"
-                                    id="cari"
-                                    name="cari"
-                                    class="form-control"
-                                    placeholder="Cari balita, NIK, petugas, keluhan, hasil, atau tindak lanjut"
-                                    value="<?= htmlspecialchars(
-                                        $cari,
-                                        ENT_QUOTES,
-                                        "UTF-8"
-                                    ); ?>"
-                                >
-
-                            </div>
 
                         </div>
 
-                        <div class="col-6 col-md-3 col-lg-2">
+                    </div>
 
-                            <label
-                                for="status"
-                                class="form-label small text-muted mb-1"
-                            >
-                                Status
-                            </label>
+                    <div class="col-6 col-md-4 col-xl-2">
 
-                            <select
-                                id="status"
-                                name="status"
-                                class="form-select"
+                        <label
+                            for="status"
+                            class="form-label small text-muted mb-1"
+                        >
+                            Status
+                        </label>
+
+                        <select
+                            id="status"
+                            name="status"
+                            class="form-select"
+                        >
+                            <option value="">
+                                Semua Status
+                            </option>
+
+                            <option
+                                value="menunggu_orang_tua"
+                                <?= $filterStatus === "menunggu_orang_tua"
+                                    ? "selected"
+                                    : ""; ?>
                             >
-                                <option value="">
-                                    Semua Status
-                                </option>
+                                Menunggu Orang Tua
+                            </option>
+
+                            <option
+                                value="menunggu_ahli_gizi"
+                                <?= $filterStatus === "menunggu_ahli_gizi"
+                                    ? "selected"
+                                    : ""; ?>
+                            >
+                                Menunggu Ahli Gizi
+                            </option>
+
+                            <option
+                                value="ditanggapi"
+                                <?= $filterStatus === "ditanggapi"
+                                    ? "selected"
+                                    : ""; ?>
+                            >
+                                Sudah Ditanggapi
+                            </option>
+                        </select>
+
+                    </div>
+
+                    <div class="col-6 col-md-4 col-xl-2">
+
+                        <label
+                            for="bulan"
+                            class="form-label small text-muted mb-1"
+                        >
+                            Bulan
+                        </label>
+
+                        <select
+                            id="bulan"
+                            name="bulan"
+                            class="form-select"
+                        >
+                            <option value="0">
+                                Semua Bulan
+                            </option>
+
+                            <?php
+                            $namaBulanKonsultasi = [
+                                1  => "Januari",
+                                2  => "Februari",
+                                3  => "Maret",
+                                4  => "April",
+                                5  => "Mei",
+                                6  => "Juni",
+                                7  => "Juli",
+                                8  => "Agustus",
+                                9  => "September",
+                                10 => "Oktober",
+                                11 => "November",
+                                12 => "Desember"
+                            ];
+                            ?>
+
+                            <?php foreach (
+                                $namaBulanKonsultasi
+                                as $nomorBulan => $labelBulan
+                            ): ?>
 
                                 <option
-                                    value="menunggu"
-                                    <?= $filterStatus === "menunggu"
+                                    value="<?= $nomorBulan; ?>"
+                                    <?= $filterBulan === $nomorBulan
                                         ? "selected"
                                         : ""; ?>
                                 >
-                                    Menunggu Tanggapan
+                                    <?= $labelBulan; ?>
                                 </option>
 
+                            <?php endforeach; ?>
+
+                        </select>
+
+                    </div>
+
+                    <div class="col-6 col-md-4 col-xl-2">
+
+                        <label
+                            for="tahun"
+                            class="form-label small text-muted mb-1"
+                        >
+                            Tahun
+                        </label>
+
+                        <select
+                            id="tahun"
+                            name="tahun"
+                            class="form-select"
+                        >
+                            <option value="0">
+                                Semua Tahun
+                            </option>
+
+                            <?php foreach (
+                                $daftarTahunFilter
+                                as $tahunFilter
+                            ): ?>
+
                                 <option
-                                    value="ditanggapi"
-                                    <?= $filterStatus === "ditanggapi"
+                                    value="<?= $tahunFilter; ?>"
+                                    <?= $filterTahun === $tahunFilter
                                         ? "selected"
                                         : ""; ?>
                                 >
-                                    Sudah Ditanggapi
+                                    <?= $tahunFilter; ?>
                                 </option>
-                            </select>
 
-                        </div>
+                            <?php endforeach; ?>
 
-                        <div class="col-6 col-md-3 col-lg-2">
+                        </select>
+
+                    </div>
+
+                    <div class="col-6 col-md-4 col-xl-2">
+
+                        <label
+                            for="urutan"
+                            class="form-label small text-muted mb-1"
+                        >
+                            Urutan
+                        </label>
+
+                        <select
+                            id="urutan"
+                            name="urutan"
+                            class="form-select"
+                        >
+                            <option
+                                value="terbaru"
+                                <?= $filterUrutan === "terbaru"
+                                    ? "selected"
+                                    : ""; ?>
+                            >
+                                Terbaru
+                            </option>
+
+                            <option
+                                value="terlama"
+                                <?= $filterUrutan === "terlama"
+                                    ? "selected"
+                                    : ""; ?>
+                            >
+                                Terlama
+                            </option>
+                        </select>
+
+                    </div>
+
+                    <?php if ($roleAktif === "dinkes"): ?>
+
+                        <div class="col-12 col-md-6 col-xl-4">
 
                             <label
                                 for="puskesmas"
@@ -915,186 +1028,33 @@ require_once "../includes/navbar.php";
 
                         </div>
 
-                        <div class="col-6 col-md-3 col-lg-2">
+                    <?php endif; ?>
 
-                            <label
-                                for="bulan"
-                                class="form-label small text-muted mb-1"
-                            >
-                                Bulan
-                            </label>
-
-                            <select
-                                id="bulan"
-                                name="bulan"
-                                class="form-select"
-                            >
-                                <option value="0">
-                                    Semua Bulan
-                                </option>
-
-                                <?php
-                                $namaBulanKonsultasi = [
-                                    1  => "Januari",
-                                    2  => "Februari",
-                                    3  => "Maret",
-                                    4  => "April",
-                                    5  => "Mei",
-                                    6  => "Juni",
-                                    7  => "Juli",
-                                    8  => "Agustus",
-                                    9  => "September",
-                                    10 => "Oktober",
-                                    11 => "November",
-                                    12 => "Desember"
-                                ];
-                                ?>
-
-                                <?php foreach (
-                                    $namaBulanKonsultasi
-                                    as $nomorBulan => $labelBulan
-                                ): ?>
-
-                                    <option
-                                        value="<?= $nomorBulan; ?>"
-                                        <?= $filterBulan === $nomorBulan
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= $labelBulan; ?>
-                                    </option>
-
-                                <?php endforeach; ?>
-
-                            </select>
-
-                        </div>
-
-                        <div class="col-6 col-md-3 col-lg-2">
-
-                            <label
-                                for="tahun"
-                                class="form-label small text-muted mb-1"
-                            >
-                                Tahun
-                            </label>
-
-                            <select
-                                id="tahun"
-                                name="tahun"
-                                class="form-select"
-                            >
-                                <option value="0">
-                                    Semua Tahun
-                                </option>
-
-                                <?php foreach (
-                                    $daftarTahunFilter
-                                    as $tahunFilter
-                                ): ?>
-
-                                    <option
-                                        value="<?= $tahunFilter; ?>"
-                                        <?= $filterTahun === $tahunFilter
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= $tahunFilter; ?>
-                                    </option>
-
-                                <?php endforeach; ?>
-
-                            </select>
-
-                        </div>
-
-                        <div class="col-6 col-lg-2">
-
-                            <button
-                                type="submit"
-                                class="btn btn-primary w-100"
-                            >
-                                <i class="bi bi-funnel"></i>
-                                Filter
-                            </button>
-
-                        </div>
-
-                        <div class="col-6 col-lg-2">
-
-                            <a
-                                href="data_konsultasi.php"
-                                class="btn btn-outline-secondary w-100"
-                            >
-                                <i class="bi bi-arrow-counterclockwise"></i>
-                                Reset
-                            </a>
-
-                        </div>
-
-                    </form>
-
-                <?php else: ?>
-
-                <form
-                    method="GET"
-                    class="row g-2 mb-3"
-                >
-
-                    <div class="col-12 col-lg-8">
-
-                        <div class="input-group">
-
-                            <span class="input-group-text">
-                                <i class="bi bi-search"></i>
-                            </span>
-
-                            <input
-                                type="text"
-                                name="cari"
-                                class="form-control"
-                                placeholder="Cari balita, NIK, petugas, keluhan, hasil, atau tindak lanjut"
-                                value="<?= htmlspecialchars(
-                                    $cari,
-                                    ENT_QUOTES,
-                                    "UTF-8"
-                                ); ?>"
-                            >
-
-                        </div>
-
-                    </div>
-
-                    <div class="col-6 col-lg-2">
+                    <div class="col-6 col-md-3 col-xl-2">
 
                         <button
                             type="submit"
                             class="btn btn-primary w-100"
                         >
-                            <i class="bi bi-search"></i>
-                            Cari
+                            <i class="bi bi-funnel"></i>
+                            Filter
                         </button>
 
                     </div>
 
-                    <div class="col-6 col-lg-2">
+                    <div class="col-6 col-md-3 col-xl-2">
 
                         <a
                             href="data_konsultasi.php"
                             class="btn btn-outline-secondary w-100"
                         >
-                            <i
-                                class="bi
-                                bi-arrow-counterclockwise"
-                            ></i>
+                            <i class="bi bi-arrow-counterclockwise"></i>
                             Reset
                         </a>
 
                     </div>
 
                 </form>
-
-                <?php endif; ?>
 
                 <div
                     class="d-flex flex-wrap

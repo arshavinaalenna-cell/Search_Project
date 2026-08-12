@@ -4,6 +4,9 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+date_default_timezone_set("Asia/Jakarta");
+@mysqli_query($conn, "SET time_zone = '+07:00'");
+
 cekRole([
     "kader",
     "petugas_kia",
@@ -115,6 +118,14 @@ $bulanFilter = (int) ($_GET["bulan"] ?? 0);
 $tahunFilter = (int) ($_GET["tahun"] ?? 0);
 $urutanFilter = (string) ($_GET["urutan"] ?? "terbaru");
 
+$tampilanData = (string) ($_GET["tampilan"] ?? (
+    $roleAktif === "kader" ? "terbaru" : "riwayat"
+));
+
+if (!in_array($tampilanData, ["terbaru", "riwayat"], true)) {
+    $tampilanData = $roleAktif === "kader" ? "terbaru" : "riwayat";
+}
+
 if ($bulanFilter < 1 || $bulanFilter > 12) {
     $bulanFilter = 0;
 }
@@ -174,6 +185,22 @@ if ($bulanFilter > 0) {
 if ($tahunFilter > 0) {
     // Hindari YEAR() pada nilai tanggal nol. Bandingkan bagian tahun sebagai teks.
     $whereFilter[] = "SUBSTRING(CAST(p.tanggal_pengukuran AS CHAR), 1, 4) = '" . $tahunFilter . "'";
+}
+
+/*
+| Untuk Kader, tampilan default adalah satu pengukuran TERBARU per balita.
+| Riwayat lengkap tetap bisa dibuka melalui tombol Riwayat Semua Pengukuran.
+*/
+if ($roleAktif === "kader" && $tampilanData === "terbaru") {
+    $whereFilter[] = "p.id_pengukuran = (
+        SELECT p2.id_pengukuran
+        FROM pengukuran_antropometri AS p2
+        WHERE p2.id_balita = p.id_balita
+        ORDER BY
+            CAST(p2.tanggal_pengukuran AS CHAR) DESC,
+            p2.id_pengukuran DESC
+        LIMIT 1
+    )";
 }
 
 $whereSql = "";
@@ -330,6 +357,54 @@ function formatTanggal($tanggal): string
     }
 
     return date("d-m-Y", $waktu);
+}
+
+function statusPemantauanPengukuran($tanggal): array
+{
+    $tanggal = trim((string) $tanggal);
+
+    if (
+        $tanggal === ""
+        || !preg_match(
+            '/^([1-9][0-9]{3})-([0-9]{2})-([0-9]{2})$/',
+            $tanggal,
+            $cocok
+        )
+    ) {
+        return [
+            "label" => "Belum pernah diukur",
+            "kelas" => "danger"
+        ];
+    }
+
+    $tahun = (int) $cocok[1];
+    $bulan = (int) $cocok[2];
+
+    if (
+        $tahun === (int) date("Y")
+        && $bulan === (int) date("n")
+    ) {
+        return [
+            "label" => "Sudah diukur bulan ini",
+            "kelas" => "success"
+        ];
+    }
+
+    $indeksSekarang = ((int) date("Y") * 12) + (int) date("n");
+    $indeksTerakhir = ($tahun * 12) + $bulan;
+    $selisihBulan = max(0, $indeksSekarang - $indeksTerakhir);
+
+    if ($selisihBulan >= 2) {
+        return [
+            "label" => "Belum diukur ≥2 bulan",
+            "kelas" => "danger"
+        ];
+    }
+
+    return [
+        "label" => "Belum diukur bulan ini",
+        "kelas" => "warning"
+    ];
 }
 
 /*
@@ -497,17 +572,43 @@ require_once "../includes/navbar.php";
 
             <div class="card-body">
 
+                <?php if ($roleAktif === "kader"): ?>
+
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <a
+                            href="data_pengukuran.php?tampilan=terbaru"
+                            class="btn btn-sm <?= $tampilanData === "terbaru" ? "btn-primary" : "btn-light"; ?>"
+                        >
+                            <i class="bi bi-person-check"></i>
+                            Pengukuran Terbaru
+                        </a>
+
+                        <a
+                            href="data_pengukuran.php?tampilan=riwayat"
+                            class="btn btn-sm <?= $tampilanData === "riwayat" ? "btn-primary" : "btn-light"; ?>"
+                        >
+                            <i class="bi bi-clock-history"></i>
+                            Riwayat Semua Pengukuran
+                        </a>
+                    </div>
+
+                <?php endif; ?>
+
                 <div
                     class="d-flex flex-wrap
                     justify-content-between align-items-center
                     gap-2 mb-3"
                 >
                     <span class="text-muted small">
-                        Total data:
+                        <?= ($roleAktif === "kader" && $tampilanData === "terbaru")
+                            ? "Balita dengan pengukuran terbaru:"
+                            : "Total data:"; ?>
                         <strong>
                             <?= mysqli_num_rows($query); ?>
                         </strong>
-                        pengukuran
+                        <?= ($roleAktif === "kader" && $tampilanData === "terbaru")
+                            ? "balita"
+                            : "pengukuran"; ?>
                     </span>
 
                     <?php if (!$bolehKelolaPengukuran): ?>
@@ -567,6 +668,14 @@ require_once "../includes/navbar.php";
                 <?php endif; ?>
 
                 <form method="GET" class="mb-4">
+
+                    <?php if ($roleAktif === "kader"): ?>
+                        <input
+                            type="hidden"
+                            name="tampilan"
+                            value="<?= aman($tampilanData); ?>"
+                        >
+                    <?php endif; ?>
 
                     <div class="row g-2 align-items-end">
 
@@ -667,7 +776,7 @@ require_once "../includes/navbar.php";
                                 </button>
 
                                 <a
-                                    href="data_pengukuran.php"
+                                    href="data_pengukuran.php<?= $roleAktif === "kader" ? "?tampilan=" . urlencode($tampilanData) : ""; ?>"
                                     class="btn btn-light"
                                     title="Reset filter"
                                 >
@@ -699,6 +808,12 @@ require_once "../includes/navbar.php";
                                 <th class="text-center">
                                     Tanggal
                                 </th>
+
+                                <?php if ($roleAktif === "kader" && $tampilanData === "terbaru"): ?>
+                                    <th class="text-center">
+                                        Status Pemantauan
+                                    </th>
+                                <?php endif; ?>
 
                                 <th class="text-center">
                                     Umur
@@ -791,6 +906,19 @@ require_once "../includes/navbar.php";
                                             ]
                                         ); ?>
                                     </td>
+
+                                    <?php if ($roleAktif === "kader" && $tampilanData === "terbaru"): ?>
+                                        <?php
+                                        $statusPantau = statusPemantauanPengukuran(
+                                            $data["tanggal_pengukuran"] ?? null
+                                        );
+                                        ?>
+                                        <td class="text-center">
+                                            <span class="badge bg-<?= aman($statusPantau["kelas"]); ?>">
+                                                <?= aman($statusPantau["label"]); ?>
+                                            </span>
+                                        </td>
+                                    <?php endif; ?>
 
                                     <td class="text-center">
                                         <?= aman(
@@ -912,7 +1040,7 @@ require_once "../includes/navbar.php";
 
                                 <td
                                     colspan="<?= $bolehKelolaPengukuran
-                                        ? "9"
+                                        ? (($roleAktif === "kader" && $tampilanData === "terbaru") ? "10" : "9")
                                         : "8"; ?>"
                                 >
 

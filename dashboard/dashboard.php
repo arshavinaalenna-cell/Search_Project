@@ -4,6 +4,9 @@ require_once "../auth/session.php";
 require_once "../config/koneksi.php";
 require_once "statistik.php";
 
+date_default_timezone_set("Asia/Jakarta");
+@mysqli_query($conn, "SET time_zone = '+07:00'");
+
 $rolePengguna = $_SESSION["role"] ?? "";
 $idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
 
@@ -176,6 +179,240 @@ if (in_array($rolePengguna, $roleTerikatPuskesmas, true)) {
     }
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| Pemantauan antropometri bulanan khusus Kader
+|--------------------------------------------------------------------------
+|
+| Dashboard Kader tidak menampilkan jumlah seluruh riwayat pengukuran sebagai
+| indikator utama. Yang lebih penting adalah progres Posyandu bulan berjalan:
+| sudah diukur, belum diukur, dan hasil terbaru yang masih menunggu verifikasi.
+|
+*/
+
+$periodeAktif = date("Y-m");
+$namaBulanDashboard = [
+    1 => "Januari",
+    2 => "Februari",
+    3 => "Maret",
+    4 => "April",
+    5 => "Mei",
+    6 => "Juni",
+    7 => "Juli",
+    8 => "Agustus",
+    9 => "September",
+    10 => "Oktober",
+    11 => "November",
+    12 => "Desember"
+];
+$labelPeriodeAktif =
+    ($namaBulanDashboard[(int) date("n")] ?? date("m"))
+    . " "
+    . date("Y");
+
+$totalSudahDiukurBulanIni = 0;
+$totalBelumDiukurBulanIni = 0;
+$totalPerluVerifikasi = 0;
+$monitoringAntropometriKader = [];
+
+if (
+    $rolePengguna === "kader"
+    && !$puskesmasBelumTerhubung
+    && $idPuskesmasAkun > 0
+) {
+    $stmtSudahDiukur = mysqli_prepare(
+        $conn,
+        "SELECT COUNT(DISTINCT pa.id_balita) AS total
+         FROM pengukuran_antropometri AS pa
+         INNER JOIN balita AS b
+            ON pa.id_balita = b.id_balita
+         WHERE b.id_puskesmas = ?
+           AND SUBSTRING(CAST(pa.tanggal_pengukuran AS CHAR), 1, 7) = ?"
+    );
+
+    if ($stmtSudahDiukur) {
+        mysqli_stmt_bind_param(
+            $stmtSudahDiukur,
+            "is",
+            $idPuskesmasAkun,
+            $periodeAktif
+        );
+        mysqli_stmt_execute($stmtSudahDiukur);
+        $hasilSudahDiukur = mysqli_stmt_get_result($stmtSudahDiukur);
+        $rowSudahDiukur = mysqli_fetch_assoc($hasilSudahDiukur);
+        $totalSudahDiukurBulanIni =
+            (int) ($rowSudahDiukur["total"] ?? 0);
+        mysqli_stmt_close($stmtSudahDiukur);
+    }
+
+    $totalBelumDiukurBulanIni =
+        max(0, (int) ($totalBalita ?? 0) - $totalSudahDiukurBulanIni);
+
+    /*
+    | Hitung balita yang hasil DETEKSI TERBARUNYA belum diverifikasi Ahli Gizi.
+    | Hasil lama tidak ikut menambah angka jika balita sudah memiliki hasil
+    | yang lebih baru.
+    */
+    $stmtPerluVerifikasi = mysqli_prepare(
+        $conn,
+        "SELECT COUNT(*) AS total
+         FROM balita AS b
+         WHERE b.id_puskesmas = ?
+           AND EXISTS (
+                SELECT 1
+                FROM hasil_deteksi AS hd
+                INNER JOIN pengukuran_antropometri AS pa
+                    ON hd.id_pengukuran = pa.id_pengukuran
+                WHERE pa.id_balita = b.id_balita
+                  AND hd.id_deteksi = (
+                        SELECT MAX(hd2.id_deteksi)
+                        FROM hasil_deteksi AS hd2
+                        INNER JOIN pengukuran_antropometri AS pa2
+                            ON hd2.id_pengukuran = pa2.id_pengukuran
+                        WHERE pa2.id_balita = b.id_balita
+                  )
+                  AND LOWER(
+                        TRIM(
+                            COALESCE(
+                                hd.status_verifikasi,
+                                'Belum diverifikasi'
+                            )
+                        )
+                  ) <> 'sudah diverifikasi'
+           )"
+    );
+
+    if ($stmtPerluVerifikasi) {
+        mysqli_stmt_bind_param(
+            $stmtPerluVerifikasi,
+            "i",
+            $idPuskesmasAkun
+        );
+        mysqli_stmt_execute($stmtPerluVerifikasi);
+        $hasilPerluVerifikasi =
+            mysqli_stmt_get_result($stmtPerluVerifikasi);
+        $rowPerluVerifikasi =
+            mysqli_fetch_assoc($hasilPerluVerifikasi);
+        $totalPerluVerifikasi =
+            (int) ($rowPerluVerifikasi["total"] ?? 0);
+        mysqli_stmt_close($stmtPerluVerifikasi);
+    }
+
+    /*
+    | Satu balita = satu baris pemantauan. Riwayat lengkap tetap berada
+    | pada menu Antropometri.
+    */
+    $stmtMonitoring = mysqli_prepare(
+        $conn,
+        "SELECT
+            b.id_balita,
+            b.nama_balita,
+            (
+                SELECT CAST(pa.tanggal_pengukuran AS CHAR)
+                FROM pengukuran_antropometri AS pa
+                WHERE pa.id_balita = b.id_balita
+                ORDER BY
+                    CAST(pa.tanggal_pengukuran AS CHAR) DESC,
+                    pa.id_pengukuran DESC
+                LIMIT 1
+            ) AS tanggal_pengukuran_terakhir
+         FROM balita AS b
+         WHERE b.id_puskesmas = ?
+         ORDER BY b.nama_balita ASC"
+    );
+
+    if ($stmtMonitoring) {
+        mysqli_stmt_bind_param(
+            $stmtMonitoring,
+            "i",
+            $idPuskesmasAkun
+        );
+        mysqli_stmt_execute($stmtMonitoring);
+        $hasilMonitoring = mysqli_stmt_get_result($stmtMonitoring);
+
+        while ($rowMonitoring = mysqli_fetch_assoc($hasilMonitoring)) {
+            $monitoringAntropometriKader[] = $rowMonitoring;
+        }
+
+        mysqli_stmt_close($stmtMonitoring);
+    }
+}
+
+function statusPemantauanBulananDashboard(?string $tanggal): array
+{
+    $tanggal = trim((string) $tanggal);
+
+    if (
+        $tanggal === ""
+        || !preg_match(
+            '/^([1-9][0-9]{3})-([0-9]{2})-([0-9]{2})$/',
+            $tanggal,
+            $cocok
+        )
+    ) {
+        return [
+            "label" => "Belum pernah diukur",
+            "kelas" => "danger",
+            "ikon" => "bi-exclamation-circle"
+        ];
+    }
+
+    $tahun = (int) $cocok[1];
+    $bulan = (int) $cocok[2];
+
+    if (
+        $tahun === (int) date("Y")
+        && $bulan === (int) date("n")
+    ) {
+        return [
+            "label" => "Sudah diukur bulan ini",
+            "kelas" => "success",
+            "ikon" => "bi-check-circle-fill"
+        ];
+    }
+
+    $indeksSekarang =
+        ((int) date("Y") * 12) + (int) date("n");
+    $indeksTerakhir =
+        ($tahun * 12) + $bulan;
+    $selisihBulan =
+        max(0, $indeksSekarang - $indeksTerakhir);
+
+    if ($selisihBulan >= 2) {
+        return [
+            "label" => "Belum diukur ≥2 bulan",
+            "kelas" => "danger",
+            "ikon" => "bi-exclamation-triangle-fill"
+        ];
+    }
+
+    return [
+        "label" => "Belum diukur bulan ini",
+        "kelas" => "warning",
+        "ikon" => "bi-clock-history"
+    ];
+}
+
+function formatTanggalDashboard(?string $tanggal): string
+{
+    $tanggal = trim((string) $tanggal);
+
+    if (
+        $tanggal === ""
+        || $tanggal === "0000-00-00"
+        || !preg_match('/^[1-9][0-9]{3}-[0-9]{2}-[0-9]{2}$/', $tanggal)
+    ) {
+        return "-";
+    }
+
+    $waktu = strtotime($tanggal);
+
+    return $waktu !== false
+        ? date("d-m-Y", $waktu)
+        : htmlspecialchars($tanggal, ENT_QUOTES, "UTF-8");
+}
+
 $judulHalaman =
     "Dashboard | Sistem Deteksi Stunting";
 
@@ -279,16 +516,22 @@ switch ($rolePengguna) {
                 "kelas" => "stat-info"
             ],
             [
-                "label" => "Pengukuran Antropometri",
-                "nilai" => $totalPengukuran ?? 0,
-                "ikon" => "bi-rulers",
+                "label" => "Sudah Diukur Bulan Ini",
+                "nilai" => $totalSudahDiukurBulanIni,
+                "ikon" => "bi-check-circle",
                 "kelas" => "stat-success"
             ],
             [
-                "label" => "Skrining Awal",
-                "nilai" => $totalSkrining ?? 0,
-                "ikon" => "bi-clipboard2-check",
+                "label" => "Belum Diukur Bulan Ini",
+                "nilai" => $totalBelumDiukurBulanIni,
+                "ikon" => "bi-calendar-x",
                 "kelas" => "stat-warning"
+            ],
+            [
+                "label" => "Perlu Verifikasi Ahli Gizi",
+                "nilai" => $totalPerluVerifikasi,
+                "ikon" => "bi-patch-question",
+                "kelas" => "stat-info"
             ]
         ];
         break;
@@ -331,7 +574,7 @@ switch ($rolePengguna) {
                 "kelas" => "stat-success"
             ],
             [
-                "label" => "Skrining Awal",
+                "label" => "Skrining",
                 "nilai" => $totalSkrining ?? 0,
                 "ikon" => "bi-clipboard2-check",
                 "kelas" => "stat-warning"
@@ -478,9 +721,9 @@ switch ($rolePengguna) {
                 "tombol" => "Buka Pengukuran"
             ],
             [
-                "judul" => "Skrining Awal",
+                "judul" => "Skrining",
                 "deskripsi" =>
-                    "Isi dan kelola data skrining awal faktor risiko balita.",
+                    "Isi dan kelola data skrining faktor risiko balita.",
                 "ikon" => "bi-clipboard2-heart",
                 "url" => "../skrining/hasil_skrining.php",
                 "tombol" => "Buka Skrining"
@@ -896,6 +1139,178 @@ require_once "../includes/navbar.php";
             <?php endforeach; ?>
 
         </div>
+
+
+        <?php if (
+            $rolePengguna === "kader"
+            && !$puskesmasBelumTerhubung
+        ): ?>
+
+            <div class="card content-card mb-4">
+
+                <div class="card-header">
+                    <div>
+                        <h4 class="mb-1">
+                            Pemantauan Antropometri <?= htmlspecialchars(
+                                $labelPeriodeAktif,
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ); ?>
+                        </h4>
+                        <small class="text-muted">
+                            Satu balita ditampilkan satu kali. Gunakan daftar ini
+                            untuk melihat siapa yang sudah dan belum diukur pada
+                            periode Posyandu bulan berjalan.
+                        </small>
+                    </div>
+
+                    <a
+                        href="../pengukuran/data_pengukuran.php?tampilan=terbaru"
+                        class="btn btn-primary btn-sm"
+                    >
+                        <i class="bi bi-rulers me-1"></i>
+                        Buka Antropometri
+                    </a>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 70px;" class="text-center">
+                                        No
+                                    </th>
+                                    <th>Nama Balita</th>
+                                    <th class="text-center">
+                                        Pengukuran Terakhir
+                                    </th>
+                                    <th class="text-center">
+                                        Status Bulan Ini
+                                    </th>
+                                    <th class="text-center" style="width: 180px;">
+                                        Aksi
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+
+                            <?php if (count($monitoringAntropometriKader) > 0): ?>
+
+                                <?php foreach (
+                                    $monitoringAntropometriKader
+                                    as $indexMonitoring => $dataMonitoring
+                                ): ?>
+                                    <?php
+                                    $statusMonitoring =
+                                        statusPemantauanBulananDashboard(
+                                            $dataMonitoring[
+                                                "tanggal_pengukuran_terakhir"
+                                            ] ?? null
+                                        );
+
+                                    $sudahBulanIni =
+                                        $statusMonitoring["kelas"] === "success";
+                                    ?>
+
+                                    <tr>
+                                        <td class="text-center">
+                                            <?= $indexMonitoring + 1; ?>
+                                        </td>
+
+                                        <td>
+                                            <strong>
+                                                <?= htmlspecialchars(
+                                                    (string) (
+                                                        $dataMonitoring["nama_balita"]
+                                                        ?? "-"
+                                                    ),
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                ); ?>
+                                            </strong>
+                                        </td>
+
+                                        <td class="text-center">
+                                            <?= formatTanggalDashboard(
+                                                $dataMonitoring[
+                                                    "tanggal_pengukuran_terakhir"
+                                                ] ?? null
+                                            ); ?>
+                                        </td>
+
+                                        <td class="text-center">
+                                            <span class="badge bg-<?= htmlspecialchars(
+                                                $statusMonitoring["kelas"],
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ); ?>">
+                                                <i class="bi <?= htmlspecialchars(
+                                                    $statusMonitoring["ikon"],
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                ); ?> me-1"></i>
+                                                <?= htmlspecialchars(
+                                                    $statusMonitoring["label"],
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                ); ?>
+                                            </span>
+                                        </td>
+
+                                        <td class="text-center">
+                                            <?php if ($sudahBulanIni): ?>
+                                                <a
+                                                    href="../pengukuran/data_pengukuran.php?tampilan=riwayat&cari=<?= urlencode(
+                                                        (string) (
+                                                            $dataMonitoring["nama_balita"]
+                                                            ?? ""
+                                                        )
+                                                    ); ?>"
+                                                    class="btn btn-light btn-sm"
+                                                >
+                                                    <i class="bi bi-clock-history me-1"></i>
+                                                    Riwayat
+                                                </a>
+                                            <?php else: ?>
+                                                <a
+                                                    href="../pengukuran/tambah_pengukuran.php?id_balita=<?= (int) (
+                                                        $dataMonitoring["id_balita"]
+                                                        ?? 0
+                                                    ); ?>"
+                                                    class="btn btn-primary btn-sm"
+                                                >
+                                                    <i class="bi bi-plus-circle me-1"></i>
+                                                    Input Antropometri
+                                                </a>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+
+                                <?php endforeach; ?>
+
+                            <?php else: ?>
+
+                                <tr>
+                                    <td colspan="5">
+                                        <div class="text-center text-muted py-4">
+                                            Belum ada balita pada wilayah Puskesmas akun Kader.
+                                        </div>
+                                    </td>
+                                </tr>
+
+                            <?php endif; ?>
+
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+
+            </div>
+
+        <?php endif; ?>
 
         <?php if (count($aksiDashboard) > 0): ?>
 

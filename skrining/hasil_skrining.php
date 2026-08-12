@@ -19,7 +19,7 @@ cekRole([
 */
 
 $judulHalaman =
-    "Data Skrining Awal | Sistem Deteksi Stunting";
+    "Data Skrining | Sistem Deteksi Stunting";
 
 /*
 |--------------------------------------------------------------------------
@@ -28,6 +28,9 @@ $judulHalaman =
 */
 
 $roleAktif = $_SESSION["role"] ?? "";
+
+/* Status hasil dan status verifikasi terlihat di semua role. */
+$tampilkanVerifikasi = true;
 
 /*
 |--------------------------------------------------------------------------
@@ -551,7 +554,14 @@ $sqlDasar = "
 |--------------------------------------------------------------------------
 */
 
-$kondisiSkrining = [];
+$kondisiSkrining = [
+    /* Menu utama menampilkan snapshot skrining TERBARU per balita. */
+    "s.id_skrining = (
+        SELECT MAX(s2.id_skrining)
+        FROM skrining_awal AS s2
+        WHERE s2.id_balita = s.id_balita
+    )"
+];
 
 if ($roleBerbasisPuskesmas) {
     if ($puskesmasBelumTerhubung) {
@@ -733,6 +743,26 @@ switch ($pesan) {
 
         break;
 
+    case "pengukuran_dianalisis":
+
+        $jenisAlert = "success";
+        $isiPesan =
+            "Pengukuran bulan ini berhasil disimpan dan status terbaru sudah dihitung menggunakan skrining terakhir. Jika ada faktor risiko yang berubah, gunakan tombol Perbarui Skrining.";
+        break;
+
+    case "skrining_diperbarui":
+
+        $jenisAlert = "success";
+        $isiPesan =
+            "Skrining berhasil diperbarui. Sistem sudah menghitung ulang status menggunakan pengukuran antropometri terbaru.";
+        break;
+
+    case "verifikasi_berhasil":
+
+        $jenisAlert = "success";
+        $isiPesan = "Hasil skrining berhasil diverifikasi oleh Ahli Gizi.";
+        break;
+
     case "edit_berhasil":
 
         $jenisAlert = "success";
@@ -774,7 +804,7 @@ switch ($pesan) {
         $jenisAlert = "warning";
 
         $isiPesan =
-            "Balita belum memiliki data skrining awal. "
+            "Balita belum memiliki data skrining. "
             . "Skrining perlu dilengkapi oleh Kader sebelum Petugas Gizi melakukan analisis.";
 
         break;
@@ -940,7 +970,7 @@ require_once "../includes/navbar.php";
                             me-2"
                         ></i>
 
-                        Data Skrining Awal
+                        Data Skrining
 
                     </h4>
 
@@ -953,8 +983,8 @@ require_once "../includes/navbar.php";
                         ):
                         ?>
 
-                            Kelola skrining awal
-                            dan faktor risiko balita.
+                            Kelola skrining serta lihat
+                            status gizi dan status stunting balita.
 
                         <?php
                         elseif (
@@ -1166,7 +1196,7 @@ require_once "../includes/navbar.php";
                     </div>
 
                     <small class="text-muted">
-                        Daftar skrining awal dan status terbaru balita.
+                        Daftar skrining dan status terbaru balita.
                     </small>
 
                 </div>
@@ -1477,9 +1507,11 @@ require_once "../includes/navbar.php";
                                     Status Stunting
                                 </th>
 
-                                <th class="text-center">
-                                    Verifikasi
-                                </th>
+                                <?php if ($tampilkanVerifikasi): ?>
+                                    <th class="text-center">
+                                        Verifikasi
+                                    </th>
+                                <?php endif; ?>
 
                                 <?php
                                 if (
@@ -1559,6 +1591,11 @@ require_once "../includes/navbar.php";
                                             ?? null
                                         )
                                         : "Belum ada hasil";
+
+                                $sudahDiverifikasi =
+                                    $idDeteksi > 0
+                                    && strtolower(trim((string) ($data["status_verifikasi"] ?? "")))
+                                        === "sudah diverifikasi";
 
                             ?>
 
@@ -1723,31 +1760,33 @@ require_once "../includes/navbar.php";
 
                                     </td>
 
-                                    <!-- STATUS VERIFIKASI -->
-                                    <td
-                                        class="text-center"
-                                    >
-
-                                        <span
-                                            class="badge
-                                            rounded-pill
-                                            <?= $idDeteksi > 0
-                                                ? kelasStatusVerifikasi(
-                                                    $data[
-                                                        "status_verifikasi"
-                                                    ]
-                                                    ?? null
-                                                )
-                                                : "text-bg-secondary"; ?>"
+                                    <?php if ($tampilkanVerifikasi): ?>
+                                        <!-- STATUS VERIFIKASI -->
+                                        <td
+                                            class="text-center"
                                         >
 
-                                            <?= amanSkrining(
-                                                $statusVerifikasi
-                                            ); ?>
+                                            <span
+                                                class="badge
+                                                rounded-pill
+                                                <?= $idDeteksi > 0
+                                                    ? kelasStatusVerifikasi(
+                                                        $data[
+                                                            "status_verifikasi"
+                                                        ]
+                                                        ?? null
+                                                    )
+                                                    : "text-bg-secondary"; ?>"
+                                            >
 
-                                        </span>
+                                                <?= amanSkrining(
+                                                    $statusVerifikasi
+                                                ); ?>
 
-                                    </td>
+                                            </span>
+
+                                        </td>
+                                    <?php endif; ?>
 
                                     <!-- AKSI -->
                                     <?php
@@ -1821,22 +1860,18 @@ require_once "../includes/navbar.php";
 
                                                         </a>
 
-                                                        <a
-                                                            href="../deteksi/verifikasi_deteksi.php?id=<?= $idDeteksi; ?>"
-                                                            class="btn
-                                                            btn-success
-                                                            btn-sm"
-                                                            title="Verifikasi hasil deteksi"
-                                                        >
-
-                                                            <i
-                                                                class="bi
-                                                                bi-check2-circle"
-                                                            ></i>
-
-                                                            Verifikasi Hasil
-
-                                                        </a>
+                                                        <?php if (!$sudahDiverifikasi): ?>
+                                                            <a
+                                                                href="../deteksi/verifikasi_deteksi.php?id=<?= $idDeteksi; ?>&kembali=skrining"
+                                                                class="btn
+                                                                btn-success
+                                                                btn-sm"
+                                                                title="Verifikasi hasil deteksi"
+                                                            >
+                                                                <i class="bi bi-check2-circle"></i>
+                                                                Verifikasi Hasil
+                                                            </a>
+                                                        <?php endif; ?>
 
                                                     <?php else: ?>
 
@@ -1868,19 +1903,19 @@ require_once "../includes/navbar.php";
                                                 ?>
 
                                                     <a
-                                                        href="edit_skrining.php?id=<?= $idSkrining; ?>"
+                                                        href="form_skrining.php?id_balita=<?= $idBalita; ?>&mode=perbarui"
                                                         class="btn
                                                         btn-warning
                                                         btn-sm"
-                                                        title="Edit skrining"
+                                                        title="Perbarui skrining dengan memakai data terakhir sebagai nilai awal"
                                                     >
 
                                                         <i
                                                             class="bi
-                                                            bi-pencil-square"
+                                                            bi-arrow-repeat"
                                                         ></i>
 
-                                                        Edit
+                                                        Perbarui Skrining
 
                                                     </a>
 
@@ -1901,9 +1936,9 @@ require_once "../includes/navbar.php";
                             <tr>
 
                                 <td
-                                    colspan="<?= $punyaAksiSkrining
-                                        ? "10"
-                                        : "9"; ?>"
+                                    colspan="<?= 8
+                                        + ($tampilkanVerifikasi ? 1 : 0)
+                                        + ($punyaAksiSkrining ? 1 : 0); ?>"
                                 >
 
                                     <div
@@ -1933,8 +1968,8 @@ require_once "../includes/navbar.php";
                                                 Tidak ada data yang cocok dengan pencarian atau filter yang dipilih.
                                             <?php else: ?>
                                                 <?= $bolehTambahSkrining
-                                                    ? "Tambahkan skrining awal untuk mulai mencatat faktor risiko balita."
-                                                    : "Data skrining awal balita belum tersedia."; ?>
+                                                    ? "Tambahkan skrining untuk mulai mencatat faktor risiko balita."
+                                                    : "Data skrining balita belum tersedia."; ?>
                                             <?php endif; ?>
 
                                         </p>
@@ -2101,7 +2136,7 @@ require_once "../includes/navbar.php";
                             mb-0"
                         >
 
-                            Data skrining awal
+                            Data skrining
                             berhasil direkam.
 
                         </p>
@@ -2197,39 +2232,41 @@ require_once "../includes/navbar.php";
 
                                     </tr>
 
-                                    <tr>
+                                    <?php if ($tampilkanVerifikasi): ?>
+                                        <tr>
 
-                                        <th>
-                                            Status Verifikasi
-                                        </th>
+                                            <th>
+                                                Status Verifikasi
+                                            </th>
 
-                                        <td>
+                                            <td>
 
-                                            <span
-                                                class="badge
-                                                rounded-pill
-                                                <?= kelasStatusVerifikasi(
-                                                    $deteksiPopup[
-                                                        "status_verifikasi"
-                                                    ]
-                                                    ?? null
-                                                ); ?>"
-                                            >
-
-                                                <?= amanSkrining(
-                                                    teksStatusVerifikasi(
+                                                <span
+                                                    class="badge
+                                                    rounded-pill
+                                                    <?= kelasStatusVerifikasi(
                                                         $deteksiPopup[
                                                             "status_verifikasi"
                                                         ]
                                                         ?? null
-                                                    )
-                                                ); ?>
+                                                    ); ?>"
+                                                >
 
-                                            </span>
+                                                    <?= amanSkrining(
+                                                        teksStatusVerifikasi(
+                                                            $deteksiPopup[
+                                                                "status_verifikasi"
+                                                            ]
+                                                            ?? null
+                                                        )
+                                                    ); ?>
 
-                                        </td>
+                                                </span>
 
-                                    </tr>
+                                            </td>
+
+                                        </tr>
+                                    <?php endif; ?>
 
                                     <?php
                                     if (

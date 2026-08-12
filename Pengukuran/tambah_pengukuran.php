@@ -6,6 +6,21 @@ require_once "../config/koneksi.php";
 
 /*
 |--------------------------------------------------------------------------
+| Zona waktu aplikasi - WIB / Jakarta
+|--------------------------------------------------------------------------
+|
+| Seluruh tanggal "hari ini" pada menu antropometri mengikuti waktu
+| Indonesia Barat (UTC+7), bukan timezone bawaan server/Laragon.
+|
+*/
+
+date_default_timezone_set("Asia/Jakarta");
+
+// Samakan timezone sesi MySQL jika ada query yang memakai NOW()/CURDATE().
+@mysqli_query($conn, "SET time_zone = '+07:00'");
+
+/*
+|--------------------------------------------------------------------------
 | Hak akses
 |--------------------------------------------------------------------------
 */
@@ -197,6 +212,32 @@ if (!$puskesmasBelumTerhubung) {
 
 $jumlahBalita =
     count($daftarBalita);
+
+/*
+|--------------------------------------------------------------------------
+| Pilih otomatis balita dari Dashboard Kader
+|--------------------------------------------------------------------------
+| Parameter id_balita hanya dipakai jika balita tersebut memang berada pada
+| Puskesmas akun Kader. Validasi server-side ini mencegah manipulasi URL.
+*/
+
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    $idBalitaDariDashboard =
+        (int) ($_GET["id_balita"] ?? 0);
+
+    if ($idBalitaDariDashboard > 0) {
+        foreach ($daftarBalita as $balitaTersedia) {
+            if (
+                (int) ($balitaTersedia["id_balita"] ?? 0)
+                === $idBalitaDariDashboard
+            ) {
+                $old["id_balita"] =
+                    (string) $idBalitaDariDashboard;
+                break;
+            }
+        }
+    }
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -512,12 +553,81 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             if ($berhasil) {
 
+                $idPengukuranBaru =
+                    (int) mysqli_insert_id($conn);
+
                 mysqli_stmt_close(
                     $stmtSimpan
                 );
 
+                /*
+                |------------------------------------------------------------------
+                | Alur kunjungan Posyandu bulanan
+                |------------------------------------------------------------------
+                | Antropometri wajib dicatat setiap kunjungan. Skrining tidak perlu
+                | diisi ulang jika balita sudah mempunyai skrining sebelumnya.
+                | Sistem memakai snapshot skrining terakhir dan langsung menghitung
+                | hasil deteksi untuk pengukuran yang baru disimpan.
+                */
+
+                $stmtSkriningTerakhir = mysqli_prepare(
+                    $conn,
+                    "SELECT id_skrining
+                     FROM skrining_awal
+                     WHERE id_balita = ?
+                     ORDER BY id_skrining DESC
+                     LIMIT 1"
+                );
+
+                if (!$stmtSkriningTerakhir) {
+                    die(
+                        "Gagal memeriksa skrining terakhir: "
+                        . mysqli_error($conn)
+                    );
+                }
+
+                mysqli_stmt_bind_param(
+                    $stmtSkriningTerakhir,
+                    "i",
+                    $idBalita
+                );
+
+                mysqli_stmt_execute(
+                    $stmtSkriningTerakhir
+                );
+
+                $hasilSkriningTerakhir =
+                    mysqli_stmt_get_result(
+                        $stmtSkriningTerakhir
+                    );
+
+                $skriningTerakhir =
+                    mysqli_fetch_assoc(
+                        $hasilSkriningTerakhir
+                    );
+
+                mysqli_stmt_close(
+                    $stmtSkriningTerakhir
+                );
+
+                if ($skriningTerakhir) {
+                    header(
+                        "Location: ../deteksi/analisis_deteksi.php"
+                        . "?id_balita=" . (int) $idBalita
+                        . "&sumber=pengukuran_bulanan"
+                    );
+                    exit;
+                }
+
+                /*
+                | Belum pernah skrining: Kader cukup mengisi skrining pertama kali.
+                | Balita langsung dipilih otomatis di form skrining.
+                */
                 header(
-                    "Location: data_pengukuran.php?pesan=tambah_berhasil"
+                    "Location: ../skrining/form_skrining.php"
+                    . "?id_balita=" . (int) $idBalita
+                    . "&mode=baru"
+                    . "&pesan=lengkapi_skrining"
                 );
 
                 exit;

@@ -96,7 +96,7 @@ if (
 */
 
 $judulHalaman =
-    "Tambah Skrining Awal | Sistem Deteksi Stunting";
+    "Tambah Skrining | Sistem Deteksi Stunting";
 
 /*
 |--------------------------------------------------------------------------
@@ -150,6 +150,125 @@ $daftarEkonomi = [
     "Sedang",
     "Tinggi"
 ];
+
+/*
+|--------------------------------------------------------------------------
+| Mode skrining: baru / perbarui
+|--------------------------------------------------------------------------
+| Skrining tidak wajib diisi dari nol setiap bulan. Jika Kader membuka
+| halaman melalui tombol "Perbarui Skrining", nilai dari skrining terakhir
+| akan menjadi nilai awal. Saat disimpan, sistem membuat snapshot baru agar
+| histori skrining lama tidak ditimpa.
+*/
+
+$modeForm = strtolower(
+    trim(
+        (string) (
+            $_POST["mode_form"]
+            ?? $_GET["mode"]
+            ?? "baru"
+        )
+    )
+);
+
+if (!in_array($modeForm, ["baru", "perbarui"], true)) {
+    $modeForm = "baru";
+}
+
+$idBalitaDariUrl =
+    (int) ($_GET["id_balita"] ?? 0);
+
+$skriningSebelumnya = null;
+
+if (
+    $_SERVER["REQUEST_METHOD"] !== "POST"
+    && !$puskesmasBelumTerhubung
+    && $idBalitaDariUrl > 0
+) {
+    /* Pastikan balita memang berada di Puskesmas akun Kader. */
+    $stmtSkriningSebelumnya = mysqli_prepare(
+        $conn,
+        "SELECT
+            s.id_skrining,
+            s.id_balita,
+            s.tinggi_badan_ibu,
+            s.lama_asi_eksklusif,
+            s.mpasi,
+            s.frekuensi_makan,
+            s.protein_hewani,
+            s.status_ekonomi,
+            s.sanitasi,
+            s.air_bersih
+         FROM skrining_awal AS s
+         INNER JOIN balita AS b
+            ON b.id_balita = s.id_balita
+         WHERE s.id_balita = ?
+           AND b.id_puskesmas = ?
+         ORDER BY s.id_skrining DESC
+         LIMIT 1"
+    );
+
+    if ($stmtSkriningSebelumnya) {
+        mysqli_stmt_bind_param(
+            $stmtSkriningSebelumnya,
+            "ii",
+            $idBalitaDariUrl,
+            $idPuskesmasAktif
+        );
+
+        mysqli_stmt_execute(
+            $stmtSkriningSebelumnya
+        );
+
+        $hasilSkriningSebelumnya =
+            mysqli_stmt_get_result(
+                $stmtSkriningSebelumnya
+            );
+
+        $skriningSebelumnya =
+            mysqli_fetch_assoc(
+                $hasilSkriningSebelumnya
+            );
+
+        mysqli_stmt_close(
+            $stmtSkriningSebelumnya
+        );
+    }
+
+    /* Balita tetap terpilih walaupun belum mempunyai skrining sebelumnya. */
+    $old["id_balita"] =
+        (string) $idBalitaDariUrl;
+
+    if ($skriningSebelumnya) {
+        $modeForm = "perbarui";
+
+        foreach ([
+            "tinggi_badan_ibu",
+            "lama_asi_eksklusif",
+            "mpasi",
+            "frekuensi_makan",
+            "protein_hewani",
+            "status_ekonomi",
+            "sanitasi",
+            "air_bersih"
+        ] as $kolomSkrining) {
+            $old[$kolomSkrining] =
+                (string) (
+                    $skriningSebelumnya[$kolomSkrining]
+                    ?? ""
+                );
+        }
+    }
+}
+
+$judulFormSkrining =
+    $modeForm === "perbarui"
+        ? "Perbarui Skrining"
+        : "Tambah Skrining";
+
+$pesanForm = trim(
+    (string) ($_GET["pesan"] ?? "")
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -546,10 +665,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 |
                 */
 
+                $sumberAnalisis =
+                    $modeForm === "perbarui"
+                        ? "skrining_diperbarui"
+                        : "form_skrining";
+
                 header(
                     "Location: ../deteksi/analisis_deteksi.php"
                     . "?id_balita=" . (int) $idBalita
-                    . "&sumber=form_skrining"
+                    . "&sumber=" . urlencode($sumberAnalisis)
                 );
 
                 exit;
@@ -731,12 +855,13 @@ require_once "../includes/navbar.php";
 
                         <h4 class="mb-1">
                             <i class="bi bi-clipboard2-heart me-2"></i>
-                            Tambah Skrining Awal
+                            <?= amanFormSkrining($judulFormSkrining); ?>
                         </h4>
 
                         <small class="text-muted">
-                            Pilih data balita, lalu sistem akan membaca
-                            Profil Ibu yang terhubung secara otomatis.
+                            <?= $modeForm === "perbarui"
+                                ? "Data skrining terakhir sudah diisi otomatis. Ubah hanya informasi yang memang berubah pada kunjungan ini."
+                                : "Pilih data balita, lalu sistem akan membaca Profil Ibu yang terhubung secara otomatis."; ?>
                         </small>
 
                     </div>
@@ -807,7 +932,7 @@ require_once "../includes/navbar.php";
                         <p>
                             Belum ada data balita di dalam sistem.
                             Tambahkan data balita terlebih dahulu
-                            sebelum mengisi skrining awal.
+                            sebelum mengisi skrining.
                         </p>
 
                         <a
@@ -834,12 +959,13 @@ require_once "../includes/navbar.php";
 
                         <h4 class="mb-1">
                             <i class="bi bi-clipboard2-heart me-2"></i>
-                            Tambah Skrining Awal
+                            <?= amanFormSkrining($judulFormSkrining); ?>
                         </h4>
 
                         <small class="text-muted">
-                            Pilih data balita, lalu sistem akan membaca
-                            Profil Ibu yang terhubung secara otomatis.
+                            <?= $modeForm === "perbarui"
+                                ? "Data skrining terakhir sudah diisi otomatis. Ubah hanya informasi yang memang berubah pada kunjungan ini."
+                                : "Pilih data balita, lalu sistem akan membaca Profil Ibu yang terhubung secara otomatis."; ?>
                         </small>
 
                     </div>
@@ -897,11 +1023,33 @@ require_once "../includes/navbar.php";
 
                     <?php endif; ?>
 
+                    <?php if ($pesanForm === "lengkapi_skrining"): ?>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Pengukuran antropometri sudah tersimpan. Balita ini belum pernah mempunyai skrining, jadi lengkapi skrining satu kali agar sistem dapat menghasilkan status.
+                        </div>
+
+                    <?php elseif ($skriningSebelumnya): ?>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-arrow-repeat me-1"></i>
+                            Data di bawah diambil dari <strong>skrining terakhir</strong>. Perbarui hanya faktor yang berubah. Saat disimpan, data lama tetap tersimpan sebagai riwayat.
+                        </div>
+
+                    <?php endif; ?>
+
                     <form
                         method="POST"
                         action=""
                         autocomplete="off"
                     >
+
+                        <input
+                            type="hidden"
+                            name="mode_form"
+                            value="<?= amanFormSkrining($modeForm); ?>"
+                        >
 
                         <!-- Puskesmas otomatis -->
                         <div class="form-group">

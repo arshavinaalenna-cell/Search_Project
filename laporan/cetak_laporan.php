@@ -4,6 +4,9 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+// Gunakan zona waktu aplikasi agar periode laporan mengikuti WIB.
+date_default_timezone_set("Asia/Jakarta");
+
 /*
 |--------------------------------------------------------------------------
 | Hak akses cetak laporan

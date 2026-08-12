@@ -4,16 +4,26 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+/* Tanggal deteksi mengikuti WIB / Jakarta. */
+date_default_timezone_set("Asia/Jakarta");
+@mysqli_query($conn, "SET time_zone = '+07:00'");
+
 /*
 |--------------------------------------------------------------------------
 | Hak akses
 |--------------------------------------------------------------------------
-| Analisis deteksi dilakukan oleh Petugas Gizi.
+| Status gizi dan status stunting dihitung otomatis oleh sistem.
+| Kader boleh memicu perhitungan setelah menyimpan skrining awal.
+| Verifikasi hasil tetap menjadi kewenangan Petugas Gizi.
 */
 
 cekRole([
+    "kader",
     "petugas_gizi"
 ]);
+
+$roleAktif = $_SESSION["role"] ?? "";
+$sumber = trim((string) ($_GET["sumber"] ?? ""));
 
 $judulHalaman =
     "Analisis Risiko Stunting | Sistem Deteksi Stunting";
@@ -26,11 +36,11 @@ $namaPuskesmasAktif = "";
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil Puskesmas Petugas Gizi aktif
+| Mengambil Puskesmas akun aktif
 |--------------------------------------------------------------------------
 |
-| Analisis hanya boleh dilakukan untuk balita pada Puskesmas
-| yang sama dengan akun Petugas Gizi.
+| Kader maupun Petugas Gizi hanya boleh menghitung status untuk balita
+| pada Puskesmas yang sama dengan akun yang sedang login.
 |
 */
 
@@ -43,7 +53,7 @@ $stmtPuskesmas = mysqli_prepare(
      LEFT JOIN puskesmas AS p
         ON u.id_puskesmas = p.id_puskesmas
      WHERE u.id_user = ?
-     AND u.role = 'petugas_gizi'
+     AND u.role = ?
      LIMIT 1"
 );
 
@@ -56,8 +66,9 @@ if (!$stmtPuskesmas) {
 
 mysqli_stmt_bind_param(
     $stmtPuskesmas,
-    "i",
-    $idUserAktif
+    "is",
+    $idUserAktif,
+    $roleAktif
 );
 
 mysqli_stmt_execute(
@@ -84,9 +95,15 @@ if (
         $dataPuskesmas["id_puskesmas"]
     )
 ) {
-    header(
-        "Location: hasil_deteksi.php?pesan=tidak_ditemukan"
-    );
+    if ($roleAktif === "kader") {
+        header(
+            "Location: ../skrining/hasil_skrining.php?pesan=puskesmas_tidak_ditemukan"
+        );
+    } else {
+        header(
+            "Location: hasil_deteksi.php?pesan=tidak_ditemukan"
+        );
+    }
     exit;
 }
 
@@ -1241,9 +1258,15 @@ $pengukuran =
 mysqli_stmt_close($stmtPengukuran);
 
 if (!$pengukuran) {
-    header(
-        "Location: ../pengukuran/data_pengukuran.php?pesan=belum_ada_pengukuran"
-    );
+    if ($roleAktif === "kader") {
+        header(
+            "Location: ../skrining/hasil_skrining.php?pesan=belum_ada_pengukuran"
+        );
+    } else {
+        header(
+            "Location: ../pengukuran/data_pengukuran.php?pesan=belum_ada_pengukuran"
+        );
+    }
     exit;
 }
 
@@ -1515,11 +1538,29 @@ mysqli_stmt_close($stmtSimpan);
 | Berhasil disimpan
 |--------------------------------------------------------------------------
 |
-| Analisis merupakan tugas Petugas Gizi.
-| Setelah proses selesai, pengguna selalu diarahkan ke Hasil Deteksi.
-| Tidak ada lagi jalur kembali ke form skrining milik Kader.
+| Untuk Kader, perhitungan status berjalan otomatis setelah skrining lalu
+| kembali ke menu Skrining. Status verifikasi tetap "Belum diverifikasi"
+| di database, tetapi tidak ditampilkan pada antarmuka Kader.
+|
+| Petugas Gizi tetap diarahkan ke halaman Hasil Deteksi.
 |
 */
+
+if ($roleAktif === "kader") {
+    $pesanKader = "tambah_berhasil";
+
+    if ($sumber === "pengukuran_bulanan") {
+        $pesanKader = "pengukuran_dianalisis";
+    } elseif ($sumber === "skrining_diperbarui") {
+        $pesanKader = "skrining_diperbarui";
+    }
+
+    header(
+        "Location: ../skrining/hasil_skrining.php?pesan="
+        . urlencode($pesanKader)
+    );
+    exit;
+}
 
 header(
     "Location: hasil_deteksi.php?pesan=analisis_berhasil"

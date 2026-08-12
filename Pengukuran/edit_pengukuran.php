@@ -6,6 +6,21 @@ require_once "../config/koneksi.php";
 
 /*
 |--------------------------------------------------------------------------
+| Zona waktu aplikasi - WIB / Jakarta
+|--------------------------------------------------------------------------
+|
+| Seluruh tanggal "hari ini" pada menu antropometri mengikuti waktu
+| Indonesia Barat (UTC+7), bukan timezone bawaan server/Laragon.
+|
+*/
+
+date_default_timezone_set("Asia/Jakarta");
+
+// Samakan timezone sesi MySQL jika ada query yang memakai NOW()/CURDATE().
+@mysqli_query($conn, "SET time_zone = '+07:00'");
+
+/*
+|--------------------------------------------------------------------------
 | Hak akses
 |--------------------------------------------------------------------------
 */

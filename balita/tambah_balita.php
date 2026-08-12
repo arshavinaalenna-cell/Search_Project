@@ -117,7 +117,7 @@ if (
 |
 */
 
-$queryOrangTua = mysqli_query(
+$stmtDaftarOrangTua = mysqli_prepare(
     $conn,
     "SELECT
         ot.id_orang_tua,
@@ -133,18 +133,31 @@ $queryOrangTua = mysqli_query(
      INNER JOIN pengguna AS p
         ON ot.id_user = p.id_user
      WHERE p.role = 'orang_tua'
+       AND p.id_puskesmas = ?
      ORDER BY ot.nama_ibu ASC"
 );
 
-if (!$queryOrangTua) {
+if (!$stmtDaftarOrangTua) {
     die(
-        "Gagal mengambil profil Ibu: "
+        "Gagal menyiapkan daftar profil Ibu: "
         . mysqli_error($conn)
     );
 }
 
-$jumlahOrangTua =
-    mysqli_num_rows($queryOrangTua);
+mysqli_stmt_bind_param(
+    $stmtDaftarOrangTua,
+    "i",
+    $idPuskesmas
+);
+
+mysqli_stmt_execute($stmtDaftarOrangTua);
+$queryOrangTua = mysqli_stmt_get_result($stmtDaftarOrangTua);
+
+if (!$queryOrangTua) {
+    die("Gagal mengambil profil Ibu pada Puskesmas akun Kader.");
+}
+
+$jumlahOrangTua = mysqli_num_rows($queryOrangTua);
 
 /*
 |--------------------------------------------------------------------------
@@ -271,6 +284,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 ON ot.id_user = p.id_user
              WHERE ot.id_user = ?
              AND p.role = 'orang_tua'
+             AND p.id_puskesmas = ?
              LIMIT 1"
         );
 
@@ -283,8 +297,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             mysqli_stmt_bind_param(
                 $stmtOrangTua,
-                "i",
-                $idUserInt
+                "ii",
+                $idUserInt,
+                $idPuskesmas
             );
 
             mysqli_stmt_execute(
@@ -304,7 +319,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             if (!$profilIbu) {
 
                 $pesanError =
-                    "Profil Ibu tidak ditemukan atau belum lengkap.";
+                    "Profil Ibu tidak ditemukan, belum lengkap, atau tidak berada pada wilayah Puskesmas akun Kader.";
 
             } else {
 
@@ -500,9 +515,10 @@ require_once "../includes/navbar.php";
 
             <div class="alert alert-warning">
                 <i class="bi bi-person-exclamation me-1"></i>
-                Belum ada profil Ibu yang dapat dipilih.
-                Orang Tua harus login dan melengkapi
-                <strong>Profil Ibu</strong> terlebih dahulu.
+                Belum ada profil Ibu pada wilayah
+                <strong><?= htmlspecialchars($namaPuskesmasAktif, ENT_QUOTES, "UTF-8"); ?></strong>
+                yang dapat dipilih. Orang Tua harus terdaftar pada Puskesmas yang sama
+                dan melengkapi <strong>Profil Ibu</strong> terlebih dahulu.
             </div>
 
         <?php endif; ?>
@@ -662,6 +678,9 @@ require_once "../includes/navbar.php";
                             >
                                 Pilih Ibu / Orang Tua
                                 <span class="text-danger">*</span>
+                                <small class="text-muted d-block mt-1">
+                                    Hanya akun Orang Tua wilayah <?= htmlspecialchars($namaPuskesmasAktif, ENT_QUOTES, "UTF-8"); ?> yang ditampilkan.
+                                </small>
                             </label>
 
                             <?php

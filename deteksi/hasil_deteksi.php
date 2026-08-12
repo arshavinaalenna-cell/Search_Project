@@ -4,6 +4,9 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+date_default_timezone_set("Asia/Jakarta");
+@mysqli_query($conn, "SET time_zone = '+07:00'");
+
 cekRole([
     "petugas_gizi",
     "petugas_kia",
@@ -252,6 +255,38 @@ $selectDeteksi = "
     INNER JOIN pengukuran_antropometri AS pa
         ON hd.id_pengukuran = pa.id_pengukuran
 
+    /*
+    |--------------------------------------------------------------------------
+    | Hanya hasil terbaru untuk setiap balita pada tabel utama
+    |--------------------------------------------------------------------------
+    | Riwayat lama tetap tersimpan di hasil_deteksi dan dapat dilihat melalui
+    | tombol Riwayat. Pemilihan hasil terbaru mengikuti tanggal pengukuran,
+    | kemudian id_deteksi sebagai penentu jika tanggalnya sama.
+    */
+    INNER JOIN (
+        SELECT
+            pa_latest.id_balita,
+            hd_latest.id_deteksi
+        FROM hasil_deteksi AS hd_latest
+        INNER JOIN pengukuran_antropometri AS pa_latest
+            ON hd_latest.id_pengukuran = pa_latest.id_pengukuran
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM hasil_deteksi AS hd_newer
+            INNER JOIN pengukuran_antropometri AS pa_newer
+                ON hd_newer.id_pengukuran = pa_newer.id_pengukuran
+            WHERE pa_newer.id_balita = pa_latest.id_balita
+              AND (
+                    pa_newer.tanggal_pengukuran > pa_latest.tanggal_pengukuran
+                    OR (
+                        pa_newer.tanggal_pengukuran = pa_latest.tanggal_pengukuran
+                        AND hd_newer.id_deteksi > hd_latest.id_deteksi
+                    )
+              )
+        )
+    ) AS terbaru
+        ON terbaru.id_deteksi = hd.id_deteksi
+
     INNER JOIN balita AS b
         ON pa.id_balita = b.id_balita
 
@@ -277,6 +312,7 @@ $filterCari = "
 | Orang Tua         : anak sendiri.
 | Gizi/KIA/Kapus    : Puskesmas akun sendiri.
 | Dinkes            : seluruh Puskesmas.
+| Status otomatis tetap ditampilkan walaupun belum diverifikasi Ahli Gizi.
 |
 */
 
@@ -495,8 +531,8 @@ require_once "../includes/navbar.php";
                     </h4>
 
                     <small class="text-muted">
-                        Hasil status gizi dan status stunting berdasarkan
-                        data pengukuran antropometri.
+                        Menampilkan hasil terbaru setiap balita. Hasil bulan sebelumnya
+                        tetap tersimpan dan dapat dilihat melalui menu Riwayat.
                     </small>
 
                 </div>
@@ -571,6 +607,13 @@ require_once "../includes/navbar.php";
                         <div class="alert alert-success">
                             <i class="bi bi-check-circle me-1"></i>
                             Hasil deteksi berhasil disimpan.
+                        </div>
+
+                    <?php elseif ($_GET["pesan"] === "verifikasi_berhasil"): ?>
+
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Hasil deteksi berhasil diverifikasi oleh Ahli Gizi.
                         </div>
 
                     <?php elseif ($_GET["pesan"] === "edit_berhasil"): ?>
@@ -926,7 +969,7 @@ require_once "../includes/navbar.php";
                                 </th>
 
                                 <th class="text-center">
-                                    Tanggal Deteksi
+                                    Pengukuran Terakhir
                                 </th>
 
                                 <th>
@@ -1063,6 +1106,9 @@ require_once "../includes/navbar.php";
                                     $kelasVerifikasi =
                                         "bg-warning text-dark";
                                 }
+
+                                $sudahDiverifikasi =
+                                    $statusVerifikasiNormal === "sudah diverifikasi";
                             ?>
 
                                 <tr>
@@ -1073,13 +1119,13 @@ require_once "../includes/navbar.php";
 
                                     <td class="text-center">
                                         <?= !empty(
-                                            $data["tanggal_deteksi"]
+                                            $data["tanggal_pengukuran"]
                                         )
                                             ? date(
                                                 "d-m-Y",
                                                 strtotime(
                                                     $data[
-                                                        "tanggal_deteksi"
+                                                        "tanggal_pengukuran"
                                                     ]
                                                 )
                                             )
@@ -1225,16 +1271,33 @@ require_once "../includes/navbar.php";
                                                 Detail
                                             </a>
 
-                                            <?php if (
-                                                $roleAktif === "petugas_gizi"
-                                            ): ?>
+                                            <a
+                                                href="riwayat_deteksi.php?id_balita=<?= (int) $data["id_balita"]; ?>"
+                                                class="btn btn-secondary btn-sm"
+                                            >
+                                                <i class="bi bi-clock-history"></i>
+                                                Riwayat
+                                            </a>
+
+                                            <?php if ($roleAktif === "petugas_gizi"): ?>
+
+                                                <?php if (!$sudahDiverifikasi): ?>
+                                                    <a
+                                                        href="verifikasi_deteksi.php?id=<?= (int) $data["id_deteksi"]; ?>&kembali=deteksi"
+                                                        class="btn btn-success btn-sm"
+                                                    >
+                                                        <i class="bi bi-check2-circle"></i>
+                                                        Verifikasi
+                                                    </a>
+                                                <?php endif; ?>
 
                                                 <a
-                                                    href="verifikasi_deteksi.php?id=<?= (int) $data["id_deteksi"]; ?>"
-                                                    class="btn btn-success btn-sm"
+                                                    href="analisis_deteksi.php?id_balita=<?= (int) $data["id_balita"]; ?>"
+                                                    class="btn btn-primary btn-sm"
+                                                    onclick="return confirm('Analisis ulang akan menghitung kembali status dan mengubah verifikasi menjadi Belum diverifikasi. Lanjutkan?');"
                                                 >
-                                                    <i class="bi bi-check2-circle"></i>
-                                                    Verifikasi
+                                                    <i class="bi bi-arrow-repeat"></i>
+                                                    Analisis Ulang
                                                 </a>
 
                                             <?php endif; ?>

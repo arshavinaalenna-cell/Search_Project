@@ -4,122 +4,236 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
-cekRole(["petugas_gizi"]);
+date_default_timezone_set("Asia/Jakarta");
+@mysqli_query($conn, "SET time_zone = '+07:00'");
 
-$judulHalaman =
-    "Verifikasi Hasil Deteksi | Sistem Deteksi Stunting";
+cekRole([
+    "petugas_gizi",
+    "petugas_kia",
+    "orang_tua",
+    "kepala_puskesmas",
+    "dinkes"
+]);
 
-$idUserAktif =
-    (int) ($_SESSION["id_user"] ?? 0);
+$judulHalaman = "Hasil Deteksi Stunting | Sistem Deteksi Stunting";
+
+$roleAktif = $_SESSION["role"] ?? "";
+$idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
+$cari = trim($_GET["cari"] ?? "");
+
+$kataKunci = "%" . $cari . "%";
+
+/*
+|--------------------------------------------------------------------------
+| Filter khusus Dinkes
+|--------------------------------------------------------------------------
+|
+| Filter Puskesmas, bulan, dan tahun hanya berlaku untuk role Dinkes.
+| Role lain tetap memakai batas wilayah masing-masing seperti sebelumnya.
+|
+*/
+
+$filterPuskesmas = 0;
+$filterBulan = 0;
+$filterTahun = 0;
+
+if ($roleAktif === "dinkes") {
+
+    $filterPuskesmas =
+        filter_input(
+            INPUT_GET,
+            "puskesmas",
+            FILTER_VALIDATE_INT
+        ) ?: 0;
+
+    $filterBulan =
+        filter_input(
+            INPUT_GET,
+            "bulan",
+            FILTER_VALIDATE_INT
+        ) ?: 0;
+
+    $filterTahun =
+        filter_input(
+            INPUT_GET,
+            "tahun",
+            FILTER_VALIDATE_INT
+        ) ?: 0;
+
+    if (
+        $filterBulan < 1
+        || $filterBulan > 12
+    ) {
+        $filterBulan = 0;
+    }
+
+    if (
+        $filterTahun < 2000
+        || $filterTahun > 2100
+    ) {
+        $filterTahun = 0;
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Daftar pilihan filter Dinkes
+|--------------------------------------------------------------------------
+*/
+
+$daftarPuskesmasFilter = [];
+$daftarTahunFilter = [];
+
+if ($roleAktif === "dinkes") {
+
+    $queryPuskesmasFilter = mysqli_query(
+        $conn,
+        "SELECT
+            id_puskesmas,
+            nama_puskesmas
+         FROM puskesmas
+         ORDER BY nama_puskesmas ASC"
+    );
+
+    if ($queryPuskesmasFilter) {
+        while (
+            $itemPuskesmas =
+                mysqli_fetch_assoc(
+                    $queryPuskesmasFilter
+                )
+        ) {
+            $daftarPuskesmasFilter[] =
+                $itemPuskesmas;
+        }
+    }
+
+    $queryTahunFilter = mysqli_query(
+        $conn,
+        "SELECT DISTINCT
+            YEAR(tanggal_deteksi) AS tahun
+         FROM hasil_deteksi
+         WHERE tanggal_deteksi IS NOT NULL
+         ORDER BY tahun DESC"
+    );
+
+    if ($queryTahunFilter) {
+        while (
+            $itemTahun =
+                mysqli_fetch_assoc(
+                    $queryTahunFilter
+                )
+        ) {
+            if (!empty($itemTahun["tahun"])) {
+                $daftarTahunFilter[] =
+                    (int) $itemTahun["tahun"];
+            }
+        }
+    }
+}
 
 $idPuskesmasAktif = 0;
 $namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
 
-$id = filter_input(
-    INPUT_GET,
-    "id",
-    FILTER_VALIDATE_INT
-);
-
-if (!$id || $id < 1) {
-    header(
-        "Location: hasil_deteksi.php?pesan=tidak_ditemukan"
+$roleBerbasisPuskesmas =
+    in_array(
+        $roleAktif,
+        [
+            "petugas_gizi",
+            "petugas_kia",
+            "kepala_puskesmas"
+        ],
+        true
     );
-    exit;
-}
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil Puskesmas Petugas Gizi aktif
+| Mengambil Puskesmas akun aktif
 |--------------------------------------------------------------------------
 */
 
-$stmtPuskesmas = mysqli_prepare(
-    $conn,
-    "SELECT
-        u.id_puskesmas,
-        p.nama_puskesmas
-     FROM pengguna AS u
-     LEFT JOIN puskesmas AS p
-        ON u.id_puskesmas = p.id_puskesmas
-     WHERE u.id_user = ?
-     AND u.role = 'petugas_gizi'
-     LIMIT 1"
-);
+if ($roleBerbasisPuskesmas) {
 
-if (!$stmtPuskesmas) {
-    die(
-        "Gagal memeriksa Puskesmas Petugas Gizi: "
-        . mysqli_error($conn)
+    $stmtPuskesmas = mysqli_prepare(
+        $conn,
+        "SELECT
+            u.id_puskesmas,
+            p.nama_puskesmas
+         FROM pengguna AS u
+         LEFT JOIN puskesmas AS p
+            ON u.id_puskesmas = p.id_puskesmas
+         WHERE u.id_user = ?
+         LIMIT 1"
     );
-}
 
-mysqli_stmt_bind_param(
-    $stmtPuskesmas,
-    "i",
-    $idUserAktif
-);
+    if (!$stmtPuskesmas) {
+        die(
+            "Gagal memeriksa Puskesmas pengguna: "
+            . mysqli_error($conn)
+        );
+    }
 
-mysqli_stmt_execute($stmtPuskesmas);
+    mysqli_stmt_bind_param(
+        $stmtPuskesmas,
+        "i",
+        $idUserAktif
+    );
 
-$hasilPuskesmas =
-    mysqli_stmt_get_result(
+    mysqli_stmt_execute($stmtPuskesmas);
+
+    $hasilPuskesmas =
+        mysqli_stmt_get_result(
+            $stmtPuskesmas
+        );
+
+    $dataPuskesmas =
+        mysqli_fetch_assoc(
+            $hasilPuskesmas
+        );
+
+    mysqli_stmt_close(
         $stmtPuskesmas
     );
 
-$dataPuskesmas =
-    mysqli_fetch_assoc(
-        $hasilPuskesmas
-    );
-
-mysqli_stmt_close(
-    $stmtPuskesmas
-);
-
-if (
-    !$dataPuskesmas
-    || empty(
-        $dataPuskesmas["id_puskesmas"]
-    )
-) {
-    header(
-        "Location: hasil_deteksi.php?pesan=tidak_ditemukan"
-    );
-    exit;
-}
-
-$idPuskesmasAktif =
-    (int) $dataPuskesmas[
-        "id_puskesmas"
-    ];
-
-$namaPuskesmasAktif =
-    trim(
-        (string) (
-            $dataPuskesmas[
-                "nama_puskesmas"
-            ]
-            ?? ""
+    if (
+        !$dataPuskesmas
+        || empty(
+            $dataPuskesmas["id_puskesmas"]
         )
-    );
+    ) {
+        $puskesmasBelumTerhubung = true;
+    } else {
+        $idPuskesmasAktif =
+            (int) $dataPuskesmas[
+                "id_puskesmas"
+            ];
+
+        $namaPuskesmasAktif =
+            trim(
+                (string) (
+                    $dataPuskesmas[
+                        "nama_puskesmas"
+                    ]
+                    ?? ""
+                )
+            );
+    }
+}
 
 /*
 |--------------------------------------------------------------------------
-| Ambil hasil deteksi yang boleh diverifikasi
+| Query dasar hasil deteksi
 |--------------------------------------------------------------------------
 */
 
-$stmtData = mysqli_prepare(
-    $conn,
-    "SELECT
+$selectDeteksi = "
+    SELECT
         hd.id_deteksi,
+        hd.id_pengukuran,
         hd.status_gizi,
         hd.status_stunting,
+        hd.tanggal_deteksi,
         hd.status_verifikasi,
-        hd.catatan_verifikasi,
-        hd.keputusan_konsultasi,
-        hd.konsultasi_ditetapkan_oleh,
-        hd.tanggal_keputusan_konsultasi,
 
         pa.tanggal_pengukuran,
         pa.umur_bulan,
@@ -132,480 +246,267 @@ $stmtData = mysqli_prepare(
         b.nama_balita,
         b.nik_balita,
         b.jenis_kelamin,
+        b.id_puskesmas,
 
         p.nama_puskesmas
 
-     FROM hasil_deteksi AS hd
+    FROM hasil_deteksi AS hd
 
-     INNER JOIN pengukuran_antropometri AS pa
+    INNER JOIN pengukuran_antropometri AS pa
         ON hd.id_pengukuran = pa.id_pengukuran
 
-     INNER JOIN balita AS b
+    /*
+    |--------------------------------------------------------------------------
+    | Hanya hasil terbaru untuk setiap balita pada tabel utama
+    |--------------------------------------------------------------------------
+    | Riwayat lama tetap tersimpan di hasil_deteksi dan dapat dilihat melalui
+    | tombol Riwayat. Pemilihan hasil terbaru mengikuti tanggal pengukuran,
+    | kemudian id_deteksi sebagai penentu jika tanggalnya sama.
+    */
+    INNER JOIN (
+        SELECT
+            pa_latest.id_balita,
+            hd_latest.id_deteksi
+        FROM hasil_deteksi AS hd_latest
+        INNER JOIN pengukuran_antropometri AS pa_latest
+            ON hd_latest.id_pengukuran = pa_latest.id_pengukuran
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM hasil_deteksi AS hd_newer
+            INNER JOIN pengukuran_antropometri AS pa_newer
+                ON hd_newer.id_pengukuran = pa_newer.id_pengukuran
+            WHERE pa_newer.id_balita = pa_latest.id_balita
+              AND (
+                    pa_newer.tanggal_pengukuran > pa_latest.tanggal_pengukuran
+                    OR (
+                        pa_newer.tanggal_pengukuran = pa_latest.tanggal_pengukuran
+                        AND hd_newer.id_deteksi > hd_latest.id_deteksi
+                    )
+              )
+        )
+    ) AS terbaru
+        ON terbaru.id_deteksi = hd.id_deteksi
+
+    INNER JOIN balita AS b
         ON pa.id_balita = b.id_balita
 
-     LEFT JOIN puskesmas AS p
+    LEFT JOIN puskesmas AS p
         ON b.id_puskesmas = p.id_puskesmas
+";
 
-     WHERE hd.id_deteksi = ?
-     AND b.id_puskesmas = ?
-
-     LIMIT 1"
-);
-
-if (!$stmtData) {
-    die(
-        "Gagal menyiapkan data hasil deteksi: "
-        . mysqli_error($conn)
-    );
-}
-
-mysqli_stmt_bind_param(
-    $stmtData,
-    "ii",
-    $id,
-    $idPuskesmasAktif
-);
-
-mysqli_stmt_execute(
-    $stmtData
-);
-
-$resultData =
-    mysqli_stmt_get_result(
-        $stmtData
-    );
-
-$dataDeteksi =
-    mysqli_fetch_assoc(
-        $resultData
-    );
-
-mysqli_stmt_close(
-    $stmtData
-);
-
-if (!$dataDeteksi) {
-    header(
-        "Location: hasil_deteksi.php?pesan=tidak_ditemukan"
-    );
-    exit;
-}
+$filterCari = "
+    (
+        b.nama_balita LIKE ?
+        OR b.nik_balita LIKE ?
+        OR hd.status_gizi LIKE ?
+        OR hd.status_stunting LIKE ?
+        OR hd.status_verifikasi LIKE ?
+    )
+";
 
 /*
 |--------------------------------------------------------------------------
-| Proses verifikasi dan keputusan kebutuhan konsultasi
+| Mengambil data berdasarkan role
 |--------------------------------------------------------------------------
 |
-| Hanya hasil dengan kategori Risiko Stunting, Stunting, atau Stunting Berat
-| yang dapat ditetapkan "Perlu konsultasi". Jika Petugas Gizi memilih
-| "Perlu konsultasi" dan hasil sudah diverifikasi, sistem otomatis membuat
-| satu tiket konsultasi untuk anak tersebut. Orang Tua tidak membuat tiket.
+| Orang Tua         : anak sendiri.
+| Gizi/KIA/Kapus    : Puskesmas akun sendiri.
+| Dinkes            : seluruh Puskesmas.
+| Status otomatis tetap ditampilkan walaupun belum diverifikasi Ahli Gizi.
 |
 */
 
-$error = "";
+if ($roleAktif === "orang_tua") {
 
-$statusVerifikasi =
-    $dataDeteksi["status_verifikasi"]
-    ?? "Belum diverifikasi";
+    if ($cari !== "") {
 
-$catatanVerifikasi =
-    $dataDeteksi["catatan_verifikasi"]
-    ?? "";
-
-$keputusanKonsultasi =
-    $dataDeteksi["keputusan_konsultasi"]
-    ?? "Belum ditentukan";
-
-$statusStuntingNormalisasi = strtolower(
-    trim((string) ($dataDeteksi["status_stunting"] ?? ""))
-);
-
-$kategoriBerisikoKonsultasi = in_array(
-    $statusStuntingNormalisasi,
-    [
-        "risiko stunting",
-        "stunting",
-        "stunting berat"
-    ],
-    true
-);
-
-$daftarStatus = [
-    "Belum diverifikasi",
-    "Sudah diverifikasi",
-    "Perlu pemeriksaan ulang"
-];
-
-$labelStatusVerifikasi = [
-    "Belum diverifikasi" =>
-        "Belum Diverifikasi",
-    "Sudah diverifikasi" =>
-        "Terverifikasi",
-    "Perlu pemeriksaan ulang" =>
-        "Perlu Pemeriksaan Ulang"
-];
-
-$daftarKeputusanKonsultasi = [
-    "Perlu konsultasi",
-    "Tidak perlu konsultasi"
-];
-
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-
-    $statusVerifikasi =
-        trim($_POST["status_verifikasi"] ?? "");
-
-    $catatanVerifikasi =
-        trim($_POST["catatan_verifikasi"] ?? "");
-
-    $keputusanKonsultasi =
-        trim($_POST["keputusan_konsultasi"] ?? "");
-
-    if (
-        !in_array(
-            $statusVerifikasi,
-            $daftarStatus,
-            true
-        )
-    ) {
-        $error = "Status verifikasi tidak valid.";
-
-    } elseif (
-        $statusVerifikasi === "Perlu pemeriksaan ulang"
-        && $catatanVerifikasi === ""
-    ) {
-        $error =
-            "Catatan Petugas Gizi wajib diisi jika hasil memerlukan pemeriksaan ulang.";
-
-    } elseif (
-        $kategoriBerisikoKonsultasi
-        && $statusVerifikasi === "Sudah diverifikasi"
-        && !in_array(
-            $keputusanKonsultasi,
-            $daftarKeputusanKonsultasi,
-            true
-        )
-    ) {
-        $error =
-            "Tentukan apakah balita perlu konsultasi dengan Ahli Gizi.";
-    }
-
-    /*
-    |------------------------------------------------------------------------
-    | Status selain kategori risiko tidak membuka konsultasi
-    |------------------------------------------------------------------------
-    */
-    if (!$kategoriBerisikoKonsultasi) {
-        $keputusanKonsultasi =
-            $statusVerifikasi === "Sudah diverifikasi"
-                ? "Tidak perlu konsultasi"
-                : "Belum ditentukan";
-    } elseif ($statusVerifikasi !== "Sudah diverifikasi") {
-        $keputusanKonsultasi = "Belum ditentukan";
-    }
-
-    /*
-    |------------------------------------------------------------------------
-    | Konsultasi yang sudah dimulai tidak boleh dibatalkan dari verifikasi
-    |------------------------------------------------------------------------
-    */
-    if ($error === "" && $kategoriBerisikoKonsultasi) {
-        $stmtCekAktif = mysqli_prepare(
+        $stmt = mysqli_prepare(
             $conn,
-            "SELECT
-                id_konsultasi,
-                keluhan,
-                hasil_konsultasi,
-                tindak_lanjut
-             FROM konsultasi
-             WHERE id_deteksi = ?
-             AND sumber_pengajuan = 'ahli_gizi'
-             LIMIT 1"
+            $selectDeteksi . "
+            WHERE b.id_user = ?
+            AND " . $filterCari . "
+            ORDER BY hd.id_deteksi DESC"
         );
 
-        if ($stmtCekAktif) {
-            mysqli_stmt_bind_param($stmtCekAktif, "i", $id);
-            mysqli_stmt_execute($stmtCekAktif);
-            $hasilCekAktif = mysqli_stmt_get_result($stmtCekAktif);
-            $dataCekAktif = mysqli_fetch_assoc($hasilCekAktif);
-            mysqli_stmt_close($stmtCekAktif);
-
-            if ($dataCekAktif) {
-                $konsultasiSudahDimulai = (
-                    trim((string) ($dataCekAktif["keluhan"] ?? "")) !== ""
-                    || trim((string) ($dataCekAktif["hasil_konsultasi"] ?? "")) !== ""
-                    || trim((string) ($dataCekAktif["tindak_lanjut"] ?? "")) !== ""
-                );
-
-                if (
-                    $konsultasiSudahDimulai
-                    && !(
-                        $statusVerifikasi === "Sudah diverifikasi"
-                        && $keputusanKonsultasi === "Perlu konsultasi"
-                    )
-                ) {
-                    $error =
-                        "Konsultasi sudah dimulai oleh Orang Tua sehingga keputusan konsultasi tidak dapat dibatalkan.";
-                }
-            }
-        }
-    }
-
-    if ($error === "") {
-
-        try {
-
-            mysqli_begin_transaction($conn);
-
-            if ($statusVerifikasi === "Belum diverifikasi") {
-
-                $stmt = mysqli_prepare(
-                    $conn,
-                    "UPDATE hasil_deteksi AS hd
-                     INNER JOIN pengukuran_antropometri AS pa
-                        ON hd.id_pengukuran = pa.id_pengukuran
-                     INNER JOIN balita AS b
-                        ON pa.id_balita = b.id_balita
-                     SET
-                        hd.status_verifikasi = ?,
-                        hd.catatan_verifikasi = ?,
-                        hd.diverifikasi_oleh = NULL,
-                        hd.tanggal_verifikasi = NULL,
-                        hd.keputusan_konsultasi = 'Belum ditentukan',
-                        hd.konsultasi_ditetapkan_oleh = NULL,
-                        hd.tanggal_keputusan_konsultasi = NULL
-                     WHERE hd.id_deteksi = ?
-                     AND b.id_puskesmas = ?"
-                );
-
-                if (!$stmt) {
-                    throw new Exception(
-                        "Gagal menyiapkan verifikasi hasil deteksi: "
-                        . mysqli_error($conn)
-                    );
-                }
-
-                mysqli_stmt_bind_param(
-                    $stmt,
-                    "ssii",
-                    $statusVerifikasi,
-                    $catatanVerifikasi,
-                    $id,
-                    $idPuskesmasAktif
-                );
-
-            } else {
-
-                $stmt = mysqli_prepare(
-                    $conn,
-                    "UPDATE hasil_deteksi AS hd
-                     INNER JOIN pengukuran_antropometri AS pa
-                        ON hd.id_pengukuran = pa.id_pengukuran
-                     INNER JOIN balita AS b
-                        ON pa.id_balita = b.id_balita
-                     SET
-                        hd.status_verifikasi = ?,
-                        hd.catatan_verifikasi = ?,
-                        hd.diverifikasi_oleh = ?,
-                        hd.tanggal_verifikasi = NOW(),
-                        hd.keputusan_konsultasi = ?,
-                        hd.konsultasi_ditetapkan_oleh = ?,
-                        hd.tanggal_keputusan_konsultasi = NOW()
-                     WHERE hd.id_deteksi = ?
-                     AND b.id_puskesmas = ?"
-                );
-
-                if (!$stmt) {
-                    throw new Exception(
-                        "Gagal menyiapkan verifikasi hasil deteksi: "
-                        . mysqli_error($conn)
-                    );
-                }
-
-                mysqli_stmt_bind_param(
-                    $stmt,
-                    "ssisiii",
-                    $statusVerifikasi,
-                    $catatanVerifikasi,
-                    $idUserAktif,
-                    $keputusanKonsultasi,
-                    $idUserAktif,
-                    $id,
-                    $idPuskesmasAktif
-                );
-            }
-
-            if (!mysqli_stmt_execute($stmt)) {
-                throw new Exception(
-                    "Verifikasi hasil deteksi gagal disimpan: "
-                    . mysqli_stmt_error($stmt)
-                );
-            }
-
-            mysqli_stmt_close($stmt);
-
-            /*
-            |------------------------------------------------------------------
-            | Jika disetujui perlu konsultasi, buat tiket otomatis
-            |------------------------------------------------------------------
-            */
-            if (
-                $kategoriBerisikoKonsultasi
-                && $statusVerifikasi === "Sudah diverifikasi"
-                && $keputusanKonsultasi === "Perlu konsultasi"
-            ) {
-
-                $stmtCek = mysqli_prepare(
-                    $conn,
-                    "SELECT id_konsultasi
-                     FROM konsultasi
-                     WHERE id_deteksi = ?
-                     LIMIT 1"
-                );
-
-                if (!$stmtCek) {
-                    throw new Exception(
-                        "Gagal memeriksa tiket konsultasi: "
-                        . mysqli_error($conn)
-                    );
-                }
-
-                mysqli_stmt_bind_param($stmtCek, "i", $id);
-                mysqli_stmt_execute($stmtCek);
-                $hasilCek = mysqli_stmt_get_result($stmtCek);
-                $tiketAda = mysqli_fetch_assoc($hasilCek);
-                mysqli_stmt_close($stmtCek);
-
-                if ($tiketAda) {
-                    $stmtTiket = mysqli_prepare(
-                        $conn,
-                        "UPDATE konsultasi
-                         SET
-                            id_balita = ?,
-                            id_petugas = ?,
-                            tanggal = CURDATE(),
-                            sumber_pengajuan = 'ahli_gizi'
-                         WHERE id_deteksi = ?"
-                    );
-
-                    if (!$stmtTiket) {
-                        throw new Exception(
-                            "Gagal memperbarui tiket konsultasi: "
-                            . mysqli_error($conn)
-                        );
-                    }
-
-                    mysqli_stmt_bind_param(
-                        $stmtTiket,
-                        "iii",
-                        $dataDeteksi["id_balita"],
-                        $idUserAktif,
-                        $id
-                    );
-                } else {
-                    $stmtTiket = mysqli_prepare(
-                        $conn,
-                        "INSERT INTO konsultasi
-                        (
-                            id_deteksi,
-                            id_balita,
-                            id_petugas,
-                            tanggal,
-                            keluhan,
-                            hasil_konsultasi,
-                            tindak_lanjut,
-                            sumber_pengajuan
-                        )
-                        VALUES
-                        (
-                            ?,
-                            ?,
-                            ?,
-                            CURDATE(),
-                            '',
-                            NULL,
-                            NULL,
-                            'ahli_gizi'
-                        )"
-                    );
-
-                    if (!$stmtTiket) {
-                        throw new Exception(
-                            "Gagal membuat tiket konsultasi: "
-                            . mysqli_error($conn)
-                        );
-                    }
-
-                    mysqli_stmt_bind_param(
-                        $stmtTiket,
-                        "iii",
-                        $id,
-                        $dataDeteksi["id_balita"],
-                        $idUserAktif
-                    );
-                }
-
-                if (!mysqli_stmt_execute($stmtTiket)) {
-                    throw new Exception(
-                        "Tiket konsultasi gagal disimpan: "
-                        . mysqli_stmt_error($stmtTiket)
-                    );
-                }
-
-                mysqli_stmt_close($stmtTiket);
-
-            } else {
-
-                /*
-                |--------------------------------------------------------------
-                | Jika keputusan dibatalkan, hapus hanya tiket otomatis
-                | yang belum pernah ditanggapi. Riwayat yang sudah selesai
-                | tidak dihapus.
-                |--------------------------------------------------------------
-                */
-                $stmtBatal = mysqli_prepare(
-                    $conn,
-                    "DELETE FROM konsultasi
-                     WHERE id_deteksi = ?
-                     AND sumber_pengajuan = 'ahli_gizi'
-                     AND (hasil_konsultasi IS NULL OR TRIM(hasil_konsultasi) = '')
-                     AND (tindak_lanjut IS NULL OR TRIM(tindak_lanjut) = '')"
-                );
-
-                if (!$stmtBatal) {
-                    throw new Exception(
-                        "Gagal memperbarui keputusan konsultasi: "
-                        . mysqli_error($conn)
-                    );
-                }
-
-                mysqli_stmt_bind_param($stmtBatal, "i", $id);
-                mysqli_stmt_execute($stmtBatal);
-                mysqli_stmt_close($stmtBatal);
-            }
-
-            mysqli_commit($conn);
-
-            header(
-                "Location: detail_deteksi.php?id="
-                . $id
-                . "&pesan=verifikasi_berhasil"
+        if (!$stmt) {
+            die(
+                "Gagal menyiapkan pencarian hasil deteksi: "
+                . mysqli_error($conn)
             );
-            exit;
-
-        } catch (Throwable $e) {
-            mysqli_rollback($conn);
-            $error = $e->getMessage();
         }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "isssss",
+            $idUserAktif,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci
+        );
+
+    } else {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectDeteksi . "
+            WHERE b.id_user = ?
+            ORDER BY hd.id_deteksi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal mengambil hasil deteksi: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "i",
+            $idUserAktif
+        );
     }
+
+} elseif ($roleBerbasisPuskesmas) {
+
+    if ($puskesmasBelumTerhubung) {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectDeteksi . "
+            WHERE 1 = 0
+            ORDER BY hd.id_deteksi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal menyiapkan hasil deteksi."
+            );
+        }
+
+    } elseif ($cari !== "") {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectDeteksi . "
+            WHERE b.id_puskesmas = ?
+            AND " . $filterCari . "
+            ORDER BY hd.id_deteksi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal menyiapkan pencarian hasil deteksi: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "isssss",
+            $idPuskesmasAktif,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci,
+            $kataKunci
+        );
+
+    } else {
+
+        $stmt = mysqli_prepare(
+            $conn,
+            $selectDeteksi . "
+            WHERE b.id_puskesmas = ?
+            ORDER BY hd.id_deteksi DESC"
+        );
+
+        if (!$stmt) {
+            die(
+                "Gagal mengambil hasil deteksi: "
+                . mysqli_error($conn)
+            );
+        }
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "i",
+            $idPuskesmasAktif
+        );
+    }
+
+} else {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dinkes
+    |--------------------------------------------------------------------------
+    |
+    | Dinkes dapat melihat seluruh wilayah dan menggunakan filter:
+    | - Puskesmas
+    | - Bulan deteksi
+    | - Tahun deteksi
+    | - Pencarian
+    |
+    */
+
+    $stmt = mysqli_prepare(
+        $conn,
+        $selectDeteksi . "
+        WHERE
+            (? = 0 OR b.id_puskesmas = ?)
+        AND
+            (? = 0 OR MONTH(hd.tanggal_deteksi) = ?)
+        AND
+            (? = 0 OR YEAR(hd.tanggal_deteksi) = ?)
+        AND
+            (
+                ? = ''
+                OR " . $filterCari . "
+            )
+        ORDER BY hd.id_deteksi DESC"
+    );
+
+    if (!$stmt) {
+        die(
+            "Gagal menyiapkan filter hasil deteksi Dinkes: "
+            . mysqli_error($conn)
+        );
+    }
+
+    mysqli_stmt_bind_param(
+        $stmt,
+        "iiiiiissssss",
+        $filterPuskesmas,
+        $filterPuskesmas,
+        $filterBulan,
+        $filterBulan,
+        $filterTahun,
+        $filterTahun,
+        $cari,
+        $kataKunci,
+        $kataKunci,
+        $kataKunci,
+        $kataKunci,
+        $kataKunci
+    );
 }
 
-/*
-|--------------------------------------------------------------------------
-| Template
-|--------------------------------------------------------------------------
-*/
+mysqli_stmt_execute($stmt);
+
+$query =
+    mysqli_stmt_get_result($stmt);
+
+if (!$query) {
+    die(
+        "Gagal membaca hasil deteksi."
+    );
+}
+
+$totalData =
+    mysqli_num_rows($query);
 
 require_once "../includes/header.php";
 require_once "../includes/navbar.php";
@@ -625,486 +526,827 @@ require_once "../includes/navbar.php";
                 <div>
 
                     <h4 class="mb-1">
-                        <i class="bi bi-check2-circle me-2"></i>
-                        Verifikasi Hasil Deteksi
+                        <i class="bi bi-clipboard2-pulse me-2"></i>
+                        Hasil Deteksi Stunting
                     </h4>
 
                     <small class="text-muted">
-                        Tinjau dan tetapkan status verifikasi
-                        hasil deteksi <?= htmlspecialchars(
-                            $dataDeteksi["nama_balita"] ?? "balita",
-                            ENT_QUOTES,
-                            "UTF-8"
-                        ); ?>.
+                        Menampilkan hasil terbaru setiap balita. Hasil bulan sebelumnya
+                        tetap tersimpan dan dapat dilihat melalui menu Riwayat.
                     </small>
 
                 </div>
 
-                <a
-                    href="detail_deteksi.php?id=<?= $id; ?>"
-                    class="btn btn-secondary btn-sm"
-                >
-                    <i class="bi bi-arrow-left"></i>
-                    Kembali
-                </a>
+                <div class="d-flex flex-wrap gap-2">
+
+                    <?php if (
+                        $roleBerbasisPuskesmas
+                        && !$puskesmasBelumTerhubung
+                    ): ?>
+
+                        <span
+                            class="badge badge-info
+                            d-inline-flex align-items-center px-3"
+                        >
+                            <i class="bi bi-hospital me-1"></i>
+                            <?= htmlspecialchars(
+                                $namaPuskesmasAktif,
+                                ENT_QUOTES,
+                                "UTF-8"
+                            ); ?>
+                        </span>
+
+                    <?php endif; ?>
+
+                    <a
+                        href="../dashboard/dashboard.php"
+                        class="btn btn-secondary btn-sm"
+                    >
+                        <i class="bi bi-arrow-left"></i>
+                        Kembali
+                    </a>
+
+                    <?php if (
+                        $roleAktif === "petugas_gizi"
+                        && !$puskesmasBelumTerhubung
+                    ): ?>
+
+                        <a
+                            href="../skrining/hasil_skrining.php"
+                            class="btn btn-primary btn-sm"
+                        >
+                            <i class="bi bi-activity"></i>
+                            Pilih Data untuk Analisis
+                        </a>
+
+                    <?php endif; ?>
+
+                </div>
 
             </div>
 
             <div class="card-body">
 
-                <?php if ($error !== ""): ?>
+                <?php if (
+                    $roleBerbasisPuskesmas
+                    && $puskesmasBelumTerhubung
+                ): ?>
 
-                    <div class="alert alert-danger">
-                        <i class="bi bi-exclamation-circle me-1"></i>
-                        <?= htmlspecialchars(
-                            $error,
-                            ENT_QUOTES,
-                            "UTF-8"
-                        ); ?>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Akun ini belum terhubung dengan Puskesmas.
+                        Data hasil deteksi wilayah tidak dapat ditampilkan.
                     </div>
 
                 <?php endif; ?>
 
-                <div class="row g-3 mb-4">
+                <?php if (isset($_GET["pesan"])): ?>
 
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="detail-item h-100">
-                            <span class="detail-label">
-                                Balita
-                            </span>
+                    <?php if ($_GET["pesan"] === "analisis_berhasil"): ?>
 
-                            <div class="detail-value">
-                                <strong>
-                                    <?= htmlspecialchars(
-                                        $dataDeteksi["nama_balita"],
-                                        ENT_QUOTES,
-                                        "UTF-8"
-                                    ); ?>
-                                </strong>
-                            </div>
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Hasil deteksi berhasil disimpan.
+                        </div>
 
-                            <div class="form-text">
-                                NIK:
-                                <?= htmlspecialchars(
-                                    $dataDeteksi["nik_balita"],
+                    <?php elseif ($_GET["pesan"] === "verifikasi_berhasil"): ?>
+
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Hasil deteksi berhasil diverifikasi oleh Ahli Gizi.
+                        </div>
+
+                    <?php elseif ($_GET["pesan"] === "edit_berhasil"): ?>
+
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Hasil deteksi berhasil diperbarui.
+                        </div>
+
+                    <?php elseif ($_GET["pesan"] === "tidak_ditemukan"): ?>
+
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Data hasil deteksi tidak ditemukan.
+                        </div>
+
+                    <?php elseif ($_GET["pesan"] === "gagal"): ?>
+
+                        <div class="alert alert-danger">
+                            <i class="bi bi-x-circle me-1"></i>
+                            Proses deteksi gagal dilakukan.
+                        </div>
+
+                    <?php endif; ?>
+
+                <?php endif; ?>
+
+                <?php if ($roleAktif === "dinkes"): ?>
+
+                    <form
+                        method="GET"
+                        class="row g-2 mb-3"
+                    >
+
+                        <div class="col-12 col-lg-4">
+
+                            <label
+                                for="cari"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Pencarian
+                            </label>
+
+                            <input
+                                type="text"
+                                id="cari"
+                                name="cari"
+                                class="form-control"
+                                placeholder="Cari nama, NIK, status gizi, atau status stunting"
+                                value="<?= htmlspecialchars(
+                                    $cari,
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ); ?>
-                            </div>
+                                ); ?>"
+                            >
+
                         </div>
-                    </div>
 
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="detail-item h-100">
-                            <span class="detail-label">
-                                Status Stunting
-                            </span>
+                        <div class="col-12 col-md-4 col-lg-3">
 
-                            <div class="detail-value">
-                                <strong>
-                                    <?= htmlspecialchars(
-                                        $dataDeteksi["status_stunting"]
-                                            ?? "-",
-                                        ENT_QUOTES,
-                                        "UTF-8"
-                                    ); ?>
-                                </strong>
-                            </div>
-
-                            <div class="form-text">
-                                Indikator: TB/U
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="detail-item h-100">
-                            <span class="detail-label">
-                                Status Gizi
-                            </span>
-
-                            <div class="detail-value">
-                                <strong>
-                                    <?= htmlspecialchars(
-                                        $dataDeteksi["status_gizi"]
-                                            ?? "-",
-                                        ENT_QUOTES,
-                                        "UTF-8"
-                                    ); ?>
-                                </strong>
-                            </div>
-
-                            <div class="form-text">
-                                Indikator: BB/PB atau BB/TB
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="detail-item h-100">
-                            <span class="detail-label">
+                            <label
+                                for="puskesmas"
+                                class="form-label small text-muted mb-1"
+                            >
                                 Puskesmas
-                            </span>
+                            </label>
 
-                            <div class="detail-value">
-                                <i class="bi bi-hospital me-1"></i>
-                                <?= htmlspecialchars(
-                                    $dataDeteksi["nama_puskesmas"]
-                                        ?? $namaPuskesmasAktif,
+                            <select
+                                id="puskesmas"
+                                name="puskesmas"
+                                class="form-select"
+                            >
+
+                                <option value="0">
+                                    Semua Puskesmas
+                                </option>
+
+                                <?php foreach (
+                                    $daftarPuskesmasFilter
+                                    as $puskesmasFilter
+                                ): ?>
+
+                                    <option
+                                        value="<?= (int)
+                                            $puskesmasFilter[
+                                                "id_puskesmas"
+                                            ]; ?>"
+                                        <?= (
+                                            $filterPuskesmas
+                                            ===
+                                            (int) $puskesmasFilter[
+                                                "id_puskesmas"
+                                            ]
+                                        )
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= htmlspecialchars(
+                                            $puskesmasFilter[
+                                                "nama_puskesmas"
+                                            ],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </option>
+
+                                <?php endforeach; ?>
+
+                            </select>
+
+                        </div>
+
+                        <div class="col-6 col-md-4 col-lg-2">
+
+                            <label
+                                for="bulan"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Bulan
+                            </label>
+
+                            <select
+                                id="bulan"
+                                name="bulan"
+                                class="form-select"
+                            >
+
+                                <option value="0">
+                                    Semua Bulan
+                                </option>
+
+                                <?php
+                                $namaBulan = [
+                                    1  => "Januari",
+                                    2  => "Februari",
+                                    3  => "Maret",
+                                    4  => "April",
+                                    5  => "Mei",
+                                    6  => "Juni",
+                                    7  => "Juli",
+                                    8  => "Agustus",
+                                    9  => "September",
+                                    10 => "Oktober",
+                                    11 => "November",
+                                    12 => "Desember"
+                                ];
+                                ?>
+
+                                <?php foreach (
+                                    $namaBulan
+                                    as $nomorBulan => $labelBulan
+                                ): ?>
+
+                                    <option
+                                        value="<?= $nomorBulan; ?>"
+                                        <?= $filterBulan === $nomorBulan
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= $labelBulan; ?>
+                                    </option>
+
+                                <?php endforeach; ?>
+
+                            </select>
+
+                        </div>
+
+                        <div class="col-6 col-md-4 col-lg-2">
+
+                            <label
+                                for="tahun"
+                                class="form-label small text-muted mb-1"
+                            >
+                                Tahun
+                            </label>
+
+                            <select
+                                id="tahun"
+                                name="tahun"
+                                class="form-select"
+                            >
+
+                                <option value="0">
+                                    Semua Tahun
+                                </option>
+
+                                <?php foreach (
+                                    $daftarTahunFilter
+                                    as $tahunFilter
+                                ): ?>
+
+                                    <option
+                                        value="<?= $tahunFilter; ?>"
+                                        <?= $filterTahun === $tahunFilter
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= $tahunFilter; ?>
+                                    </option>
+
+                                <?php endforeach; ?>
+
+                            </select>
+
+                        </div>
+
+                        <div class="col-6 col-md-2 col-lg-1">
+
+                            <label
+                                class="form-label small text-muted mb-1 d-block"
+                            >
+                                &nbsp;
+                            </label>
+
+                            <button
+                                type="submit"
+                                class="btn btn-primary w-100"
+                                title="Terapkan filter"
+                            >
+                                <i class="bi bi-funnel"></i>
+                            </button>
+
+                        </div>
+
+                        <div class="col-6 col-md-2 col-lg-12">
+
+                            <a
+                                href="hasil_deteksi.php"
+                                class="btn btn-light"
+                            >
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                                Reset Filter
+                            </a>
+
+                        </div>
+
+                    </form>
+
+                <?php else: ?>
+
+                    <form
+                        method="GET"
+                        class="row g-2 mb-3"
+                    >
+
+                        <div class="col-12 col-md-8">
+
+                            <input
+                                type="text"
+                                name="cari"
+                                class="form-control"
+                                placeholder="Cari nama, NIK, status gizi, atau status stunting"
+                                value="<?= htmlspecialchars(
+                                    $cari,
                                     ENT_QUOTES,
                                     "UTF-8"
-                                ); ?>
-                            </div>
+                                ); ?>"
+                            >
+
                         </div>
-                    </div>
+
+                        <div class="col-6 col-md-2">
+
+                            <button
+                                type="submit"
+                                class="btn btn-primary w-100"
+                            >
+                                <i class="bi bi-search"></i>
+                                Cari
+                            </button>
+
+                        </div>
+
+                        <div class="col-6 col-md-2">
+
+                            <a
+                                href="hasil_deteksi.php"
+                                class="btn btn-light w-100"
+                            >
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                                Reset
+                            </a>
+
+                        </div>
+
+                    </form>
+
+                <?php endif; ?>
+
+                <div
+                    class="d-flex flex-wrap
+                    justify-content-between align-items-center
+                    gap-2 mb-3"
+                >
+
+                    <span class="text-muted small">
+                        Total data:
+                        <strong>
+                            <?= $totalData; ?>
+                        </strong>
+                        hasil deteksi
+                    </span>
+
+                    <?php if ($roleAktif !== "petugas_gizi"): ?>
+
+                        <span class="badge badge-info">
+                            <i class="bi bi-eye"></i>
+                            Mode lihat
+                        </span>
+
+                    <?php endif; ?>
 
                 </div>
 
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-1"></i>
-                    Verifikasi ini menetapkan
-                    <strong>status hasil deteksi</strong>,
-                    bukan memverifikasi identitas atau data balita.
+                <div
+                    class="status-legend d-flex flex-wrap
+                    align-items-center gap-2 mb-3"
+                >
+
+                    <span class="text-muted small me-1">
+                        Keterangan status:
+                    </span>
+
+                    <span class="badge bg-success">
+                        Normal
+                    </span>
+
+                    <span class="badge bg-warning text-dark">
+                        Risiko Stunting
+                    </span>
+
+                    <span class="badge bg-danger">
+                        Stunting
+                    </span>
+
+                    <span class="badge bg-dark text-white">
+                        Stunting Berat
+                    </span>
+
                 </div>
 
-                <div class="mb-4">
+                <div class="table-responsive">
 
-                    <button
-                        class="btn btn-outline-primary btn-sm"
-                        type="button"
-                        data-bs-toggle="collapse"
-                        data-bs-target="#dataPendukungVerifikasi"
-                        aria-expanded="false"
-                        aria-controls="dataPendukungVerifikasi"
-                    >
-                        <i class="bi bi-clipboard2-data me-1"></i>
-                        Lihat Data Pendukung
-                    </button>
+                    <table class="table table-hover align-middle">
 
-                    <div
-                        class="collapse mt-3"
-                        id="dataPendukungVerifikasi"
-                    >
-                        <div class="detail-item">
+                        <thead>
 
-                            <div class="row g-3">
+                            <tr>
 
-                                <div class="col-6 col-lg-3">
-                                    <span class="detail-label">
-                                        Tanggal Pengukuran
-                                    </span>
-                                    <div class="detail-value">
+                                <th class="text-center">
+                                    No
+                                </th>
+
+                                <th class="text-center">
+                                    Pengukuran Terakhir
+                                </th>
+
+                                <th>
+                                    Nama Balita
+                                </th>
+
+                                <th>
+                                    NIK
+                                </th>
+
+                                <th>
+                                    Puskesmas
+                                </th>
+
+                                <th class="text-center">
+                                    JK
+                                </th>
+
+                                <th class="text-center">
+                                    Umur
+                                </th>
+
+                                <th class="text-center">
+                                    BB
+                                </th>
+
+                                <th class="text-center">
+                                    TB/PB
+                                </th>
+
+                                <th class="text-center">
+                                    Status Gizi
+                                </th>
+
+                                <th class="text-center">
+                                    Status Stunting
+                                </th>
+
+                                <th class="text-center">
+                                    Verifikasi
+                                </th>
+
+                                <th class="text-center">
+                                    Aksi
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                        <?php if ($totalData > 0): ?>
+
+                            <?php
+                            $no = 1;
+
+                            while ($data = mysqli_fetch_assoc($query)):
+
+                                $statusStunting = strtolower(
+                                    trim(
+                                        $data["status_stunting"] ?? ""
+                                    )
+                                );
+
+                                $kelasStunting = "bg-secondary";
+
+                                if (
+                                    $statusStunting === "normal"
+                                    || $statusStunting === "normal/sehat"
+                                    || $statusStunting === "tidak stunting"
+                                ) {
+
+                                    $kelasStunting = "bg-success";
+
+                                } elseif (
+                                    $statusStunting === "risiko stunting"
+                                ) {
+
+                                    $kelasStunting =
+                                        "bg-warning text-dark";
+
+                                } elseif (
+                                    $statusStunting === "stunting"
+                                    || $statusStunting === "pendek"
+                                ) {
+
+                                    $kelasStunting = "bg-danger";
+
+                                } elseif (
+                                    $statusStunting === "stunting berat"
+                                    || $statusStunting === "severely stunted"
+                                    || $statusStunting === "sangat pendek"
+                                ) {
+
+                                    $kelasStunting =
+                                        "bg-dark text-white";
+                                }
+
+                                $statusVerifikasi =
+                                    trim(
+                                        (string) (
+                                            $data["status_verifikasi"]
+                                            ?? ""
+                                        )
+                                    );
+
+                                if ($statusVerifikasi === "") {
+                                    $statusVerifikasi =
+                                        "Belum diverifikasi";
+                                }
+
+                                $statusVerifikasiNormal =
+                                    strtolower(
+                                        $statusVerifikasi
+                                    );
+
+                                $kelasVerifikasi =
+                                    "bg-secondary";
+
+                                if (
+                                    $statusVerifikasiNormal
+                                    === "sudah diverifikasi"
+                                ) {
+
+                                    $kelasVerifikasi =
+                                        "bg-success";
+
+                                } elseif (
+                                    $statusVerifikasiNormal
+                                    === "perlu pemeriksaan ulang"
+                                ) {
+
+                                    $kelasVerifikasi =
+                                        "bg-warning text-dark";
+                                }
+
+                                $sudahDiverifikasi =
+                                    $statusVerifikasiNormal === "sudah diverifikasi";
+                            ?>
+
+                                <tr>
+
+                                    <td class="text-center">
+                                        <?= $no++; ?>
+                                    </td>
+
+                                    <td class="text-center">
                                         <?= !empty(
-                                            $dataDeteksi[
-                                                "tanggal_pengukuran"
-                                            ]
+                                            $data["tanggal_pengukuran"]
                                         )
                                             ? date(
                                                 "d-m-Y",
                                                 strtotime(
-                                                    $dataDeteksi[
+                                                    $data[
                                                         "tanggal_pengukuran"
                                                     ]
                                                 )
                                             )
                                             : "-"; ?>
-                                    </div>
-                                </div>
+                                    </td>
 
-                                <div class="col-6 col-lg-3">
-                                    <span class="detail-label">
-                                        Umur
-                                    </span>
-                                    <div class="detail-value">
+                                    <td>
+
+                                        <div
+                                            class="d-flex
+                                            align-items-center gap-2"
+                                        >
+
+                                            <span
+                                                class="badge badge-primary"
+                                            >
+                                                <i
+                                                    class="bi
+                                                    bi-person-heart"
+                                                ></i>
+                                            </span>
+
+                                            <strong>
+                                                <?= htmlspecialchars(
+                                                    $data[
+                                                        "nama_balita"
+                                                    ],
+                                                    ENT_QUOTES,
+                                                    "UTF-8"
+                                                ); ?>
+                                            </strong>
+
+                                        </div>
+
+                                    </td>
+
+                                    <td>
                                         <?= htmlspecialchars(
-                                            (string) (
-                                                $dataDeteksi[
-                                                    "umur_bulan"
-                                                ]
-                                                ?? "-"
-                                            ),
+                                            $data["nik_balita"],
                                             ENT_QUOTES,
                                             "UTF-8"
                                         ); ?>
-                                        bulan
-                                    </div>
-                                </div>
+                                    </td>
 
-                                <div class="col-6 col-lg-3">
-                                    <span class="detail-label">
-                                        Berat Badan
-                                    </span>
-                                    <div class="detail-value">
+                                    <td>
                                         <?= htmlspecialchars(
-                                            (string) (
-                                                $dataDeteksi[
-                                                    "berat_badan"
-                                                ]
-                                                ?? "-"
-                                            ),
+                                            $data["nama_puskesmas"]
+                                                ?? "-",
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </td>
+
+                                    <td class="text-center">
+                                        <?= htmlspecialchars(
+                                            $data["jenis_kelamin"],
+                                            ENT_QUOTES,
+                                            "UTF-8"
+                                        ); ?>
+                                    </td>
+
+                                    <td class="text-center">
+                                        <?= (int) (
+                                            $data["umur_bulan"] ?? 0
+                                        ); ?>
+                                        bulan
+                                    </td>
+
+                                    <td class="text-center">
+                                        <?= htmlspecialchars(
+                                            $data[
+                                                "berat_badan"
+                                            ] ?? "-",
                                             ENT_QUOTES,
                                             "UTF-8"
                                         ); ?>
                                         kg
-                                    </div>
-                                </div>
+                                    </td>
 
-                                <div class="col-6 col-lg-3">
-                                    <span class="detail-label">
-                                        Tinggi / Panjang Badan
-                                    </span>
-                                    <div class="detail-value">
+                                    <td class="text-center">
                                         <?= htmlspecialchars(
-                                            (string) (
-                                                $dataDeteksi[
-                                                    "tinggi_panjang_badan"
-                                                ]
-                                                ?? "-"
-                                            ),
+                                            $data[
+                                                "tinggi_panjang_badan"
+                                            ] ?? "-",
                                             ENT_QUOTES,
                                             "UTF-8"
                                         ); ?>
                                         cm
-                                    </div>
-                                </div>
+                                    </td>
 
-                                <div class="col-6 col-lg-3">
-                                    <span class="detail-label">
-                                        Lingkar Kepala
-                                    </span>
-                                    <div class="detail-value">
+                                    <td class="text-center">
                                         <?= htmlspecialchars(
-                                            (string) (
-                                                $dataDeteksi[
-                                                    "lingkar_kepala"
-                                                ]
-                                                ?? "-"
-                                            ),
+                                            $data["status_gizi"]
+                                                ?? "Belum tersedia",
                                             ENT_QUOTES,
                                             "UTF-8"
                                         ); ?>
-                                        cm
-                                    </div>
-                                </div>
+                                    </td>
 
-                                <div class="col-6 col-lg-3">
-                                    <span class="detail-label">
-                                        LILA
-                                    </span>
-                                    <div class="detail-value">
-                                        <?= htmlspecialchars(
-                                            (string) (
-                                                $dataDeteksi[
-                                                    "lila"
+                                    <td class="text-center">
+
+                                        <span
+                                            class="badge <?= $kelasStunting; ?>"
+                                        >
+                                            <?= htmlspecialchars(
+                                                $data[
+                                                    "status_stunting"
                                                 ]
-                                                ?? "-"
-                                            ),
-                                            ENT_QUOTES,
-                                            "UTF-8"
-                                        ); ?>
-                                        cm
+                                                    ?? "Belum tersedia",
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ); ?>
+                                        </span>
+
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <span
+                                            class="badge <?= $kelasVerifikasi; ?>"
+                                        >
+                                            <?= htmlspecialchars(
+                                                $statusVerifikasi,
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ); ?>
+                                        </span>
+
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <div
+                                            class="table-actions
+                                            justify-content-center"
+                                        >
+
+                                            <a
+                                                href="detail_deteksi.php?id=<?= (int) $data["id_deteksi"]; ?>"
+                                                class="btn btn-info btn-sm"
+                                            >
+                                                <i class="bi bi-eye"></i>
+                                                Detail
+                                            </a>
+
+                                            <a
+                                                href="riwayat_deteksi.php?id_balita=<?= (int) $data["id_balita"]; ?>"
+                                                class="btn btn-secondary btn-sm"
+                                            >
+                                                <i class="bi bi-clock-history"></i>
+                                                Riwayat
+                                            </a>
+
+                                            <?php if ($roleAktif === "petugas_gizi"): ?>
+
+                                                <?php if (!$sudahDiverifikasi): ?>
+                                                    <a
+                                                        href="verifikasi_deteksi.php?id=<?= (int) $data["id_deteksi"]; ?>&kembali=deteksi"
+                                                        class="btn btn-success btn-sm"
+                                                    >
+                                                        <i class="bi bi-check2-circle"></i>
+                                                        Verifikasi
+                                                    </a>
+                                                <?php endif; ?>
+
+                                                <a
+                                                    href="analisis_deteksi.php?id_balita=<?= (int) $data["id_balita"]; ?>"
+                                                    class="btn btn-primary btn-sm"
+                                                    onclick="return confirm('Analisis ulang akan menghitung kembali status dan mengubah verifikasi menjadi Belum diverifikasi. Lanjutkan?');"
+                                                >
+                                                    <i class="bi bi-arrow-repeat"></i>
+                                                    Analisis Ulang
+                                                </a>
+
+                                            <?php endif; ?>
+
+                                        </div>
+
+                                    </td>
+
+                                </tr>
+
+                            <?php endwhile; ?>
+
+                        <?php else: ?>
+
+                            <tr>
+
+                                <td colspan="13">
+
+                                    <div class="empty-state">
+
+                                        <div class="empty-state-icon">
+                                            <i
+                                                class="bi
+                                                bi-clipboard2-pulse"
+                                            ></i>
+                                        </div>
+
+                                        <h3>
+                                            Belum ada hasil deteksi
+                                        </h3>
+
+                                        <p>
+                                            Data hasil deteksi
+                                            stunting belum tersedia.
+                                        </p>
+
                                     </div>
-                                </div>
 
-                                <div class="col-12 col-lg-6">
-                                    <span class="detail-label">
-                                        Indikator Analisis
-                                    </span>
-                                    <div class="detail-value">
-                                        TB/U untuk status stunting
-                                        dan BB/PB atau BB/TB untuk status gizi.
-                                    </div>
-                                </div>
+                                </td>
 
-                            </div>
+                            </tr>
 
-                        </div>
-                    </div>
+                        <?php endif; ?>
+
+                        </tbody>
+
+                    </table>
 
                 </div>
-
-                <?php if ($kategoriBerisikoKonsultasi): ?>
-
-                    <div class="alert alert-warning">
-                        <i class="bi bi-bell-fill me-1"></i>
-                        Status anak adalah
-                        <strong><?= htmlspecialchars(
-                            $dataDeteksi["status_stunting"] ?? "-",
-                            ENT_QUOTES,
-                            "UTF-8"
-                        ); ?></strong>.
-                        Setelah hasil dinyatakan <strong>Terverifikasi</strong>,
-                        Ahli Gizi wajib menentukan apakah Orang Tua perlu
-                        melakukan konsultasi gizi.
-                    </div>
-
-                <?php else: ?>
-
-                    <div class="alert alert-success">
-                        <i class="bi bi-check-circle me-1"></i>
-                        Status stunting anak saat ini tidak termasuk kategori
-                        Risiko Stunting, Stunting, atau Stunting Berat sehingga
-                        sistem tidak membuka kebutuhan konsultasi otomatis.
-                    </div>
-
-                <?php endif; ?>
-
-                <form method="POST">
-
-                    <div class="form-group">
-
-                        <label
-                            for="status_verifikasi"
-                            class="form-label"
-                        >
-                            Status Verifikasi
-                            <span class="text-danger">*</span>
-                        </label>
-
-                        <select
-                            name="status_verifikasi"
-                            id="status_verifikasi"
-                            class="form-select"
-                            required
-                        >
-
-                            <?php foreach ($daftarStatus as $status): ?>
-
-                                <option
-                                    value="<?= htmlspecialchars(
-                                        $status,
-                                        ENT_QUOTES,
-                                        "UTF-8"
-                                    ); ?>"
-                                    <?= $statusVerifikasi === $status
-                                        ? "selected"
-                                        : ""; ?>
-                                >
-                                    <?= htmlspecialchars(
-                                        $labelStatusVerifikasi[
-                                            $status
-                                        ] ?? $status,
-                                        ENT_QUOTES,
-                                        "UTF-8"
-                                    ); ?>
-                                </option>
-
-                            <?php endforeach; ?>
-
-                        </select>
-
-                        <div class="form-text">
-                            Pilih hasil peninjauan Petugas Gizi:
-                            Belum Diverifikasi, Terverifikasi,
-                            atau Perlu Pemeriksaan Ulang.
-                        </div>
-
-                    </div>
-
-                    <?php if ($kategoriBerisikoKonsultasi): ?>
-
-                        <div class="form-group" id="blokKeputusanKonsultasi">
-
-                            <label
-                                for="keputusan_konsultasi"
-                                class="form-label"
-                            >
-                                Kebutuhan Konsultasi Orang Tua
-                                <span id="tandaKonsultasiWajib" class="text-danger">*</span>
-                            </label>
-
-                            <select
-                                name="keputusan_konsultasi"
-                                id="keputusan_konsultasi"
-                                class="form-select"
-                            >
-                                <option value="">
-                                    -- Tentukan kebutuhan konsultasi --
-                                </option>
-                                <option
-                                    value="Perlu konsultasi"
-                                    <?= $keputusanKonsultasi === "Perlu konsultasi"
-                                        ? "selected"
-                                        : ""; ?>
-                                >
-                                    Perlu Konsultasi
-                                </option>
-                                <option
-                                    value="Tidak perlu konsultasi"
-                                    <?= $keputusanKonsultasi === "Tidak perlu konsultasi"
-                                        ? "selected"
-                                        : ""; ?>
-                                >
-                                    Tidak Perlu Konsultasi
-                                </option>
-                            </select>
-
-                            <div class="form-text">
-                                Jika memilih <strong>Perlu Konsultasi</strong>,
-                                sistem otomatis membuat tiket konsultasi dan
-                                menampilkan pemberitahuan pada akun Kader,
-                                Petugas KIA, serta Orang Tua.
-                            </div>
-
-                        </div>
-
-                    <?php endif; ?>
-
-                    <div class="form-group">
-
-                        <label
-                            for="catatan_verifikasi"
-                            class="form-label"
-                        >
-                            Catatan Petugas Gizi
-                            <span
-                                id="tandaCatatanWajib"
-                                class="text-danger d-none"
-                            >*</span>
-                        </label>
-
-                        <textarea
-                            name="catatan_verifikasi"
-                            id="catatan_verifikasi"
-                            class="form-control"
-                            rows="4"
-                            placeholder="Tambahkan catatan verifikasi bila diperlukan."
-                        ><?= htmlspecialchars(
-                            $catatanVerifikasi,
-                            ENT_QUOTES,
-                            "UTF-8"
-                        ); ?></textarea>
-
-                        <div class="form-text">
-                            Wajib diisi jika memilih
-                            <strong>Perlu Pemeriksaan Ulang</strong>.
-                            Untuk status Terverifikasi,
-                            catatan bersifat opsional.
-                        </div>
-
-                    </div>
-
-                    <div class="form-actions">
-
-                        <button
-                            type="submit"
-                            class="btn btn-success"
-                        >
-                            <i class="bi bi-floppy"></i>
-                            Simpan Verifikasi
-                        </button>
-
-                        <a
-                            href="detail_deteksi.php?id=<?= $id; ?>"
-                            class="btn btn-light"
-                        >
-                            <i class="bi bi-x-circle"></i>
-                            Batal
-                        </a>
-
-                    </div>
-
-                </form>
 
             </div>
 
@@ -1114,89 +1356,10 @@ require_once "../includes/navbar.php";
 
 </div>
 
-<script>
-document.addEventListener(
-    "DOMContentLoaded",
-    function () {
+<?php
 
-        const status =
-            document.getElementById(
-                "status_verifikasi"
-            );
+mysqli_stmt_close($stmt);
 
-        const catatan =
-            document.getElementById(
-                "catatan_verifikasi"
-            );
+require_once "../includes/footer.php";
 
-        const tandaWajib =
-            document.getElementById(
-                "tandaCatatanWajib"
-            );
-
-        const keputusanKonsultasi =
-            document.getElementById(
-                "keputusan_konsultasi"
-            );
-
-        const tandaKonsultasiWajib =
-            document.getElementById(
-                "tandaKonsultasiWajib"
-            );
-
-        function aturCatatan() {
-
-            if (!status || !catatan) {
-                return;
-            }
-
-            const wajib =
-                status.value ===
-                "Perlu pemeriksaan ulang";
-
-            catatan.required =
-                wajib;
-
-            if (tandaWajib) {
-                tandaWajib.classList.toggle(
-                    "d-none",
-                    !wajib
-                );
-            }
-        }
-
-        status.addEventListener(
-            "change",
-            function () {
-                aturCatatan();
-                aturKonsultasi();
-            }
-        );
-
-        function aturKonsultasi() {
-            if (!keputusanKonsultasi || !status) {
-                return;
-            }
-
-            const wajib =
-                status.value === "Sudah diverifikasi";
-
-            keputusanKonsultasi.disabled = !wajib;
-            keputusanKonsultasi.required = wajib;
-
-            if (tandaKonsultasiWajib) {
-                tandaKonsultasiWajib.classList.toggle(
-                    "d-none",
-                    !wajib
-                );
-            }
-        }
-
-        aturKonsultasi();
-
-        aturCatatan();
-    }
-);
-</script>
-
-<?php require_once "../includes/footer.php"; ?>
+?>
