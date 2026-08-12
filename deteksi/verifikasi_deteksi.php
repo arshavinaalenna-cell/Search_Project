@@ -486,7 +486,7 @@ require_once "../includes/navbar.php";
                             </div>
 
                             <div class="form-text">
-                                Indikator: BB/U
+                                Indikator: BB/PB atau BB/TB
                             </div>
                         </div>
                     </div>
@@ -663,7 +663,7 @@ require_once "../includes/navbar.php";
                                     </span>
                                     <div class="detail-value">
                                         TB/U untuk status stunting
-                                        dan BB/U untuk status gizi.
+                                        dan BB/PB atau BB/TB untuk status gizi.
                                     </div>
                                 </div>
 

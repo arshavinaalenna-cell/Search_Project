@@ -21,29 +21,74 @@ $bolehKelolaPengukuran =
 
 /*
 |--------------------------------------------------------------------------
-| Filter Puskesmas khusus Kader
+| Puskesmas yang terhubung dengan akun Kader
 |--------------------------------------------------------------------------
+|
+| Kader tidak memilih Puskesmas secara manual. Seluruh data antropometri
+| yang ditampilkan otomatis dibatasi berdasarkan pengguna.id_puskesmas
+| milik akun Kader yang sedang login.
+|
 */
 
-$filterPuskesmas = $roleAktif === "kader"
-    ? max(0, (int) ($_GET["puskesmas"] ?? 0))
-    : 0;
-
-$daftarPuskesmas = [];
+$idPuskesmasAktif = 0;
+$namaPuskesmasAktif = "";
+$puskesmasBelumTerhubung = false;
 
 if ($roleAktif === "kader") {
-    $queryPuskesmas = mysqli_query(
+    $stmtPuskesmasAktif = mysqli_prepare(
         $conn,
-        "SELECT id_puskesmas, nama_puskesmas
-         FROM puskesmas
-         ORDER BY nama_puskesmas ASC"
+        "SELECT
+            u.id_puskesmas,
+            p.nama_puskesmas
+         FROM pengguna AS u
+         LEFT JOIN puskesmas AS p
+            ON u.id_puskesmas = p.id_puskesmas
+         WHERE u.id_user = ?
+           AND u.role = 'kader'
+         LIMIT 1"
     );
 
-    if ($queryPuskesmas) {
-        while ($puskesmas = mysqli_fetch_assoc($queryPuskesmas)) {
-            $daftarPuskesmas[] = $puskesmas;
-        }
+    if (!$stmtPuskesmasAktif) {
+        die(
+            "Gagal menyiapkan data Puskesmas akun: "
+            . mysqli_error($conn)
+        );
     }
+
+    mysqli_stmt_bind_param(
+        $stmtPuskesmasAktif,
+        "i",
+        $idUserAktif
+    );
+
+    if (!mysqli_stmt_execute($stmtPuskesmasAktif)) {
+        die(
+            "Gagal mengambil data Puskesmas akun: "
+            . mysqli_stmt_error($stmtPuskesmasAktif)
+        );
+    }
+
+    $hasilPuskesmasAktif =
+        mysqli_stmt_get_result($stmtPuskesmasAktif);
+
+    $dataPuskesmasAktif =
+        mysqli_fetch_assoc($hasilPuskesmasAktif);
+
+    if (
+        !$dataPuskesmasAktif
+        || empty($dataPuskesmasAktif["id_puskesmas"])
+    ) {
+        $puskesmasBelumTerhubung = true;
+    } else {
+        $idPuskesmasAktif =
+            (int) $dataPuskesmasAktif["id_puskesmas"];
+
+        $namaPuskesmasAktif = trim(
+            (string) ($dataPuskesmasAktif["nama_puskesmas"] ?? "")
+        );
+    }
+
+    mysqli_stmt_close($stmtPuskesmasAktif);
 }
 
 /*
@@ -57,166 +102,178 @@ $judulHalaman =
 
 /*
 |--------------------------------------------------------------------------
+| Filter data pengukuran
+|--------------------------------------------------------------------------
+|
+| Filter tidak mengubah pembatasan wilayah. Khusus Kader, data tetap hanya
+| berasal dari Puskesmas yang terhubung dengan akun yang sedang login.
+|
+*/
+
+$kataKunci = trim((string) ($_GET["cari"] ?? ""));
+$bulanFilter = (int) ($_GET["bulan"] ?? 0);
+$tahunFilter = (int) ($_GET["tahun"] ?? 0);
+$urutanFilter = (string) ($_GET["urutan"] ?? "terbaru");
+
+if ($bulanFilter < 1 || $bulanFilter > 12) {
+    $bulanFilter = 0;
+}
+
+if ($tahunFilter < 1900 || $tahunFilter > 2100) {
+    $tahunFilter = 0;
+}
+
+if (!in_array($urutanFilter, ["terbaru", "terlama"], true)) {
+    $urutanFilter = "terbaru";
+}
+
+$filterAktif =
+    $kataKunci !== ""
+    || $bulanFilter > 0
+    || $tahunFilter > 0
+    || $urutanFilter === "terlama";
+
+/*
+|--------------------------------------------------------------------------
 | Mengambil data pengukuran beserta nama balita
 |--------------------------------------------------------------------------
 |
 | Orang Tua hanya dapat melihat data pengukuran anak yang terhubung
 | dengan akun miliknya melalui balita.id_user.
 |
-| Role lain tetap dapat melihat seluruh data sesuai kebutuhan
-| monitoring/pelayanan.
+| Kader hanya dapat melihat data balita dari Puskesmas yang terhubung
+| dengan akun miliknya melalui pengguna.id_puskesmas.
+|
+| Filter pencarian, bulan, tahun, dan urutan diterapkan setelah pembatasan
+| akses wilayah/akun tersebut.
 |
 */
 
-$stmtPengukuran = null;
+$whereAkses = [];
 
 if ($roleAktif === "orang_tua") {
+    $whereAkses[] = "b.id_user = " . $idUserAktif;
+} elseif ($roleAktif === "kader") {
+    $whereAkses[] = "b.id_puskesmas = " . $idPuskesmasAktif;
+}
 
-    $sql = "
-        SELECT
-            p.id_pengukuran,
-            p.id_balita,
-            p.tanggal_pengukuran,
-            p.umur_bulan,
-            p.berat_badan,
-            p.tinggi_panjang_badan,
-            p.lingkar_kepala,
-            p.lila,
-            b.nama_balita,
-            EXISTS (
-                SELECT 1
-                FROM hasil_deteksi AS hd
-                WHERE hd.id_pengukuran = p.id_pengukuran
-            ) AS digunakan_deteksi
-        FROM pengukuran_antropometri AS p
-        INNER JOIN balita AS b
-            ON p.id_balita = b.id_balita
-        WHERE b.id_user = ?
-        ORDER BY
-            p.tanggal_pengukuran DESC,
-            p.id_pengukuran DESC
-    ";
+$whereFilter = $whereAkses;
 
-    $stmtPengukuran = mysqli_prepare(
-        $conn,
-        $sql
+if ($kataKunci !== "") {
+    $kataKunciSql = mysqli_real_escape_string($conn, $kataKunci);
+    $whereFilter[] = "b.nama_balita LIKE '%" . $kataKunciSql . "%'";
+}
+
+if ($bulanFilter > 0) {
+    // Gunakan representasi teks agar aman jika database lama masih memiliki
+    // tanggal nol (0000-00-00) dan MySQL berjalan dalam strict mode.
+    $bulanSql = str_pad((string) $bulanFilter, 2, '0', STR_PAD_LEFT);
+    $whereFilter[] = "SUBSTRING(CAST(p.tanggal_pengukuran AS CHAR), 6, 2) = '" . $bulanSql . "'";
+}
+
+if ($tahunFilter > 0) {
+    // Hindari YEAR() pada nilai tanggal nol. Bandingkan bagian tahun sebagai teks.
+    $whereFilter[] = "SUBSTRING(CAST(p.tanggal_pengukuran AS CHAR), 1, 4) = '" . $tahunFilter . "'";
+}
+
+$whereSql = "";
+
+if (!empty($whereFilter)) {
+    $whereSql = " WHERE " . implode(" AND ", $whereFilter);
+}
+
+$orderSql = $urutanFilter === "terlama"
+    ? "ASC"
+    : "DESC";
+
+$sql = "
+    SELECT
+        p.id_pengukuran,
+        p.id_balita,
+        p.tanggal_pengukuran,
+        p.umur_bulan,
+        p.berat_badan,
+        p.tinggi_panjang_badan,
+        p.lingkar_kepala,
+        p.lila,
+        b.nama_balita,
+        EXISTS (
+            SELECT 1
+            FROM hasil_deteksi AS hd
+            WHERE hd.id_pengukuran = p.id_pengukuran
+        ) AS digunakan_deteksi
+    FROM pengukuran_antropometri AS p
+    INNER JOIN balita AS b
+        ON p.id_balita = b.id_balita
+    " . $whereSql . "
+    ORDER BY
+        p.tanggal_pengukuran " . $orderSql . ",
+        p.id_pengukuran " . $orderSql;
+
+$query = mysqli_query($conn, $sql);
+
+if (!$query) {
+    die(
+        "Gagal mengambil data pengukuran: "
+        . mysqli_error($conn)
     );
+}
 
-    if (!$stmtPengukuran) {
-        die(
-            "Gagal menyiapkan data pengukuran: "
-            . mysqli_error($conn)
-        );
-    }
+/*
+|--------------------------------------------------------------------------
+| Daftar tahun untuk dropdown filter
+|--------------------------------------------------------------------------
+|
+| Tahun yang ditampilkan hanya tahun yang memiliki data pada cakupan akun.
+| Untuk Kader berarti hanya tahun dari data balita Puskesmas terhubung.
+|
+*/
 
-    mysqli_stmt_bind_param(
-        $stmtPengukuran,
-        "i",
-        $idUserAktif
-    );
+$whereTahun = $whereAkses;
+$whereTahun[] = "p.tanggal_pengukuran IS NOT NULL";
 
-    if (!mysqli_stmt_execute($stmtPengukuran)) {
-        die(
-            "Gagal mengambil data pengukuran: "
-            . mysqli_stmt_error($stmtPengukuran)
-        );
-    }
+// Jangan memakai YEAR(), perbandingan DATE, atau literal 0000-00-00 di SQL.
+// Beberapa instalasi MySQL/MariaDB dengan strict mode akan melempar
+// mysqli_sql_exception ketika data lama masih berisi tanggal nol.
+$sqlTahun = "
+    SELECT DISTINCT
+        CAST(p.tanggal_pengukuran AS CHAR) AS tanggal_filter
+    FROM pengukuran_antropometri AS p
+    INNER JOIN balita AS b
+        ON p.id_balita = b.id_balita
+    WHERE " . implode(" AND ", $whereTahun) . "
+";
 
-    $query =
-        mysqli_stmt_get_result($stmtPengukuran);
+$queryTahun = mysqli_query($conn, $sqlTahun);
+$daftarTahun = [];
 
-} elseif ($roleAktif === "kader" && $filterPuskesmas > 0) {
+if ($queryTahun) {
+    while ($rowTahun = mysqli_fetch_assoc($queryTahun)) {
+        $tanggalFilter = (string) ($rowTahun["tanggal_filter"] ?? "");
 
-    $sql = "
-        SELECT
-            p.id_pengukuran,
-            p.id_balita,
-            p.tanggal_pengukuran,
-            p.umur_bulan,
-            p.berat_badan,
-            p.tinggi_panjang_badan,
-            p.lingkar_kepala,
-            p.lila,
-            b.nama_balita,
-            EXISTS (
-                SELECT 1
-                FROM hasil_deteksi AS hd
-                WHERE hd.id_pengukuran = p.id_pengukuran
-            ) AS digunakan_deteksi
-        FROM pengukuran_antropometri AS p
-        INNER JOIN balita AS b
-            ON p.id_balita = b.id_balita
-        WHERE b.id_puskesmas = ?
-        ORDER BY
-            p.tanggal_pengukuran DESC,
-            p.id_pengukuran DESC
-    ";
-
-    $stmtPengukuran = mysqli_prepare(
-        $conn,
-        $sql
-    );
-
-    if (!$stmtPengukuran) {
-        die(
-            "Gagal menyiapkan filter data pengukuran: "
-            . mysqli_error($conn)
-        );
-    }
-
-    mysqli_stmt_bind_param(
-        $stmtPengukuran,
-        "i",
-        $filterPuskesmas
-    );
-
-    if (!mysqli_stmt_execute($stmtPengukuran)) {
-        die(
-            "Gagal mengambil data pengukuran: "
-            . mysqli_stmt_error($stmtPengukuran)
-        );
-    }
-
-    $query = mysqli_stmt_get_result($stmtPengukuran);
-
-} else {
-
-    $sql = "
-        SELECT
-            p.id_pengukuran,
-            p.id_balita,
-            p.tanggal_pengukuran,
-            p.umur_bulan,
-            p.berat_badan,
-            p.tinggi_panjang_badan,
-            p.lingkar_kepala,
-            p.lila,
-            b.nama_balita,
-            EXISTS (
-                SELECT 1
-                FROM hasil_deteksi AS hd
-                WHERE hd.id_pengukuran = p.id_pengukuran
-            ) AS digunakan_deteksi
-        FROM pengukuran_antropometri AS p
-        INNER JOIN balita AS b
-            ON p.id_balita = b.id_balita
-        ORDER BY
-            p.tanggal_pengukuran DESC,
-            p.id_pengukuran DESC
-    ";
-
-    $query = mysqli_query(
-        $conn,
-        $sql
-    );
-
-    if (!$query) {
-        die(
-            "Gagal mengambil data pengukuran: "
-            . mysqli_error($conn)
-        );
+        // Hanya ambil tahun valid 1000-9999. Nilai 0000-00-00 otomatis diabaikan.
+        if (preg_match('/^([1-9][0-9]{3})-[0-9]{2}-[0-9]{2}$/', $tanggalFilter, $cocok)) {
+            $daftarTahun[(int) $cocok[1]] = (int) $cocok[1];
+        }
     }
 }
+
+rsort($daftarTahun, SORT_NUMERIC);
+
+$namaBulan = [
+    1 => "Januari",
+    2 => "Februari",
+    3 => "Maret",
+    4 => "April",
+    5 => "Mei",
+    6 => "Juni",
+    7 => "Juli",
+    8 => "Agustus",
+    9 => "September",
+    10 => "Oktober",
+    11 => "November",
+    12 => "Desember"
+];
 
 /*
 |--------------------------------------------------------------------------
@@ -466,70 +523,162 @@ require_once "../includes/navbar.php";
 
                 <?php if ($roleAktif === "kader"): ?>
 
-                    <form
-                        method="GET"
-                        class="row g-2 mb-4 align-items-end"
-                    >
+                    <?php if ($puskesmasBelumTerhubung): ?>
 
-                        <div class="col-12 col-lg-8">
+                        <div class="alert alert-warning mb-4" role="alert">
+                            <div class="d-flex align-items-start gap-2">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <div>
+                                    <strong>Puskesmas belum terhubung.</strong>
+                                    <div class="small mt-1">
+                                        Data balita tidak ditampilkan karena akun Kader ini belum memiliki Puskesmas.
+                                        Hubungkan akun Kader ke Puskesmas terlebih dahulu.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                            <label
-                                for="filter_puskesmas"
-                                class="form-label small text-muted mb-1"
-                            >
-                                Filter berdasarkan Puskesmas
-                            </label>
+                    <?php else: ?>
 
-                            <select
-                                id="filter_puskesmas"
-                                name="puskesmas"
-                                class="form-select"
-                            >
-                                <option value="0">
-                                    Semua Puskesmas
-                                </option>
-
-                                <?php foreach ($daftarPuskesmas as $puskesmas): ?>
-                                    <option
-                                        value="<?= (int) $puskesmas["id_puskesmas"]; ?>"
-                                        <?= $filterPuskesmas === (int) $puskesmas["id_puskesmas"]
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= htmlspecialchars(
-                                            $puskesmas["nama_puskesmas"],
-                                            ENT_QUOTES,
-                                            "UTF-8"
+                        <div class="alert alert-info mb-4" role="alert">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                <div>
+                                    <span class="small text-muted d-block">
+                                        Data otomatis mengikuti Puskesmas akun Kader
+                                    </span>
+                                    <strong>
+                                        <i class="bi bi-hospital"></i>
+                                        <?= aman(
+                                            $namaPuskesmasAktif !== ""
+                                                ? $namaPuskesmasAktif
+                                                : "Puskesmas terhubung"
                                         ); ?>
+                                    </strong>
+                                </div>
+                                <span class="badge badge-info">
+                                    <i class="bi bi-lock"></i>
+                                    Wilayah terkunci
+                                </span>
+                            </div>
+                        </div>
+
+                    <?php endif; ?>
+
+                <?php endif; ?>
+
+                <form method="GET" class="mb-4">
+
+                    <div class="row g-2 align-items-end">
+
+                        <div class="col-12 col-lg-4">
+                            <label for="cari" class="form-label small text-muted mb-1">
+                                Cari Balita
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="bi bi-search"></i>
+                                </span>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="cari"
+                                    name="cari"
+                                    value="<?= aman($kataKunci); ?>"
+                                    placeholder="Ketik nama balita..."
+                                >
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-md-3 col-lg-2">
+                            <label for="bulan" class="form-label small text-muted mb-1">
+                                Bulan
+                            </label>
+                            <select
+                                class="form-select"
+                                id="bulan"
+                                name="bulan"
+                            >
+                                <option value="0">Semua Bulan</option>
+                                <?php foreach ($namaBulan as $nomorBulan => $labelBulan): ?>
+                                    <option
+                                        value="<?= $nomorBulan; ?>"
+                                        <?= $bulanFilter === $nomorBulan ? "selected" : ""; ?>
+                                    >
+                                        <?= aman($labelBulan); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-
                         </div>
 
-                        <div class="col-6 col-lg-2">
-                            <button
-                                type="submit"
-                                class="btn btn-primary w-100"
+                        <div class="col-6 col-md-3 col-lg-2">
+                            <label for="tahun" class="form-label small text-muted mb-1">
+                                Tahun
+                            </label>
+                            <select
+                                class="form-select"
+                                id="tahun"
+                                name="tahun"
                             >
-                                <i class="bi bi-funnel"></i>
-                                Filter
-                            </button>
+                                <option value="0">Semua Tahun</option>
+
+                                <?php foreach ($daftarTahun as $tahun): ?>
+                                    <option
+                                        value="<?= $tahun; ?>"
+                                        <?= $tahunFilter === $tahun ? "selected" : ""; ?>
+                                    >
+                                        <?= $tahun; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
 
-                        <div class="col-6 col-lg-2">
-                            <a
-                                href="data_pengukuran.php"
-                                class="btn btn-light w-100"
+                        <div class="col-12 col-md-3 col-lg-2">
+                            <label for="urutan" class="form-label small text-muted mb-1">
+                                Urutan
+                            </label>
+                            <select
+                                class="form-select"
+                                id="urutan"
+                                name="urutan"
                             >
-                                <i class="bi bi-x-circle"></i>
-                                Hapus Filter
-                            </a>
+                                <option
+                                    value="terbaru"
+                                    <?= $urutanFilter === "terbaru" ? "selected" : ""; ?>
+                                >
+                                    Terbaru
+                                </option>
+                                <option
+                                    value="terlama"
+                                    <?= $urutanFilter === "terlama" ? "selected" : ""; ?>
+                                >
+                                    Terlama
+                                </option>
+                            </select>
                         </div>
 
-                    </form>
+                        <div class="col-12 col-md-3 col-lg-2">
+                            <div class="d-flex gap-2">
+                                <button
+                                    type="submit"
+                                    class="btn btn-primary flex-fill"
+                                >
+                                    <i class="bi bi-funnel"></i>
+                                    Filter
+                                </button>
 
-                <?php endif; ?>
+                                <a
+                                    href="data_pengukuran.php"
+                                    class="btn btn-light"
+                                    title="Reset filter"
+                                >
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </a>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </form>
 
                 <div class="table-responsive">
 
@@ -777,11 +926,15 @@ require_once "../includes/navbar.php";
                                         </div>
 
                                         <h3>
-                                            Belum ada data pengukuran
+                                            <?= $filterAktif
+                                                ? "Data tidak ditemukan"
+                                                : "Belum ada data pengukuran"; ?>
                                         </h3>
 
                                         <p>
-                                            <?php if ($bolehKelolaPengukuran): ?>
+                                            <?php if ($filterAktif): ?>
+                                                Tidak ada data yang sesuai dengan pencarian atau filter yang dipilih.
+                                            <?php elseif ($bolehKelolaPengukuran): ?>
                                                 Tambahkan pengukuran pertama untuk mulai memantau pertumbuhan balita.
                                             <?php elseif ($roleAktif === "orang_tua"): ?>
                                                 Belum ada data pengukuran untuk anak yang terhubung dengan akun Anda.
@@ -792,6 +945,7 @@ require_once "../includes/navbar.php";
 
                                         <?php if (
                                             $bolehKelolaPengukuran
+                                            && !$filterAktif
                                         ): ?>
 
                                             <a
@@ -830,10 +984,6 @@ require_once "../includes/navbar.php";
 </div>
 
 <?php
-
-if ($stmtPengukuran instanceof mysqli_stmt) {
-    mysqli_stmt_close($stmtPengukuran);
-}
 
 require_once "../includes/footer.php";
 

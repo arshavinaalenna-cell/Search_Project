@@ -132,7 +132,21 @@ function teksStatusGizi($status): string
         return "Belum tersedia";
     }
 
-    return (string) $status;
+    $statusAsli = trim((string) $status);
+    $statusNormal = strtolower($statusAsli);
+
+    /*
+    |------------------------------------------------------------------
+    | Normalisasi istilah lama dari database.
+    | Data yang sebelumnya tersimpan sebagai "Risiko Gizi Lebih"
+    | tetap ditampilkan dengan istilah yang sudah diperbaiki.
+    |------------------------------------------------------------------
+    */
+    if ($statusNormal === "risiko gizi lebih") {
+        return "Berisiko Gizi Lebih";
+    }
+
+    return $statusAsli;
 }
 
 function kelasStatusGizi($status): string
@@ -149,24 +163,26 @@ function kelasStatusGizi($status): string
     );
 
     if (
-        strpos($statusNormal, "normal") !== false
-        || strpos($statusNormal, "baik") !== false
+        strpos($statusNormal, "baik") !== false
+        || strpos($statusNormal, "normal") !== false
     ) {
         return "text-bg-success";
     }
 
     if (
-        strpos($statusNormal, "risiko") !== false
-        || strpos($statusNormal, "kurang") !== false
+        strpos($statusNormal, "obesitas") !== false
+        || strpos($statusNormal, "buruk") !== false
     ) {
-        return "text-bg-warning";
+        return "text-bg-danger";
     }
 
     if (
-        strpos($statusNormal, "buruk") !== false
-        || strpos($statusNormal, "sangat") !== false
+        strpos($statusNormal, "berisiko") !== false
+        || strpos($statusNormal, "risiko") !== false
+        || strpos($statusNormal, "kurang") !== false
+        || strpos($statusNormal, "gizi lebih") !== false
     ) {
-        return "text-bg-danger";
+        return "text-bg-warning";
     }
 
     return "text-bg-info";
@@ -355,6 +371,83 @@ if ($roleBerbasisPuskesmas) {
 
 /*
 |--------------------------------------------------------------------------
+| Filter daftar skrining
+|--------------------------------------------------------------------------
+|
+| Filter menggunakan GET agar pilihan tetap tersimpan di URL dan mudah
+| di-reset. Pencarian mencakup nama balita, Puskesmas, pendidikan,
+| pekerjaan, status gizi, status stunting, dan status verifikasi.
+|
+*/
+
+$cariSkrining = trim((string) ($_GET["cari"] ?? ""));
+
+$bulanFilter = (int) ($_GET["bulan"] ?? 0);
+if ($bulanFilter < 1 || $bulanFilter > 12) {
+    $bulanFilter = 0;
+}
+
+$tahunFilter = (int) ($_GET["tahun"] ?? 0);
+if ($tahunFilter < 2000 || $tahunFilter > 2100) {
+    $tahunFilter = 0;
+}
+
+$urutanFilter = strtolower(
+    trim((string) ($_GET["urut"] ?? "terbaru"))
+);
+
+if (!in_array($urutanFilter, ["terbaru", "terlama"], true)) {
+    $urutanFilter = "terbaru";
+}
+
+$filterAktif =
+    $cariSkrining !== ""
+    || $bulanFilter > 0
+    || $tahunFilter > 0
+    || $urutanFilter === "terlama";
+
+/*
+|--------------------------------------------------------------------------
+| Tentukan kolom tanggal skrining bila tersedia
+|--------------------------------------------------------------------------
+|
+| Beberapa versi database menggunakan nama kolom tanggal yang berbeda.
+| Sistem mencoba memakai tanggal skrining terlebih dahulu. Bila tidak ada,
+| filter bulan/tahun memakai tanggal hasil deteksi terbaru sebagai fallback.
+|
+*/
+
+$kolomTanggalSkrining = "";
+$kandidatKolomTanggal = [
+    "tanggal_skrining",
+    "tanggal_input",
+    "created_at",
+    "dibuat_pada"
+];
+
+$hasilKolomSkrining = mysqli_query(
+    $conn,
+    "SHOW COLUMNS FROM skrining_awal"
+);
+
+if ($hasilKolomSkrining) {
+    while ($kolom = mysqli_fetch_assoc($hasilKolomSkrining)) {
+        $namaKolom = (string) ($kolom["Field"] ?? "");
+
+        if (in_array($namaKolom, $kandidatKolomTanggal, true)) {
+            $kolomTanggalSkrining = $namaKolom;
+            break;
+        }
+    }
+}
+
+$ekspresiTanggalFilter =
+    $kolomTanggalSkrining !== ""
+        ? "s.`" . $kolomTanggalSkrining . "`"
+        : "det.tanggal_deteksi";
+
+/*
+|--------------------------------------------------------------------------
 | Query data skrining
 |--------------------------------------------------------------------------
 |
@@ -454,102 +547,81 @@ $sqlDasar = "
 
 /*
 |--------------------------------------------------------------------------
-| Jalankan query
+| Susun kondisi filter
 |--------------------------------------------------------------------------
 */
 
-$stmtSkrining = null;
+$kondisiSkrining = [];
 
 if ($roleBerbasisPuskesmas) {
-
     if ($puskesmasBelumTerhubung) {
-
-        $sql = $sqlDasar . "
-            WHERE 1 = 0
-            ORDER BY s.id_skrining DESC
-        ";
-
-        $query = mysqli_query(
-            $conn,
-            $sql
-        );
-
-        if (!$query) {
-            die(
-                "Gagal mengambil data skrining: "
-                . mysqli_error($conn)
-            );
-        }
-
+        $kondisiSkrining[] = "1 = 0";
     } else {
-
-        $sql = $sqlDasar . "
-            WHERE b.id_puskesmas = ?
-            ORDER BY s.id_skrining DESC
-        ";
-
-        $stmtSkrining =
-            mysqli_prepare(
-                $conn,
-                $sql
-            );
-
-        if (!$stmtSkrining) {
-            die(
-                "Gagal menyiapkan data skrining: "
-                . mysqli_error($conn)
-            );
-        }
-
-        mysqli_stmt_bind_param(
-            $stmtSkrining,
-            "i",
-            $idPuskesmasAktif
-        );
-
-        mysqli_stmt_execute(
-            $stmtSkrining
-        );
-
-        $query =
-            mysqli_stmt_get_result(
-                $stmtSkrining
-            );
-
-        if (!$query) {
-            mysqli_stmt_close(
-                $stmtSkrining
-            );
-
-            die(
-                "Gagal membaca hasil skrining."
-            );
-        }
+        $kondisiSkrining[] =
+            "b.id_puskesmas = " . (int) $idPuskesmasAktif;
     }
+}
 
-} else {
-
-    /*
-    |--------------------------------------------------------------------------
-    | Dinkes: monitoring seluruh Puskesmas
-    |--------------------------------------------------------------------------
-    */
-
-    $sql = $sqlDasar . "
-        ORDER BY s.id_skrining DESC
-    ";
-
-    $query = mysqli_query(
+if ($cariSkrining !== "") {
+    $cariSql = mysqli_real_escape_string(
         $conn,
-        $sql
+        $cariSkrining
     );
 
-    if (!$query) {
-        die(
-            "Gagal mengambil data skrining: "
-            . mysqli_error($conn)
-        );
-    }
+    $kondisiSkrining[] = "(
+        b.nama_balita LIKE '%{$cariSql}%'
+        OR ps.nama_puskesmas LIKE '%{$cariSql}%'
+        OR s.pendidikan_ibu LIKE '%{$cariSql}%'
+        OR s.pekerjaan_ibu LIKE '%{$cariSql}%'
+        OR det.status_gizi LIKE '%{$cariSql}%'
+        OR det.status_stunting LIKE '%{$cariSql}%'
+        OR det.status_verifikasi LIKE '%{$cariSql}%'
+    )";
+}
+
+if ($bulanFilter > 0) {
+    $kondisiSkrining[] =
+        "MONTH({$ekspresiTanggalFilter}) = " . (int) $bulanFilter;
+}
+
+if ($tahunFilter > 0) {
+    $kondisiSkrining[] =
+        "YEAR({$ekspresiTanggalFilter}) = " . (int) $tahunFilter;
+}
+
+$sql = $sqlDasar;
+
+if (!empty($kondisiSkrining)) {
+    $sql .= "\nWHERE " . implode("\nAND ", $kondisiSkrining);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Urutan data
+|--------------------------------------------------------------------------
+|
+| id_skrining dipakai sebagai urutan input sehingga data terbaru/terlama
+| tetap dapat diurutkan meskipun suatu balita belum mempunyai hasil deteksi.
+|
+*/
+
+$arahUrutan =
+    $urutanFilter === "terlama"
+        ? "ASC"
+        : "DESC";
+
+$sql .= "\nORDER BY s.id_skrining {$arahUrutan}";
+
+$query = mysqli_query(
+    $conn,
+    $sql
+);
+
+if (!$query) {
+    die(
+        "Gagal mengambil data skrining: "
+        . mysqli_error($conn)
+    );
 }
 
 $totalData =
@@ -788,6 +860,40 @@ require_once "../includes/navbar.php";
         border-radius: 14px;
         background: rgba(0, 0, 0, .025);
     }
+
+    .skrining-data-filter {
+        margin-bottom: 20px;
+        padding: 18px;
+        border: 1px solid rgba(0, 0, 0, .07);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, .72);
+    }
+
+    .skrining-data-filter .filter-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        font-weight: 700;
+    }
+
+    .skrining-data-filter .form-label {
+        margin-bottom: 6px;
+        font-size: .86rem;
+        font-weight: 600;
+        color: #5c667a;
+    }
+
+    .skrining-data-filter .input-group-text {
+        background: #fff;
+    }
+
+    .skrining-filter-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
 
     @media (max-width: 767.98px) {
         .skrining-toolbar {
@@ -1111,6 +1217,213 @@ require_once "../includes/navbar.php";
                     </div>
 
                 <?php endif; ?>
+
+                <!-- =================================================
+                     FILTER & PENCARIAN DATA
+                ================================================== -->
+
+                <form
+                    method="get"
+                    action="hasil_skrining.php"
+                    class="skrining-data-filter"
+                >
+
+                    <div class="filter-title">
+                        <i class="bi bi-funnel"></i>
+                        Filter & Cari Data
+                    </div>
+
+                    <div class="row g-3 align-items-end">
+
+                        <!-- CARI -->
+                        <div class="col-xl-4 col-lg-4 col-md-12">
+                            <label
+                                for="cari"
+                                class="form-label"
+                            >
+                                Cari
+                            </label>
+
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="bi bi-search"></i>
+                                </span>
+
+                                <input
+                                    type="search"
+                                    class="form-control"
+                                    id="cari"
+                                    name="cari"
+                                    value="<?= htmlspecialchars(
+                                        $cariSkrining,
+                                        ENT_QUOTES,
+                                        "UTF-8"
+                                    ); ?>"
+                                    placeholder="Cari nama balita, status, pekerjaan..."
+                                    autocomplete="off"
+                                >
+                            </div>
+                        </div>
+
+                        <!-- BULAN -->
+                        <div class="col-xl-2 col-lg-2 col-md-4 col-sm-6">
+                            <label
+                                for="bulan"
+                                class="form-label"
+                            >
+                                Bulan
+                            </label>
+
+                            <select
+                                class="form-select"
+                                id="bulan"
+                                name="bulan"
+                            >
+                                <option value="0">Semua Bulan</option>
+
+                                <?php
+                                $namaBulan = [
+                                    1 => "Januari",
+                                    2 => "Februari",
+                                    3 => "Maret",
+                                    4 => "April",
+                                    5 => "Mei",
+                                    6 => "Juni",
+                                    7 => "Juli",
+                                    8 => "Agustus",
+                                    9 => "September",
+                                    10 => "Oktober",
+                                    11 => "November",
+                                    12 => "Desember"
+                                ];
+
+                                foreach ($namaBulan as $angkaBulan => $teksBulan):
+                                ?>
+                                    <option
+                                        value="<?= $angkaBulan; ?>"
+                                        <?= $bulanFilter === $angkaBulan
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= $teksBulan; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <!-- TAHUN -->
+                        <div class="col-xl-2 col-lg-2 col-md-4 col-sm-6">
+                            <label
+                                for="tahun"
+                                class="form-label"
+                            >
+                                Tahun
+                            </label>
+
+                            <select
+                                class="form-select"
+                                id="tahun"
+                                name="tahun"
+                            >
+                                <option value="0">Semua Tahun</option>
+
+                                <?php
+                                $tahunSekarang = (int) date("Y");
+                                $tahunAwal = max(2015, $tahunSekarang - 10);
+
+                                if (
+                                    $tahunFilter > 0
+                                    && $tahunFilter < $tahunAwal
+                                ) {
+                                    $tahunAwal = $tahunFilter;
+                                }
+
+                                for (
+                                    $tahun = $tahunSekarang;
+                                    $tahun >= $tahunAwal;
+                                    $tahun--
+                                ):
+                                ?>
+                                    <option
+                                        value="<?= $tahun; ?>"
+                                        <?= $tahunFilter === $tahun
+                                            ? "selected"
+                                            : ""; ?>
+                                    >
+                                        <?= $tahun; ?>
+                                    </option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+
+                        <!-- URUTAN -->
+                        <div class="col-xl-2 col-lg-2 col-md-4 col-sm-6">
+                            <label
+                                for="urut"
+                                class="form-label"
+                            >
+                                Urutkan
+                            </label>
+
+                            <select
+                                class="form-select"
+                                id="urut"
+                                name="urut"
+                            >
+                                <option
+                                    value="terbaru"
+                                    <?= $urutanFilter === "terbaru"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Terbaru
+                                </option>
+
+                                <option
+                                    value="terlama"
+                                    <?= $urutanFilter === "terlama"
+                                        ? "selected"
+                                        : ""; ?>
+                                >
+                                    Terlama
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- AKSI FILTER -->
+                        <div class="col-xl-2 col-lg-2 col-md-12">
+                            <div class="skrining-filter-actions">
+                                <button
+                                    type="submit"
+                                    class="btn btn-primary"
+                                >
+                                    <i class="bi bi-funnel-fill"></i>
+                                    Terapkan
+                                </button>
+
+                                <a
+                                    href="hasil_skrining.php"
+                                    class="btn btn-outline-secondary"
+                                    title="Reset filter"
+                                >
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                    Reset
+                                </a>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <?php if ($filterAktif): ?>
+                        <div class="mt-3 small text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Menampilkan
+                            <strong><?= $totalData; ?></strong>
+                            data sesuai filter yang dipilih.
+                        </div>
+                    <?php endif; ?>
+
+                </form>
 
                 <!-- =================================================
                      TABEL SKRINING
@@ -1609,20 +1922,37 @@ require_once "../includes/navbar.php";
                                         </div>
 
                                         <h3>
-                                            Belum ada data
-                                            skrining
+                                            <?= $filterAktif
+                                                ? "Data tidak ditemukan"
+                                                : "Belum ada data skrining"; ?>
                                         </h3>
 
                                         <p>
 
-                                            <?= $bolehTambahSkrining
-                                                ? "Tambahkan skrining awal untuk mulai mencatat faktor risiko balita."
-                                                : "Data skrining awal balita belum tersedia."; ?>
+                                            <?php if ($filterAktif): ?>
+                                                Tidak ada data yang cocok dengan pencarian atau filter yang dipilih.
+                                            <?php else: ?>
+                                                <?= $bolehTambahSkrining
+                                                    ? "Tambahkan skrining awal untuk mulai mencatat faktor risiko balita."
+                                                    : "Data skrining awal balita belum tersedia."; ?>
+                                            <?php endif; ?>
 
                                         </p>
 
+                                        <?php if ($filterAktif): ?>
+
+                                            <a
+                                                href="hasil_skrining.php"
+                                                class="btn
+                                                btn-outline-secondary
+                                                mt-3"
+                                            >
+                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                                Reset Filter
+                                            </a>
+
                                         <?php
-                                        if (
+                                        elseif (
                                             $bolehTambahSkrining
                                             && !$puskesmasBelumTerhubung
                                         ):

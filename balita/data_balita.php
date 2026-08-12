@@ -19,6 +19,31 @@ $roleAktif = $_SESSION["role"] ?? "";
 $idUserAktif = (int) ($_SESSION["id_user"] ?? 0);
 
 $cari = trim($_GET["cari"] ?? "");
+$filterJenisKelamin = trim($_GET["jenis_kelamin"] ?? "");
+$filterBulanLahir = trim($_GET["bulan_lahir"] ?? "");
+$filterTahunLahir = trim($_GET["tahun_lahir"] ?? "");
+$urutan = trim($_GET["urutan"] ?? "terbaru");
+
+$jenisKelaminValid = ["Laki-laki", "Perempuan"];
+if (!in_array($filterJenisKelamin, $jenisKelaminValid, true)) {
+    $filterJenisKelamin = "";
+}
+
+$bulanLahirAngka = (int) $filterBulanLahir;
+if ($filterBulanLahir === "" || $bulanLahirAngka < 1 || $bulanLahirAngka > 12) {
+    $filterBulanLahir = "";
+    $bulanLahirAngka = 0;
+}
+
+$tahunLahirAngka = (int) $filterTahunLahir;
+if ($filterTahunLahir === "" || $tahunLahirAngka < 1900 || $tahunLahirAngka > 2100) {
+    $filterTahunLahir = "";
+    $tahunLahirAngka = 0;
+}
+
+if (!in_array($urutan, ["terbaru", "terlama"], true)) {
+    $urutan = "terbaru";
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -130,7 +155,39 @@ $sql = "SELECT
             ot.pendidikan_ibu,
             ot.pekerjaan_ibu,
             b.nama_posyandu,
-            p.nama_puskesmas
+            p.nama_puskesmas,
+            (
+                EXISTS (
+                    SELECT 1
+                    FROM pengukuran_antropometri AS pa_lock
+                    WHERE pa_lock.id_balita = b.id_balita
+                    LIMIT 1
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM skrining_awal AS sa_lock
+                    WHERE sa_lock.id_balita = b.id_balita
+                    LIMIT 1
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM riwayat_kelahiran AS rk_lock
+                    WHERE rk_lock.id_balita = b.id_balita
+                    LIMIT 1
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM riwayat_kesehatan AS rh_lock
+                    WHERE rh_lock.id_balita = b.id_balita
+                    LIMIT 1
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM konsultasi AS k_lock
+                    WHERE k_lock.id_balita = b.id_balita
+                    LIMIT 1
+                )
+            ) AS data_terpakai
         FROM balita AS b
         LEFT JOIN puskesmas AS p
             ON b.id_puskesmas = p.id_puskesmas
@@ -194,7 +251,31 @@ if ($cari !== "") {
     }
 }
 
-$sql .= " ORDER BY b.id_balita DESC ";
+/* Filter jenis kelamin */
+if ($filterJenisKelamin !== "") {
+    $sql .= " AND b.jenis_kelamin = ? ";
+    $tipe .= "s";
+    $parameter[] = $filterJenisKelamin;
+}
+
+/* Filter bulan lahir memakai teks tanggal agar aman untuk data tanggal lama. */
+if ($bulanLahirAngka > 0) {
+    $sql .= " AND SUBSTRING(CAST(b.tanggal_lahir AS CHAR), 6, 2) = ? ";
+    $tipe .= "s";
+    $parameter[] = str_pad((string) $bulanLahirAngka, 2, "0", STR_PAD_LEFT);
+}
+
+/* Filter tahun lahir */
+if ($tahunLahirAngka > 0) {
+    $sql .= " AND LEFT(CAST(b.tanggal_lahir AS CHAR), 4) = ? ";
+    $tipe .= "s";
+    $parameter[] = (string) $tahunLahirAngka;
+}
+
+/* Urutan data menggunakan ID sebagai urutan data masuk. */
+$sql .= $urutan === "terlama"
+    ? " ORDER BY b.id_balita ASC "
+    : " ORDER BY b.id_balita DESC ";
 
 $stmt = mysqli_prepare(
     $conn,
@@ -221,6 +302,53 @@ if (!mysqli_stmt_execute($stmt)) {
 }
 
 $query = mysqli_stmt_get_result($stmt);
+
+/*
+|--------------------------------------------------------------------------
+| Daftar tahun lahir untuk filter
+|--------------------------------------------------------------------------
+*/
+
+$tahunLahirTersedia = [];
+$sqlTahun = "SELECT DISTINCT LEFT(CAST(b.tanggal_lahir AS CHAR), 4) AS tahun_lahir
+             FROM balita AS b
+             WHERE b.tanggal_lahir IS NOT NULL
+             AND CHAR_LENGTH(CAST(b.tanggal_lahir AS CHAR)) >= 4";
+$tipeTahun = "";
+$parameterTahun = [];
+
+if ($roleAktif === "orang_tua") {
+    $sqlTahun .= " AND b.id_user = ? ";
+    $tipeTahun .= "i";
+    $parameterTahun[] = $idUserAktif;
+} elseif (in_array($roleAktif, $roleTerikatPuskesmas, true)) {
+    if ($puskesmasBelumTerhubung) {
+        $sqlTahun .= " AND 1 = 0 ";
+    } else {
+        $sqlTahun .= " AND b.id_puskesmas = ? ";
+        $tipeTahun .= "i";
+        $parameterTahun[] = $idPuskesmasAkun;
+    }
+} elseif ($roleAktif !== "dinkes") {
+    $sqlTahun .= " AND 1 = 0 ";
+}
+
+$sqlTahun .= " ORDER BY tahun_lahir DESC ";
+$stmtTahun = mysqli_prepare($conn, $sqlTahun);
+if ($stmtTahun) {
+    if ($parameterTahun !== []) {
+        mysqli_stmt_bind_param($stmtTahun, $tipeTahun, ...$parameterTahun);
+    }
+    mysqli_stmt_execute($stmtTahun);
+    $hasilTahun = mysqli_stmt_get_result($stmtTahun);
+    while ($rowTahun = mysqli_fetch_assoc($hasilTahun)) {
+        $tahun = (int) ($rowTahun["tahun_lahir"] ?? 0);
+        if ($tahun >= 1900 && $tahun <= 2100) {
+            $tahunLahirTersedia[] = $tahun;
+        }
+    }
+    mysqli_stmt_close($stmtTahun);
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -447,56 +575,81 @@ require_once "../includes/navbar.php";
                     class="row g-2 mb-3"
                 >
 
-                    <div class="col-12 col-lg-8">
-
+                    <div class="col-12 col-xl-4">
                         <div class="input-group">
-
                             <span class="input-group-text">
                                 <i class="bi bi-search"></i>
                             </span>
-
                             <input
                                 type="text"
                                 name="cari"
                                 class="form-control"
-                                placeholder="Cari NIK, nama balita, Profil Ibu, Posyandu, atau Puskesmas"
-                                value="<?= htmlspecialchars(
-                                    $cari,
-                                    ENT_QUOTES,
-                                    "UTF-8"
-                                ); ?>"
+                                placeholder="Cari NIK, nama balita, ibu, Posyandu..."
+                                value="<?= htmlspecialchars($cari, ENT_QUOTES, "UTF-8"); ?>"
                             >
-
                         </div>
+                    </div>
 
+                    <div class="col-6 col-md-3 col-xl-2">
+                        <select name="jenis_kelamin" class="form-select">
+                            <option value="">Semua JK</option>
+                            <option value="Laki-laki" <?= $filterJenisKelamin === "Laki-laki" ? "selected" : ""; ?>>Laki-laki</option>
+                            <option value="Perempuan" <?= $filterJenisKelamin === "Perempuan" ? "selected" : ""; ?>>Perempuan</option>
+                        </select>
+                    </div>
+
+                    <div class="col-6 col-md-3 col-xl-2">
+                        <select name="bulan_lahir" class="form-select">
+                            <option value="">Semua Bulan</option>
+                            <?php
+                            $namaBulan = [
+                                1 => "Januari", 2 => "Februari", 3 => "Maret",
+                                4 => "April", 5 => "Mei", 6 => "Juni",
+                                7 => "Juli", 8 => "Agustus", 9 => "September",
+                                10 => "Oktober", 11 => "November", 12 => "Desember"
+                            ];
+                            foreach ($namaBulan as $nomorBulan => $labelBulan):
+                            ?>
+                                <option value="<?= $nomorBulan; ?>" <?= $bulanLahirAngka === $nomorBulan ? "selected" : ""; ?>>
+                                    <?= $labelBulan; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="col-6 col-md-3 col-xl-2">
+                        <select name="tahun_lahir" class="form-select">
+                            <option value="">Semua Tahun</option>
+                            <?php foreach ($tahunLahirTersedia as $tahun): ?>
+                                <option value="<?= $tahun; ?>" <?= $tahunLahirAngka === $tahun ? "selected" : ""; ?>>
+                                    <?= $tahun; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="col-6 col-md-3 col-xl-2">
+                        <select name="urutan" class="form-select">
+                            <option value="terbaru" <?= $urutan === "terbaru" ? "selected" : ""; ?>>Terbaru</option>
+                            <option value="terlama" <?= $urutan === "terlama" ? "selected" : ""; ?>>Terlama</option>
+                        </select>
                     </div>
 
                     <div class="col-6 col-lg-2">
-
-                        <button
-                            type="submit"
-                            class="btn btn-primary w-100"
-                        >
-                            <i class="bi bi-search"></i>
-                            Cari
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-funnel"></i>
+                            Filter
                         </button>
-
                     </div>
 
                     <div class="col-6 col-lg-2">
-
-                        <a
-                            href="data_balita.php"
-                            class="btn btn-light w-100"
-                        >
+                        <a href="data_balita.php" class="btn btn-light w-100">
                             <i class="bi bi-arrow-counterclockwise"></i>
                             Reset
                         </a>
-
                     </div>
 
                 </form>
-
 
 
 
@@ -754,31 +907,46 @@ require_once "../includes/navbar.php";
                                                         Edit
                                                     </a>
 
-                                                    <form
-                                                        action="hapus_balita.php"
-                                                        method="POST"
-                                                        class="d-inline
-                                                        form-hapus-balita"
-                                                        data-nama="<?= htmlspecialchars(
-                                                            $d["nama_balita"],
-                                                            ENT_QUOTES,
-                                                            "UTF-8"
-                                                        ); ?>"
-                                                    >
-                                                        <input
-                                                            type="hidden"
-                                                            name="id_balita"
-                                                            value="<?= (int) $d["id_balita"]; ?>"
-                                                        >
+                                                    <?php if ((int) ($d["data_terpakai"] ?? 0) === 1): ?>
 
                                                         <button
-                                                            type="submit"
-                                                            class="btn btn-danger btn-sm"
+                                                            type="button"
+                                                            class="btn btn-light btn-sm"
+                                                            disabled
+                                                            title="Data balita sudah terhubung dengan data pelayanan dan tidak dapat dihapus."
                                                         >
-                                                            <i class="bi bi-trash"></i>
-                                                            Hapus
+                                                            <i class="bi bi-lock"></i>
+                                                            Data Terpakai
                                                         </button>
-                                                    </form>
+
+                                                    <?php else: ?>
+
+                                                        <form
+                                                            action="hapus_balita.php"
+                                                            method="POST"
+                                                            class="d-inline form-hapus-balita"
+                                                            data-nama="<?= htmlspecialchars(
+                                                                $d["nama_balita"],
+                                                                ENT_QUOTES,
+                                                                "UTF-8"
+                                                            ); ?>"
+                                                        >
+                                                            <input
+                                                                type="hidden"
+                                                                name="id_balita"
+                                                                value="<?= (int) $d["id_balita"]; ?>"
+                                                            >
+
+                                                            <button
+                                                                type="submit"
+                                                                class="btn btn-danger btn-sm"
+                                                            >
+                                                                <i class="bi bi-trash"></i>
+                                                                Hapus
+                                                            </button>
+                                                        </form>
+
+                                                    <?php endif; ?>
 
                                                 <?php endif; ?>
 
@@ -836,6 +1004,23 @@ require_once "../includes/navbar.php";
 <?php
 
 mysqli_stmt_close($stmt);
+
+?>
+<script>
+document.querySelectorAll(".form-hapus-balita").forEach(function (form) {
+    form.addEventListener("submit", function (event) {
+        const nama = form.dataset.nama || "balita ini";
+        const setuju = window.confirm(
+            "Hapus " + nama + "?\n\n" +
+            "Data ini belum digunakan pada pelayanan lain. Tindakan ini tidak dapat dibatalkan."
+        );
+        if (!setuju) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
+<?php
 
 require_once "../includes/footer.php";
 
