@@ -371,7 +371,7 @@ require_once "../includes/navbar.php";
                     <?php endif; ?>
 
                     <a
-                        href="riwayat_kesehatan.php"
+                        href="riwayat_kesehatan.php?id_balita=<?= (int) $data["id_balita"]; ?>"
                         class="btn btn-secondary btn-sm"
                     >
                         <i class="bi bi-arrow-left"></i>

@@ -20,6 +20,20 @@ $puskesmasBelumTerhubung = false;
 
 $idBalita = "";
 
+$idBalitaDariUrl = filter_input(
+    INPUT_GET,
+    "id_balita",
+    FILTER_VALIDATE_INT
+);
+
+if ($idBalitaDariUrl) {
+    $idBalita =
+        (int) $idBalitaDariUrl;
+}
+
+$balitaDikunciDariUrl = false;
+$dataBalitaDikunci = null;
+
 $riwayatPenyakit = "";
 $riwayatImunisasi = "";
 $riwayatPerawatan = "";
@@ -167,6 +181,72 @@ $jumlahBalita =
     $queryBalita
         ? mysqli_num_rows($queryBalita)
         : 0;
+
+/*
+|--------------------------------------------------------------------------
+| Balita dari tombol Tambah Riwayat
+|--------------------------------------------------------------------------
+|
+| Jika halaman dibuka dari tombol Tambah Riwayat pada satu balita,
+| identitas balita dikunci agar catatan tidak salah masuk ke anak lain.
+|
+*/
+
+if (
+    $idBalita
+    && !$puskesmasBelumTerhubung
+) {
+
+    $stmtBalitaDikunci = mysqli_prepare(
+        $conn,
+        "SELECT
+            id_balita,
+            nik_balita,
+            nama_balita
+         FROM balita
+         WHERE id_balita = ?
+           AND id_puskesmas = ?
+         LIMIT 1"
+    );
+
+    if ($stmtBalitaDikunci) {
+
+        mysqli_stmt_bind_param(
+            $stmtBalitaDikunci,
+            "ii",
+            $idBalita,
+            $idPuskesmasAktif
+        );
+
+        mysqli_stmt_execute(
+            $stmtBalitaDikunci
+        );
+
+        $hasilBalitaDikunci =
+            mysqli_stmt_get_result(
+                $stmtBalitaDikunci
+            );
+
+        $dataBalitaDikunci =
+            mysqli_fetch_assoc(
+                $hasilBalitaDikunci
+            );
+
+        mysqli_stmt_close(
+            $stmtBalitaDikunci
+        );
+
+        if ($dataBalitaDikunci) {
+            $balitaDikunciDariUrl = true;
+        } elseif (
+            $_SERVER["REQUEST_METHOD"]
+            !== "POST"
+        ) {
+            $idBalita = "";
+        }
+    }
+}
+
 
 /*
 |--------------------------------------------------------------------------
@@ -498,7 +578,9 @@ if (
                 );
 
                 header(
-                    "Location: riwayat_kesehatan.php?pesan=tambah_berhasil"
+                    "Location: riwayat_kesehatan.php?id_balita="
+                    . (int) $idBalita
+                    . "&pesan=tambah_berhasil"
                 );
                 exit;
             }
@@ -566,7 +648,9 @@ require_once "../includes/navbar.php";
                     <?php endif; ?>
 
                     <a
-                        href="riwayat_kesehatan.php"
+                        href="<?= $idBalita
+                            ? "riwayat_kesehatan.php?id_balita=" . (int) $idBalita
+                            : "riwayat_kesehatan.php"; ?>"
                         class="btn btn-secondary btn-sm"
                     >
                         <i class="bi bi-arrow-left"></i>
@@ -671,63 +755,120 @@ require_once "../includes/navbar.php";
 
                         <div class="col-12">
 
-                            <label
-                                for="id_balita"
-                                class="form-label"
-                            >
-                                Nama Balita
-                            </label>
+                            <?php if (
+                                $balitaDikunciDariUrl
+                                && $dataBalitaDikunci
+                            ): ?>
 
-                            <select
-                                id="id_balita"
-                                name="id_balita"
-                                class="form-select"
-                            >
+                                <label class="form-label">
+                                    Nama Balita
+                                </label>
 
-                                <option value="">
-                                    -- Pilih Balita --
-                                </option>
+                                <input
+                                    type="hidden"
+                                    name="id_balita"
+                                    value="<?= (int) $dataBalitaDikunci["id_balita"]; ?>"
+                                >
 
-                                <?php while (
-                                    $balita =
-                                        mysqli_fetch_assoc(
-                                            $queryBalita
-                                        )
-                                ): ?>
+                                <div class="detail-item">
 
-                                    <option
-                                        value="<?= (int)
-                                            $balita[
-                                                "id_balita"
-                                            ]; ?>"
-                                        <?= (int) $idBalita ===
-                                            (int) $balita[
-                                                "id_balita"
-                                            ]
-                                            ? "selected"
-                                            : ""; ?>
-                                    >
-                                        <?= htmlspecialchars(
-                                            $balita[
-                                                "nama_balita"
-                                            ]
-                                            . " - "
-                                            . $balita[
-                                                "nik_balita"
-                                            ],
-                                            ENT_QUOTES,
-                                            "UTF-8"
-                                        ); ?>
+                                    <span class="detail-label">
+                                        Balita Pemilik Riwayat
+                                    </span>
+
+                                    <div class="detail-value">
+
+                                        <strong>
+                                            <?= htmlspecialchars(
+                                                $dataBalitaDikunci[
+                                                    "nama_balita"
+                                                ],
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ); ?>
+                                        </strong>
+
+                                        <span class="text-muted">
+                                            —
+                                            <?= htmlspecialchars(
+                                                $dataBalitaDikunci[
+                                                    "nik_balita"
+                                                ],
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ); ?>
+                                        </span>
+
+                                    </div>
+
+                                </div>
+
+                                <div class="form-text">
+                                    Balita dikunci karena penambahan
+                                    dilakukan dari halaman riwayat anak.
+                                </div>
+
+                            <?php else: ?>
+
+                                <label
+                                    for="id_balita"
+                                    class="form-label"
+                                >
+                                    Nama Balita
+                                </label>
+
+                                <select
+                                    id="id_balita"
+                                    name="id_balita"
+                                    class="form-select"
+                                >
+
+                                    <option value="">
+                                        -- Pilih Balita --
                                     </option>
 
-                                <?php endwhile; ?>
+                                    <?php while (
+                                        $balita =
+                                            mysqli_fetch_assoc(
+                                                $queryBalita
+                                            )
+                                    ): ?>
 
-                            </select>
+                                        <option
+                                            value="<?= (int)
+                                                $balita[
+                                                    "id_balita"
+                                                ]; ?>"
+                                            <?= (int) $idBalita ===
+                                                (int) $balita[
+                                                    "id_balita"
+                                                ]
+                                                ? "selected"
+                                                : ""; ?>
+                                        >
+                                            <?= htmlspecialchars(
+                                                $balita[
+                                                    "nama_balita"
+                                                ]
+                                                . " - "
+                                                . $balita[
+                                                    "nik_balita"
+                                                ],
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            ); ?>
+                                        </option>
 
-                            <div class="form-text">
-                                Pilih balita yang akan
-                                dilengkapi riwayat kesehatannya.
-                            </div>
+                                    <?php endwhile; ?>
+
+                                </select>
+
+                                <div class="form-text">
+                                    Pilih balita yang akan
+                                    dilengkapi riwayat kesehatannya.
+                                </div>
+
+                            <?php endif; ?>
 
                         </div>
 
@@ -1059,7 +1200,9 @@ require_once "../includes/navbar.php";
                         </button>
 
                         <a
-                            href="riwayat_kesehatan.php"
+                            href="<?= $idBalita
+                                ? "riwayat_kesehatan.php?id_balita=" . (int) $idBalita
+                                : "riwayat_kesehatan.php"; ?>"
                             class="btn btn-outline-secondary"
                         >
                             <i class="bi bi-x-circle"></i>

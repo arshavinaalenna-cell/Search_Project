@@ -493,7 +493,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 );
 
                 header(
-                    "Location: riwayat_kesehatan.php?pesan=edit_berhasil"
+                    "Location: riwayat_kesehatan.php?id_balita="
+                    . (int) $idBalita
+                    . "&pesan=edit_berhasil"
                 );
                 exit;
             }
@@ -555,7 +557,7 @@ require_once "../includes/navbar.php";
                     </span>
 
                     <a
-                        href="riwayat_kesehatan.php"
+                        href="riwayat_kesehatan.php?id_balita=<?= (int) $idBalita; ?>"
                         class="btn btn-secondary btn-sm"
                     >
                         <i class="bi bi-arrow-left"></i>

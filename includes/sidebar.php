@@ -177,7 +177,7 @@ $menuSidebar = [
             ]
         ],
         [
-            "nama" => "Skrining Awal",
+            "nama" => "Skrining",
             "ikon" => "◇",
             "url" => "../skrining/hasil_skrining.php",
             "halaman" => [
@@ -231,6 +231,7 @@ $menuSidebar = [
             "url" => "../kesehatan/riwayat_kesehatan.php",
             "halaman" => [
                 "riwayat_kesehatan.php",
+                "riwayat_balita.php",
                 "detail_kesehatan.php",
                 "tambah_kesehatan.php",
                 "edit_kesehatan.php"
@@ -298,6 +299,7 @@ $menuSidebar = [
             "url" => "../kesehatan/riwayat_kesehatan.php",
             "halaman" => [
                 "riwayat_kesehatan.php",
+                "riwayat_balita.php",
                 "detail_kesehatan.php"
             ]
         ],

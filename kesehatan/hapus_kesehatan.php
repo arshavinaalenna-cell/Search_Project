@@ -92,6 +92,13 @@ if (!$idRiwayat) {
     exit;
 }
 
+$idBalitaKembali = filter_input(
+    INPUT_POST,
+    "id_balita",
+    FILTER_VALIDATE_INT
+);
+
+
 /*
 |--------------------------------------------------------------------------
 | Memastikan data tersedia
@@ -100,7 +107,9 @@ if (!$idRiwayat) {
 
 $stmtCek = mysqli_prepare(
     $conn,
-    "SELECT rk.id_riwayat
+    "SELECT
+        rk.id_riwayat,
+        rk.id_balita
      FROM riwayat_kesehatan AS rk
      INNER JOIN balita AS b
         ON rk.id_balita = b.id_balita
@@ -136,6 +145,14 @@ if (!$dataRiwayat) {
     );
     exit;
 }
+
+$idBalitaKembali =
+    (int) (
+        $dataRiwayat["id_balita"]
+        ?? $idBalitaKembali
+        ?? 0
+    );
+
 
 /*
 |--------------------------------------------------------------------------
@@ -184,7 +201,9 @@ try {
 
     if ($jumlahTerhapus > 0) {
         header(
-            "Location: riwayat_kesehatan.php?pesan=hapus_berhasil"
+            "Location: riwayat_kesehatan.php?id_balita="
+            . (int) $idBalitaKembali
+            . "&pesan=hapus_berhasil"
         );
         exit;
     }
