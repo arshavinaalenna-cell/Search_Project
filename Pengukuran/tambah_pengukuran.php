@@ -495,10 +495,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                     if (
                         $umurBulan < 0
-                        || $umurBulan > 59
+                        || $umurBulan > 60
                     ) {
                         $error =
-                            "Umur balita pada tanggal pengukuran harus berada antara 0 sampai 59 bulan.";
+                            "Umur balita pada tanggal pengukuran harus berada antara 0 sampai 60 bulan.";
                     }
                 }
             }
@@ -1440,7 +1440,7 @@ document.addEventListener(
 
             if (
                 umurBulan < 0
-                || umurBulan > 59
+                || umurBulan > 60
             ) {
                 umurBulanInput.value = "";
                 return;

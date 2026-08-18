@@ -412,10 +412,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                     if (
                         $umurBulan < 0
-                        || $umurBulan > 59
+                        || $umurBulan > 60
                     ) {
                         $error =
-                            "Umur balita pada tanggal pengukuran harus berada antara 0 sampai 59 bulan.";
+                            "Umur balita pada tanggal pengukuran harus berada antara 0 sampai 60 bulan.";
                     }
                 }
             }
@@ -484,6 +484,44 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 mysqli_stmt_close(
                     $stmtUpdate
                 );
+
+                /*
+                |----------------------------------------------------------------
+                | Hapus hasil deteksi lama yang terkait pengukuran ini
+                |----------------------------------------------------------------
+                |
+                | Status stunting/gizi pada tabel hasil_deteksi dihitung dari
+                | nilai pengukuran SAAT dianalisis (lihat analisis_deteksi.php).
+                | Jika pengukuran diedit tetapi baris hasil_deteksi lama
+                | dibiarkan, aplikasi akan terus menampilkan status BASI yang
+                | dihitung dari angka sebelum diedit (contoh: masih "Normal"
+                | walau tinggi/berat badan sudah diubah menjadi nilai yang
+                | seharusnya Stunting Berat). Baris lama dihapus di sini agar
+                | status ikut mengikuti data terbaru begitu dianalisis ulang.
+                |----------------------------------------------------------------
+                */
+
+                $stmtHapusDeteksiLama = mysqli_prepare(
+                    $conn,
+                    "DELETE FROM hasil_deteksi
+                     WHERE id_pengukuran = ?"
+                );
+
+                if ($stmtHapusDeteksiLama) {
+                    mysqli_stmt_bind_param(
+                        $stmtHapusDeteksiLama,
+                        "i",
+                        $idPengukuran
+                    );
+
+                    mysqli_stmt_execute(
+                        $stmtHapusDeteksiLama
+                    );
+
+                    mysqli_stmt_close(
+                        $stmtHapusDeteksiLama
+                    );
+                }
 
                 header(
                     "Location: data_pengukuran.php?pesan=edit_berhasil"
@@ -1009,7 +1047,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (
             umurBulan < 0
-            || umurBulan > 59
+            || umurBulan > 60
         ) {
             umurBulanInput.value = "";
             return;
