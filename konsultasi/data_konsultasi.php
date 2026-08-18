@@ -593,6 +593,11 @@ switch ($pesan) {
         $isiPesan = "Keluhan berhasil dikirim. Ahli Gizi dapat menindaklanjuti konsultasi Anda.";
         break;
 
+    case "keluhan_ditambahkan":
+        $jenisAlert = "success";
+        $isiPesan = "Keluhan tambahan berhasil dikirim. Ahli Gizi dapat menindaklanjuti keluhan terbaru Anda.";
+        break;
+
     case "menunggu_orang_tua":
         $jenisAlert = "warning";
         $isiPesan = "Konsultasi sudah disetujui, tetapi Orang Tua belum mengisi keluhan atau hal yang ingin dikonsultasikan.";
@@ -1479,7 +1484,6 @@ require_once "../includes/navbar.php";
 
                                             <?php if (
                                                 $roleAktif === "orang_tua"
-                                                && $keluhanKosong
                                             ): ?>
 
                                                 <a
@@ -1487,7 +1491,9 @@ require_once "../includes/navbar.php";
                                                     class="btn btn-primary btn-sm"
                                                 >
                                                     <i class="bi bi-chat-heart"></i>
-                                                    Mulai Konsultasi
+                                                    <?= $keluhanKosong
+                                                        ? "Mulai Konsultasi"
+                                                        : "Tambah Keluhan"; ?>
                                                 </a>
 
                                             <?php endif; ?>

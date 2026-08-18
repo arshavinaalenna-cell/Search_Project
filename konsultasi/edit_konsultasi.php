@@ -4,6 +4,22 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+/*
+|--------------------------------------------------------------------------
+| Zona waktu aplikasi - WIB / Jakarta
+|--------------------------------------------------------------------------
+|
+| Penanda waktu pada tanggapan/tindak lanjut tambahan serta tanggal
+| selesai konsultasi mengikuti waktu Indonesia Barat (UTC+7), bukan
+| timezone bawaan server.
+|
+*/
+
+date_default_timezone_set("Asia/Jakarta");
+
+// Samakan timezone sesi MySQL jika ada query yang memakai NOW()/CURDATE().
+@mysqli_query($conn, "SET time_zone = '+07:00'");
+
 cekRole(["petugas_gizi"]);
 
 $judulHalaman = "Edit Konsultasi | Sistem Deteksi Stunting";
@@ -197,11 +213,26 @@ if (trim((string) ($dataKonsultasi["keluhan"] ?? "")) === "") {
 |--------------------------------------------------------------------------
 */
 
-$hasilKonsultasiForm =
-    $dataKonsultasi["hasil_konsultasi"] ?? "";
+/*
+|--------------------------------------------------------------------------
+| Nilai awal form
+|--------------------------------------------------------------------------
+|
+| hasil_konsultasi & tindak_lanjut disimpan sebagai riwayat yang bertumpuk
+| (seperti keluhan Orang Tua). Nilai dari database adalah RIWAYAT yang
+| sudah tersimpan (read-only), sedangkan form hanya berisi input baru
+| yang akan ditambahkan ke bawah riwayat tersebut.
+|
+*/
 
-$tindakLanjut =
-    $dataKonsultasi["tindak_lanjut"] ?? "";
+$hasilTersimpan =
+    trim((string) ($dataKonsultasi["hasil_konsultasi"] ?? ""));
+
+$tindakLanjutTersimpan =
+    trim((string) ($dataKonsultasi["tindak_lanjut"] ?? ""));
+
+$hasilBaru = "";
+$tindakLanjutBaru = "";
 
 $konsultasiSudahSelesai =
     strtolower(
@@ -220,15 +251,11 @@ if ($konsultasiSudahSelesai) {
     exit;
 }
 
-$belumDitanggapi = (
-    trim(
-        (string) $hasilKonsultasiForm
-    ) === ""
-);
+$belumDitanggapi = ($hasilTersimpan === "");
 
 $judulForm = $belumDitanggapi
     ? "Tanggapi Konsultasi"
-    : "Edit Hasil Konsultasi";
+    : "Tambah Tanggapan Konsultasi";
 
 $statusKonsultasi = $belumDitanggapi
     ? "Menunggu Tanggapan"
@@ -270,23 +297,63 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $aksiForm = "simpan_sementara";
     }
 
-    $hasilKonsultasiForm = trim(
-        $_POST["hasil_konsultasi"] ?? ""
+    $hasilBaru = trim(
+        $_POST["hasil_konsultasi_baru"] ?? ""
     );
 
-    $tindakLanjut = trim(
-        $_POST["tindak_lanjut"] ?? ""
+    $tindakLanjutBaru = trim(
+        $_POST["tindak_lanjut_baru"] ?? ""
     );
+
+    /*
+    |----------------------------------------------------------------
+    | Gabungkan tanggapan/tindak lanjut baru ke bawah riwayat lama
+    | (bukan menimpa), supaya riwayat tanggapan Ahli Gizi tetap utuh.
+    |----------------------------------------------------------------
+    */
+
+    $waktuTanggapan = date("d-m-Y H:i");
+
+    $hasilGabungan = $hasilTersimpan;
+
+    if ($hasilBaru !== "") {
+        $hasilGabungan =
+            $hasilTersimpan !== ""
+                ? $hasilTersimpan
+                    . "\n\n----------\n"
+                    . "Tanggapan tambahan (" . $waktuTanggapan . "):\n"
+                    . $hasilBaru
+                : $hasilBaru;
+    }
+
+    $tindakLanjutGabungan = $tindakLanjutTersimpan;
+
+    if ($tindakLanjutBaru !== "") {
+        $tindakLanjutGabungan =
+            $tindakLanjutTersimpan !== ""
+                ? $tindakLanjutTersimpan
+                    . "\n\n----------\n"
+                    . "Tindak lanjut tambahan (" . $waktuTanggapan . "):\n"
+                    . $tindakLanjutBaru
+                : $tindakLanjutBaru;
+    }
 
     if (
+        $aksiForm === "simpan_sementara"
+        && $hasilBaru === ""
+        && $tindakLanjutBaru === ""
+    ) {
+        $pesanError =
+            "Isi tanggapan atau tindak lanjut baru sebelum menyimpan.";
+    } elseif (
         $aksiForm === "selesaikan"
-        && $hasilKonsultasiForm === ""
+        && trim($hasilGabungan) === ""
     ) {
         $pesanError =
             "Hasil konsultasi wajib diisi sebelum konsultasi diselesaikan.";
     } elseif (
         $aksiForm === "selesaikan"
-        && $tindakLanjut === ""
+        && trim($tindakLanjutGabungan) === ""
     ) {
         $pesanError =
             "Tindak lanjut wajib diisi sebelum konsultasi diselesaikan.";
@@ -330,8 +397,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             mysqli_stmt_bind_param(
                 $stmtUpdate,
                 "ssssiii",
-                $hasilKonsultasiForm,
-                $tindakLanjut,
+                $hasilGabungan,
+                $tindakLanjutGabungan,
                 $statusBaru,
                 $statusBaru,
                 $idKonsultasi,
@@ -366,15 +433,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
-$belumDitanggapi = (
-    trim(
-        (string) $hasilKonsultasiForm
-    ) === ""
-);
+$belumDitanggapi = ($hasilTersimpan === "");
 
 $judulForm = $belumDitanggapi
     ? "Tanggapi Konsultasi"
-    : "Edit Hasil Konsultasi";
+    : "Tambah Tanggapan Konsultasi";
 
 $statusKonsultasi = $belumDitanggapi
     ? "Menunggu Tanggapan"
@@ -662,6 +725,58 @@ require_once "../includes/navbar.php";
 
             <div class="card-body">
 
+                <?php if ($hasilTersimpan !== "" || $tindakLanjutTersimpan !== ""): ?>
+
+                    <div class="row g-3 mb-3">
+
+                        <?php if ($hasilTersimpan !== ""): ?>
+
+                            <div class="col-12 col-lg-6">
+                                <div class="detail-item h-100">
+                                    <span class="detail-label">
+                                        Riwayat Hasil Konsultasi
+                                    </span>
+                                    <div class="detail-value">
+                                        <?= nl2br(
+                                            htmlspecialchars(
+                                                $hasilTersimpan,
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            )
+                                        ); ?>
+                                    </div>
+                                </div>
+                            </div>
+
+                        <?php endif; ?>
+
+                        <?php if ($tindakLanjutTersimpan !== ""): ?>
+
+                            <div class="col-12 col-lg-6">
+                                <div class="detail-item h-100">
+                                    <span class="detail-label">
+                                        Riwayat Tindak Lanjut
+                                    </span>
+                                    <div class="detail-value">
+                                        <?= nl2br(
+                                            htmlspecialchars(
+                                                $tindakLanjutTersimpan,
+                                                ENT_QUOTES,
+                                                "UTF-8"
+                                            )
+                                        ); ?>
+                                    </div>
+                                </div>
+                            </div>
+
+                        <?php endif; ?>
+
+                    </div>
+
+                    <hr>
+
+                <?php endif; ?>
+
                 <form method="POST">
 
                     <div class="row g-3">
@@ -669,28 +784,30 @@ require_once "../includes/navbar.php";
                         <div class="col-12 col-lg-6">
 
                             <label
-                                for="hasil_konsultasi"
+                                for="hasil_konsultasi_baru"
                                 class="form-label"
                             >
-                                Hasil Konsultasi
+                                <?= $hasilTersimpan !== ""
+                                    ? "Tambah Tanggapan Baru"
+                                    : "Hasil Konsultasi"; ?>
                             </label>
 
                             <textarea
-                                id="hasil_konsultasi"
-                                name="hasil_konsultasi"
+                                id="hasil_konsultasi_baru"
+                                name="hasil_konsultasi_baru"
                                 class="form-control"
                                 rows="6"
                                 placeholder="Tuliskan hasil pemeriksaan dan saran gizi"
-                                required
                             ><?= htmlspecialchars(
-                                $hasilKonsultasiForm,
+                                $hasilBaru,
                                 ENT_QUOTES,
                                 "UTF-8"
                             ); ?></textarea>
 
                             <div class="form-text">
-                                Catat hasil konsultasi, edukasi,
-                                atau saran gizi yang diberikan.
+                                <?= $hasilTersimpan !== ""
+                                    ? "Tanggapan ini akan ditambahkan ke bawah riwayat hasil konsultasi di atas."
+                                    : "Catat hasil konsultasi, edukasi, atau saran gizi yang diberikan."; ?>
                             </div>
 
                         </div>
@@ -698,28 +815,30 @@ require_once "../includes/navbar.php";
                         <div class="col-12 col-lg-6">
 
                             <label
-                                for="tindak_lanjut"
+                                for="tindak_lanjut_baru"
                                 class="form-label"
                             >
-                                Tindak Lanjut
+                                <?= $tindakLanjutTersimpan !== ""
+                                    ? "Tambah Tindak Lanjut Baru"
+                                    : "Tindak Lanjut"; ?>
                             </label>
 
                             <textarea
-                                id="tindak_lanjut"
-                                name="tindak_lanjut"
+                                id="tindak_lanjut_baru"
+                                name="tindak_lanjut_baru"
                                 class="form-control"
                                 rows="6"
                                 placeholder="Tuliskan rencana pemantauan atau tindakan berikutnya"
-                                required
                             ><?= htmlspecialchars(
-                                $tindakLanjut,
+                                $tindakLanjutBaru,
                                 ENT_QUOTES,
                                 "UTF-8"
                             ); ?></textarea>
 
                             <div class="form-text">
-                                Catat rencana pemantauan,
-                                kunjungan ulang, atau tindakan berikutnya.
+                                <?= $tindakLanjutTersimpan !== ""
+                                    ? "Tindak lanjut ini akan ditambahkan ke bawah riwayat tindak lanjut di atas."
+                                    : "Catat rencana pemantauan, kunjungan ulang, atau tindakan berikutnya."; ?>
                             </div>
 
                         </div>
@@ -746,6 +865,7 @@ require_once "../includes/navbar.php";
                             name="aksi"
                             value="selesaikan"
                             class="btn btn-success"
+                            formnovalidate
                             onclick="return confirm(
                                 'Selesaikan konsultasi? Setelah selesai, konsultasi akan dikunci dan masuk ke Riwayat Konsultasi.'
                             );"

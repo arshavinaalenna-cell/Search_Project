@@ -135,6 +135,7 @@ $stmt = mysqli_prepare(
         k.keluhan,
         k.hasil_konsultasi,
         k.tindak_lanjut,
+        k.status_konsultasi,
         b.nama_balita,
         b.nik_balita,
         b.nama_ibu,
@@ -259,9 +260,15 @@ $keluhanKosong = (
     trim((string) ($data["keluhan"] ?? "")) === ""
 );
 
+/*
+|--------------------------------------------------------------------------
+| Orang Tua boleh mengirim keluhan (awal maupun tambahan) selama
+| konsultasi masih aktif, yaitu selama Petugas Gizi belum menyelesaikan
+| konsultasi tersebut.
+|--------------------------------------------------------------------------
+*/
 $bolehMulaiKonsultasi = (
     $roleAktif === "orang_tua"
-    && $keluhanKosong
 );
 
 $hasilKosong = (
@@ -424,7 +431,9 @@ require_once "../includes/navbar.php";
                             class="btn btn-primary btn-sm"
                         >
                             <i class="bi bi-chat-heart"></i>
-                            Mulai Konsultasi
+                            <?= $keluhanKosong
+                                ? "Mulai Konsultasi"
+                                : "Tambah Keluhan"; ?>
                         </a>
 
                     <?php endif; ?>
@@ -725,8 +734,9 @@ require_once "../includes/navbar.php";
                             </div>
 
                             <div class="form-text mt-2">
-                                Keluhan merupakan pengajuan awal Orang Tua
-                                dan tidak dapat diubah setelah dikirim.
+                                <?= $konsultasiSelesai
+                                    ? "Konsultasi ini sudah diselesaikan Ahli Gizi, sehingga keluhan tidak dapat ditambah lagi."
+                                    : "Orang Tua dapat menambahkan keluhan lain selama konsultasi ini masih aktif (belum diselesaikan Ahli Gizi)."; ?>
                             </div>
 
                         </div>

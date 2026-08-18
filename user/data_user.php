@@ -74,6 +74,7 @@ $sql = "
         u.nama,
         u.username,
         u.role,
+        u.password,
         u.id_puskesmas,
         p.nama_puskesmas
     FROM pengguna u
@@ -478,6 +479,7 @@ require_once "../includes/navbar.php";
                             <?php if (mysqli_num_rows($queryPengguna) > 0): ?>
 
                                 <?php $nomor = 1; ?>
+                                <?php $modalDetailPengguna = ""; ?>
 
                                 <?php while ($pengguna = mysqli_fetch_assoc($queryPengguna)): ?>
 
@@ -553,6 +555,16 @@ require_once "../includes/navbar.php";
                                         <td>
                                             <div class="d-flex flex-wrap gap-2">
 
+                                                <button
+                                                    type="button"
+                                                    class="btn btn-info btn-sm"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#modalDetailUser<?= $idUser ?>"
+                                                >
+                                                    <i class="bi bi-eye"></i>
+                                                    Detail
+                                                </button>
+
                                                 <a
                                                     href="edit_user.php?id=<?= $idUser ?>"
                                                     class="btn btn-warning btn-sm"
@@ -599,6 +611,111 @@ require_once "../includes/navbar.php";
                                         </td>
                                     </tr>
 
+                                    <?php
+                                    /*
+                                    |------------------------------------------------------------
+                                    | Modal Detail Pengguna
+                                    |------------------------------------------------------------
+                                    |
+                                    | Ditampung dalam variabel dan dicetak setelah tabel selesai
+                                    | (di luar <table>) agar struktur HTML tetap valid.
+                                    |
+                                    */
+                                    ob_start();
+                                    ?>
+
+                                    <div
+                                        class="modal fade"
+                                        id="modalDetailUser<?= $idUser ?>"
+                                        tabindex="-1"
+                                        aria-labelledby="modalDetailUser<?= $idUser ?>Label"
+                                        aria-hidden="true"
+                                    >
+                                        <div class="modal-dialog modal-dialog-centered">
+                                            <div class="modal-content">
+
+                                                <div class="modal-header">
+                                                    <h5
+                                                        class="modal-title"
+                                                        id="modalDetailUser<?= $idUser ?>Label"
+                                                    >
+                                                        <i class="bi bi-person-badge me-1"></i>
+                                                        Detail Pengguna
+                                                    </h5>
+                                                    <button
+                                                        type="button"
+                                                        class="btn-close"
+                                                        data-bs-dismiss="modal"
+                                                        aria-label="Tutup"
+                                                    ></button>
+                                                </div>
+
+                                                <div class="modal-body">
+
+                                                    <div class="detail-item mb-3">
+                                                        <span class="detail-label">Nama Lengkap</span>
+                                                        <div class="detail-value"><?= $nama ?></div>
+                                                    </div>
+
+                                                    <div class="detail-item mb-3">
+                                                        <span class="detail-label">Username</span>
+                                                        <div class="detail-value"><?= $username ?></div>
+                                                    </div>
+
+                                                    <div class="detail-item mb-3">
+                                                        <span class="detail-label">Role</span>
+                                                        <div class="detail-value">
+                                                            <span class="badge badge-info">
+                                                                <?= htmlspecialchars($role, ENT_QUOTES, "UTF-8") ?>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="detail-item">
+                                                        <span class="detail-label">Password</span>
+                                                        <div class="detail-value">
+                                                            <span class="text-muted">
+                                                                &bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;
+                                                            </span>
+                                                        </div>
+                                                        <div class="form-text mt-1">
+                                                            <i class="bi bi-shield-lock me-1"></i>
+                                                            Password disimpan dalam bentuk terenkripsi (hash)
+                                                            demi keamanan, sehingga tidak dapat ditampilkan
+                                                            sebagai teks asli. Gunakan tombol
+                                                            <strong>Edit</strong> untuk mengatur password baru
+                                                            bagi pengguna ini.
+                                                        </div>
+                                                    </div>
+
+                                                </div>
+
+                                                <div class="modal-footer">
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-secondary btn-sm"
+                                                        data-bs-dismiss="modal"
+                                                    >
+                                                        Tutup
+                                                    </button>
+
+                                                    <a
+                                                        href="edit_user.php?id=<?= $idUser ?>"
+                                                        class="btn btn-warning btn-sm"
+                                                    >
+                                                        <i class="bi bi-pencil"></i>
+                                                        Edit
+                                                    </a>
+                                                </div>
+
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <?php
+                                    $modalDetailPengguna .= ob_get_clean();
+                                    ?>
+
                                     <?php $nomor++; ?>
 
                                 <?php endwhile; ?>
@@ -627,6 +744,10 @@ require_once "../includes/navbar.php";
                     </table>
 
                 </div>
+
+                <?php if (!empty($modalDetailPengguna)): ?>
+                    <?= $modalDetailPengguna; ?>
+                <?php endif; ?>
 
             </div>
 

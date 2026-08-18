@@ -4,6 +4,21 @@ require_once "../auth/session.php";
 require_once "../includes/cek_role.php";
 require_once "../config/koneksi.php";
 
+/*
+|--------------------------------------------------------------------------
+| Zona waktu aplikasi - WIB / Jakarta
+|--------------------------------------------------------------------------
+|
+| Penanda waktu pada keluhan tambahan mengikuti waktu Indonesia Barat
+| (UTC+7), bukan timezone bawaan server.
+|
+*/
+
+date_default_timezone_set("Asia/Jakarta");
+
+// Samakan timezone sesi MySQL jika ada query yang memakai NOW()/CURDATE().
+@mysqli_query($conn, "SET time_zone = '+07:00'");
+
 cekRole(["orang_tua"]);
 
 $judulHalaman = "Mulai Konsultasi | Sistem Deteksi Stunting";
@@ -32,6 +47,7 @@ $stmt = mysqli_prepare(
         k.keluhan,
         k.hasil_konsultasi,
         k.tindak_lanjut,
+        k.status_konsultasi,
         b.id_balita,
         b.nama_balita,
         b.nik_balita,
@@ -73,13 +89,29 @@ if (!$data) {
 
 $keluhanTersimpan = trim((string) ($data["keluhan"] ?? ""));
 
+$statusKonsultasiSaatIni =
+    strtolower(
+        trim(
+            (string) ($data["status_konsultasi"] ?? "aktif")
+        )
+    );
+
+$konsultasiSudahSelesai = $statusKonsultasiSaatIni === "selesai";
+
+$sudahPernahMengirimKeluhan = $keluhanTersimpan !== "";
+
 /*
 |--------------------------------------------------------------------------
-| Keluhan hanya boleh disampaikan sekali setelah tiket disetujui
+| Keluhan boleh dikirim berkali-kali selama Ahli Gizi belum menyelesaikan
+| konsultasi. Setelah konsultasi berstatus "selesai", tiket dikunci dan
+| Orang Tua tidak dapat lagi menambahkan keluhan.
 |--------------------------------------------------------------------------
 */
-if ($keluhanTersimpan !== "" && $_SERVER["REQUEST_METHOD"] !== "POST") {
-    header("Location: detail_konsultasi.php?id=" . $idKonsultasi);
+if ($konsultasiSudahSelesai) {
+    header(
+        "Location: detail_konsultasi.php?id=" . $idKonsultasi
+        . "&kembali=riwayat"
+    );
     exit;
 }
 
@@ -93,6 +125,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 
     if ($pesanError === "") {
+
+        /*
+        |----------------------------------------------------------------
+        | Jika sudah pernah mengirim keluhan sebelumnya, keluhan baru
+        | ditambahkan ke bawah keluhan lama (bukan menimpa) supaya
+        | riwayat keluhan Orang Tua tetap tersimpan.
+        |----------------------------------------------------------------
+        */
+        if ($sudahPernahMengirimKeluhan) {
+            $keluhanGabungan =
+                $keluhanTersimpan
+                . "\n\n----------\n"
+                . "Keluhan tambahan (" . date("d-m-Y H:i") . "):\n"
+                . $keluhan;
+        } else {
+            $keluhanGabungan = $keluhan;
+        }
+
         $stmtUpdate = mysqli_prepare(
             $conn,
             "UPDATE konsultasi k
@@ -107,7 +157,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
              AND b.id_user = ?
              AND k.sumber_pengajuan = 'ahli_gizi'
              AND hd.keputusan_konsultasi = 'Perlu konsultasi'
-             AND (k.keluhan IS NULL OR TRIM(k.keluhan) = '')"
+             AND LOWER(TRIM(COALESCE(k.status_konsultasi, 'aktif'))) <> 'selesai'"
         );
 
         if (!$stmtUpdate) {
@@ -116,7 +166,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             mysqli_stmt_bind_param(
                 $stmtUpdate,
                 "sii",
-                $keluhan,
+                $keluhanGabungan,
                 $idKonsultasi,
                 $idUserAktif
             );
@@ -127,13 +177,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             if ($jumlahBerubah > 0) {
                 header(
-                    "Location: data_konsultasi.php?pesan=keluhan_berhasil"
+                    "Location: data_konsultasi.php?pesan="
+                    . ($sudahPernahMengirimKeluhan
+                        ? "keluhan_ditambahkan"
+                        : "keluhan_berhasil")
                 );
                 exit;
             }
 
             $pesanError =
-                "Konsultasi tidak dapat dimulai. Tiket mungkin sudah digunakan atau keputusan Ahli Gizi telah berubah.";
+                "Keluhan tidak dapat dikirim. Konsultasi mungkin sudah diselesaikan oleh Ahli Gizi atau keputusan Ahli Gizi telah berubah.";
         }
     }
 }
@@ -154,10 +207,14 @@ require_once "../includes/navbar.php";
                 <div>
                     <h4 class="mb-1">
                         <i class="bi bi-chat-heart me-2"></i>
-                        Mulai Konsultasi Ahli Gizi
+                        <?= $sudahPernahMengirimKeluhan
+                            ? "Tambah Keluhan Konsultasi"
+                            : "Mulai Konsultasi Ahli Gizi"; ?>
                     </h4>
                     <small class="text-muted">
-                        Konsultasi ini tersedia karena Ahli Gizi telah menetapkan anak perlu konsultasi.
+                        <?= $sudahPernahMengirimKeluhan
+                            ? "Konsultasi masih berjalan. Anda dapat menambahkan keluhan lain selama Ahli Gizi belum menyelesaikan konsultasi ini."
+                            : "Konsultasi ini tersedia karena Ahli Gizi telah menetapkan anak perlu konsultasi."; ?>
                     </small>
                 </div>
 
@@ -182,6 +239,21 @@ require_once "../includes/navbar.php";
                     <div class="alert alert-danger">
                         <i class="bi bi-exclamation-circle me-1"></i>
                         <?= htmlspecialchars($pesanError, ENT_QUOTES, "UTF-8"); ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($sudahPernahMengirimKeluhan): ?>
+                    <div class="detail-item mb-4">
+                        <span class="detail-label">Keluhan Sebelumnya</span>
+                        <div class="detail-value">
+                            <?= nl2br(
+                                htmlspecialchars(
+                                    $keluhanTersimpan,
+                                    ENT_QUOTES,
+                                    "UTF-8"
+                                )
+                            ); ?>
+                        </div>
                     </div>
                 <?php endif; ?>
 
@@ -224,7 +296,9 @@ require_once "../includes/navbar.php";
                 <form method="POST">
                     <div class="form-group">
                         <label for="keluhan" class="form-label">
-                            Keluhan / Hal yang Ingin Dikonsultasikan
+                            <?= $sudahPernahMengirimKeluhan
+                                ? "Keluhan Tambahan"
+                                : "Keluhan / Hal yang Ingin Dikonsultasikan"; ?>
                             <span class="text-danger">*</span>
                         </label>
 
@@ -238,14 +312,18 @@ require_once "../includes/navbar.php";
                         ><?= htmlspecialchars($keluhan, ENT_QUOTES, "UTF-8"); ?></textarea>
 
                         <div class="form-text">
-                            Setelah dikirim, Ahli Gizi akan dapat memberikan hasil konsultasi dan tindak lanjut.
+                            <?= $sudahPernahMengirimKeluhan
+                                ? "Keluhan tambahan ini akan ditambahkan ke keluhan sebelumnya dan tetap dapat dikirim selama konsultasi belum diselesaikan Ahli Gizi."
+                                : "Setelah dikirim, Ahli Gizi akan dapat memberikan hasil konsultasi dan tindak lanjut."; ?>
                         </div>
                     </div>
 
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-send"></i>
-                            Mulai Konsultasi
+                            <?= $sudahPernahMengirimKeluhan
+                                ? "Kirim Keluhan Tambahan"
+                                : "Mulai Konsultasi"; ?>
                         </button>
 
                         <a href="data_konsultasi.php" class="btn btn-light">
