@@ -147,6 +147,65 @@ function amanLaporan($nilai): string
 
 /*
 |--------------------------------------------------------------------------
+| Tingkat risiko status stunting (untuk membandingkan antarbulan)
+|--------------------------------------------------------------------------
+|
+| Mengubah teks status_stunting menjadi angka level risiko supaya bisa
+| dibandingkan: 0 = Normal, 1 = Risiko Stunting, 2 = Stunting,
+| 3 = Stunting Berat. Mengembalikan -1 jika teksnya tidak dikenali,
+| supaya baris tersebut tidak ikut dihitung sebagai membaik/memburuk.
+|
+*/
+
+function tingkatRisikoLaporan($status): int
+{
+    $status = strtolower(trim((string) $status));
+
+    if (
+        in_array(
+            $status,
+            ["risiko rendah", "normal", "normal/sehat", "tidak stunting"],
+            true
+        )
+    ) {
+        return 0;
+    }
+
+    if (
+        in_array(
+            $status,
+            ["risiko sedang", "risiko stunting", "pendek"],
+            true
+        )
+    ) {
+        return 1;
+    }
+
+    if (
+        in_array(
+            $status,
+            ["stunting", "risiko tinggi"],
+            true
+        )
+    ) {
+        return 2;
+    }
+
+    if (
+        in_array(
+            $status,
+            ["stunting berat", "sangat pendek", "severely stunted"],
+            true
+        )
+    ) {
+        return 3;
+    }
+
+    return -1;
+}
+
+/*
+|--------------------------------------------------------------------------
 | Memvalidasi tanggal
 |--------------------------------------------------------------------------
 */
@@ -602,6 +661,47 @@ $totalBelumDiverifikasi = 0;
 
 /*
 |--------------------------------------------------------------------------
+| Riwayat perubahan status stunting (dibanding pemeriksaan sebelumnya)
+|--------------------------------------------------------------------------
+|
+| Untuk tiap balita pada laporan, dicari SATU catatan hasil_deteksi
+| miliknya yang paling baru SEBELUM catatan yang sedang ditampilkan
+| (di luar rentang filter tanggal yang aktif), lalu dibandingkan
+| tingkat risikonya. Dengan begitu laporan tidak hanya menampilkan
+| status terbaru, tapi juga tahu apakah anak tersebut membaik,
+| memburuk, atau tetap dibanding posyandu sebelumnya.
+|
+*/
+
+$jumlahMembaik = 0;
+$jumlahMemburuk = 0;
+$jumlahTetap = 0;
+$jumlahPertamaKali = 0;
+$rekapPerubahanPerBulan = [];
+
+$sqlSebelumnya = "
+    SELECT hd_prev.status_stunting
+    FROM hasil_deteksi AS hd_prev
+    INNER JOIN pengukuran_antropometri AS pa_prev
+        ON hd_prev.id_pengukuran = pa_prev.id_pengukuran
+    WHERE pa_prev.id_balita = ?
+    AND (
+        hd_prev.tanggal_deteksi < ?
+        OR (
+            hd_prev.tanggal_deteksi = ?
+            AND hd_prev.id_deteksi < ?
+        )
+    )
+    ORDER BY
+        hd_prev.tanggal_deteksi DESC,
+        hd_prev.id_deteksi DESC
+    LIMIT 1
+";
+
+$stmtSebelumnya = mysqli_prepare($conn, $sqlSebelumnya);
+
+/*
+|--------------------------------------------------------------------------
 | Data agregasi untuk grafik
 |--------------------------------------------------------------------------
 |
@@ -616,8 +716,6 @@ $grafikTrenBulanan = [];
 while (
     $data = mysqli_fetch_assoc($resultLaporan)
 ) {
-    $dataLaporan[] = $data;
-
     $totalDeteksi++;
 
     $status = strtolower(
@@ -760,9 +858,94 @@ while (
             ]++;
         }
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Bandingkan dengan pemeriksaan sebelumnya (jika ada)
+    |--------------------------------------------------------------------------
+    */
+
+    $data["status_perubahan"] = "Pertama Kali";
+    $data["kelas_perubahan"] = "badge-secondary";
+
+    if ($stmtSebelumnya) {
+
+        $idBalitaSekarang = (int) ($data["id_balita"] ?? 0);
+        $idDeteksiSekarang = (int) ($data["id_deteksi"] ?? 0);
+        $tanggalDeteksiSekarang = (string) ($data["tanggal_deteksi"] ?? "");
+
+        mysqli_stmt_bind_param(
+            $stmtSebelumnya,
+            "issi",
+            $idBalitaSekarang,
+            $tanggalDeteksiSekarang,
+            $tanggalDeteksiSekarang,
+            $idDeteksiSekarang
+        );
+
+        mysqli_stmt_execute($stmtSebelumnya);
+
+        $hasilSebelumnya = mysqli_stmt_get_result($stmtSebelumnya);
+        $rowSebelumnya = $hasilSebelumnya
+            ? mysqli_fetch_assoc($hasilSebelumnya)
+            : null;
+
+        if ($rowSebelumnya) {
+
+            $tingkatSekarang = tingkatRisikoLaporan($data["status_stunting"] ?? "");
+            $tingkatSebelumnya = tingkatRisikoLaporan($rowSebelumnya["status_stunting"] ?? "");
+
+            if ($tingkatSekarang >= 0 && $tingkatSebelumnya >= 0) {
+
+                if ($tingkatSekarang < $tingkatSebelumnya) {
+                    $data["status_perubahan"] = "Membaik";
+                    $data["kelas_perubahan"] = "badge-success";
+                    $jumlahMembaik++;
+                } elseif ($tingkatSekarang > $tingkatSebelumnya) {
+                    $data["status_perubahan"] = "Memburuk";
+                    $data["kelas_perubahan"] = "badge-danger";
+                    $jumlahMemburuk++;
+                } else {
+                    $data["status_perubahan"] = "Tetap";
+                    $data["kelas_perubahan"] = "badge-secondary";
+                    $jumlahTetap++;
+                }
+
+                $bulanPerubahan = $tanggalDeteksiSekarang !== ""
+                    ? date("Y-m", strtotime($tanggalDeteksiSekarang))
+                    : "Tidak diketahui";
+
+                if (!isset($rekapPerubahanPerBulan[$bulanPerubahan])) {
+                    $rekapPerubahanPerBulan[$bulanPerubahan] = [
+                        "membaik" => 0,
+                        "memburuk" => 0,
+                        "tetap" => 0
+                    ];
+                }
+
+                $rekapPerubahanPerBulan[$bulanPerubahan][
+                    strtolower($data["status_perubahan"])
+                ]++;
+
+            } else {
+                $jumlahPertamaKali++;
+            }
+
+        } else {
+            $jumlahPertamaKali++;
+        }
+    }
+
+    $dataLaporan[] = $data;
+}
+
+if ($stmtSebelumnya) {
+    mysqli_stmt_close($stmtSebelumnya);
 }
 
 mysqli_stmt_close($stmtLaporan);
+
+ksort($rekapPerubahanPerBulan);
 
 /*
 |--------------------------------------------------------------------------
@@ -1269,6 +1452,67 @@ require_once "../includes/navbar.php";
 
         </div>
 
+        <!-- Riwayat perubahan status stunting -->
+        <div class="alert alert-light border mb-4">
+            <i class="bi bi-graph-up-arrow me-1"></i>
+            Dibanding pemeriksaan sebelumnya:
+            <strong class="text-success"><?= $jumlahMembaik; ?> membaik</strong>,
+            <strong class="text-danger"><?= $jumlahMemburuk; ?> memburuk</strong>,
+            <strong><?= $jumlahTetap; ?> tetap</strong>, dan
+            <strong class="text-muted"><?= $jumlahPertamaKali; ?> pemeriksaan pertama</strong>
+            (belum ada pembanding).
+        </div>
+
+        <?php if (!empty($rekapPerubahanPerBulan)): ?>
+            <div class="card content-card mb-4">
+
+                <div class="card-header">
+                    <div>
+                        <h5 class="mb-1">
+                            Riwayat Perubahan Status per Bulan
+                        </h5>
+                        <small class="text-muted">
+                            Setiap balita dibandingkan dengan catatan
+                            pemeriksaannya sendiri yang paling terakhir
+                            sebelum bulan tersebut.
+                        </small>
+                    </div>
+                </div>
+
+                <div class="card-body table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Periode</th>
+                                <th class="text-center">Membaik</th>
+                                <th class="text-center">Memburuk</th>
+                                <th class="text-center">Tetap</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($rekapPerubahanPerBulan as $periode => $perubahan): ?>
+                                <?php
+                                    $labelPeriode = $periode;
+                                    if (preg_match('/^([1-9][0-9]{3})-(0[1-9]|1[0-2])$/', $periode, $cocok)) {
+                                        $labelPeriode =
+                                            ($namaBulanIndonesia[(int) $cocok[2]] ?? $cocok[2])
+                                            . " " . $cocok[1];
+                                    }
+                                ?>
+                                <tr>
+                                    <td><?= amanLaporan($labelPeriode); ?></td>
+                                    <td class="text-center text-success"><?= (int) $perubahan["membaik"]; ?></td>
+                                    <td class="text-center text-danger"><?= (int) $perubahan["memburuk"]; ?></td>
+                                    <td class="text-center"><?= (int) $perubahan["tetap"]; ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        <?php endif; ?>
+
         <!-- Visualisasi laporan -->
         <div class="card content-card">
 
@@ -1528,6 +1772,10 @@ require_once "../includes/navbar.php";
                                 </th>
 
                                 <th class="text-center">
+                                    Perubahan
+                                </th>
+
+                                <th class="text-center">
                                     Verifikasi Ahli Gizi
                                 </th>
 
@@ -1679,6 +1927,25 @@ require_once "../includes/navbar.php";
                                     <td class="text-center">
 
                                         <span
+                                            class="badge <?= $data["kelas_perubahan"]; ?>"
+                                        >
+                                            <?php if ($data["status_perubahan"] === "Membaik"): ?>
+                                                <i class="bi bi-arrow-down-circle"></i>
+                                            <?php elseif ($data["status_perubahan"] === "Memburuk"): ?>
+                                                <i class="bi bi-arrow-up-circle"></i>
+                                            <?php elseif ($data["status_perubahan"] === "Tetap"): ?>
+                                                <i class="bi bi-dash-circle"></i>
+                                            <?php else: ?>
+                                                <i class="bi bi-flag"></i>
+                                            <?php endif; ?>
+                                            <?= amanLaporan($data["status_perubahan"]); ?>
+                                        </span>
+
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <span
                                             class="badge
                                             <?= kelasVerifikasiLaporan(
                                                 $data[
@@ -1732,7 +1999,7 @@ require_once "../includes/navbar.php";
 
                             <tr>
 
-                                <td colspan="13">
+                                <td colspan="14">
 
                                     <div class="empty-state">
 

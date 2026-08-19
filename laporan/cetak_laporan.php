@@ -394,11 +394,11 @@ if ($aksesPuskesmasTerbatas) {
 
 /*
 |--------------------------------------------------------------------------
-| Mengambil hasil deteksi TERBARU per balita dalam periode
+| Mengambil riwayat hasil deteksi TERBARU per balita setiap bulan
 |--------------------------------------------------------------------------
 |
 | Cetak laporan menggunakan aturan yang sama dengan laporan utama:
-| satu balita = satu baris, berdasarkan hasil deteksi terbaru di periode.
+| satu balita = satu baris untuk setiap bulan yang memiliki pengukuran.
 |
 */
 
@@ -408,6 +408,7 @@ $sqlLaporan = "
         hd.status_gizi,
         hd.status_stunting,
         hd.tanggal_deteksi,
+        DATE_FORMAT(pa.tanggal_pengukuran, '%Y-%m') AS periode_bulan,
         hd.status_verifikasi,
 
         pa.umur_bulan,
@@ -436,6 +437,7 @@ $sqlLaporan = "
      INNER JOIN (
         SELECT
             pa2.id_balita,
+            DATE_FORMAT(pa2.tanggal_pengukuran, '%Y-%m') AS periode_bulan,
             MAX(hd2.id_deteksi) AS id_deteksi_terbaru
 
         FROM hasil_deteksi AS hd2
@@ -446,7 +448,7 @@ $sqlLaporan = "
         INNER JOIN balita AS b2
             ON pa2.id_balita = b2.id_balita
 
-        WHERE hd2.tanggal_deteksi
+        WHERE pa2.tanggal_pengukuran
             BETWEEN ? AND ?
 ";
 
@@ -457,7 +459,7 @@ if ($idPuskesmas > 0) {
 }
 
 $sqlLaporan .= "
-        GROUP BY pa2.id_balita
+        GROUP BY pa2.id_balita, DATE_FORMAT(pa2.tanggal_pengukuran, '%Y-%m')
      ) AS terbaru
 
         ON terbaru.id_deteksi_terbaru =
@@ -465,7 +467,7 @@ $sqlLaporan .= "
 
      ORDER BY
         b.nama_balita ASC,
-        hd.tanggal_deteksi ASC,
+        pa.tanggal_pengukuran ASC,
         hd.id_deteksi ASC
 ";
 
@@ -1732,6 +1734,10 @@ if ($formatCetakDinkes) {
                         </th>
 
                         <th>
+                            Periode
+                        </th>
+
+                        <th>
                             Nama Balita
                         </th>
 
@@ -1793,6 +1799,10 @@ if ($formatCetakDinkes) {
                                 <?= formatTanggalCetak(
                                     $data["tanggal_deteksi"]
                                 ); ?>
+                            </td>
+
+                            <td class="text-center">
+                                <?= amanCetak($data["periode_bulan"] ?? "-"); ?>
                             </td>
 
                             <td>
